@@ -19,7 +19,9 @@ three *renderings* of that model output.
 
 ## Where the thinking lives (read before building)
 
-- **The assessment** (13 docs + master): `~/PycharmProjects/Horizon2/docs/assessment/`.
+- **The assessment** (13 docs + master): `docs/assessment/` (this repo — it is
+  Horizon3's founding rationale; a point-in-time copy also exists in Horizon2's
+  history as its own post-mortem record).
   §00 recommendation, §04 the failure post-mortem, §05 decision-maker × model
   matrix, §06 target architecture, §09 roadmap, §10 the input-*state* principle,
   §11 the model literature review, §12 SoTA agentic/prompting/context-engineering.

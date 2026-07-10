@@ -9,7 +9,7 @@ piece of work — paste the block as your first message, editing the "TASK" line
 ```
 Before anything else, read and internalise:
 - CLAUDE.md (this repo) — the charter and the seven hard rules.
-- ~/PycharmProjects/Horizon2/docs/assessment/ — the full assessment. At minimum
+- docs/assessment/ (this repo) — the full assessment. At minimum
   §00 (recommendation), §04 (failure post-mortem), §05 (decision-maker × model
   matrix), §06 (target architecture), §09 (roadmap), §10 (input-state principle),
   §11 (model literature), §12 (SoTA agentic/prompting).
