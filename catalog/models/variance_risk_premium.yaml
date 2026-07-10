@@ -8,11 +8,12 @@ summary: >
 generic_over: [underlying]
 instances: [SPY, BTC, ETH, SOFR, UST2Y, UST5Y, UST10Y, UST30Y, EURUSD]
 implementation_coverage:
-  covers: []
+  covers: [SPY, BTC, ETH, SOFR, UST2Y, UST5Y, UST10Y, UST30Y, EURUSD]
   gap: >
-    Thin composition to BUILD (Deliverable 5): implied variance (from the fitted ATM surface / VIX²)
-    minus an expected-realized-variance forecast (trailing realized via compute_log_vol as the
-    proxy, or a HAR forecast). Both inputs are LIVE for all 4 underlyings — buildable now.
+    Implemented 2026-07-10 (vol_analytics.variance_risk_premium): implied_var − expected_realized_var,
+    generic over underlying. The implied leg binds to implied_vol_atm (VIX²/surface ATM); the
+    expected-realized leg to realized_vol (trailing compute_log_vol proxy, HAR-upgradeable). Live
+    across all 9 vol underlyings.
 
 spec:
   form: >
@@ -70,4 +71,4 @@ visualizations:
     color_job: diverging
     dim: 2D
 
-build_stub: true
+implemented_by: "unified_market_data.analysis.vol_analytics.variance_risk_premium"
