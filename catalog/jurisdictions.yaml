@@ -15,6 +15,9 @@ roles:
   govt_par_curve:           {kind: curve,        optional: true, desc: "Government par curve (curve_snapshots CCY/government). Nominal-zero bootstrap = a Deliverable-2 transform. Rich for EUR/JP/CA/CH/AU; SPARSE for USD; absent for GB."}
   term_premium_series:      {kind: observations, optional: true, desc: "PUBLISHED per-tenor term premium (data-direct). US = NY Fed ACM ACMTP01..10. Where a CB publishes ACM, no re-estimation is needed."}
   expectations_series:      {kind: observations, optional: true, desc: "PUBLISHED per-tenor risk-neutral/expectations yield. US = NY Fed ACM ACMRNY01..10 (the model's expectations component)."}
+  core_inflation:           {kind: observations, optional: true, desc: "Core inflation index (yoy computed = Taylor π). US = PCEPILFE (core PCE)."}
+  real_gdp:                 {kind: observations, optional: true, desc: "Real GDP — output-gap numerator. US = GDPC1."}
+  potential_gdp:            {kind: observations, optional: true, desc: "Potential real GDP — output-gap denominator. US = GDPPOT. DATE-ALIGN with real_gdp (projections run to 2036)."}
   overnight_index:          {kind: observations, desc: "RFR overnight fixing (SOFR/ESTR/SONIA/...)."}
   policy_rate:              {kind: observations, desc: "Central-bank target/effective policy rate."}
   overnight_deposit_anchor: {kind: any,          desc: "Short-end bootstrap anchor (OBFR for US; RFR/curve-front elsewhere)."}
@@ -37,6 +40,9 @@ jurisdictions:
       govt_par_curve:           null   # curve_snapshots USD/government has only 2 snapshots — SPARSE, unusable
       term_premium_series:      {ref: "ACMTP*",             source: observations, note: "NY Fed ACM per-tenor term premium (nyfed_acm provider)."}
       expectations_series:      {ref: "ACMRNY*",            source: observations, note: "NY Fed ACM per-tenor risk-neutral/expectations yield."}
+      core_inflation:           {ref: "PCEPILFE",           source: observations, note: "Core PCE index; yoy = Taylor π."}
+      real_gdp:                 {ref: "GDPC1",              source: observations}
+      potential_gdp:            {ref: "GDPPOT",             source: observations, note: "Date-align with real_gdp."}
       overnight_index:          {ref: "SOFR",               source: observations}
       policy_rate:              {ref: "DFF",                source: observations}
       overnight_deposit_anchor: {ref: "OBFR",               source: observations}

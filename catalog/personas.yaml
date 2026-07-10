@@ -24,9 +24,7 @@ personas:
   - persona_id: central_bank_policymaker
     name: "Central-bank policymaker"
     decision: "Set the policy rate."
-    uses: [term_premium_acm]   # shared with macro_rates_trader (authored). TODO: taylor_rule,
-                               # reaction_function, r_star, output_gap, phillips_curve, inflation_persistence
-    status: pending_authoring
+    uses: [reaction_function, output_gap, r_star, phillips_curve, term_premium_acm]  # term_premium_acm shared with macro_rates_trader
 
   - persona_id: relative_value_fi_trader
     name: "Relative-value FI trader"

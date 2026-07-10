@@ -1,0 +1,67 @@
+model_id: phillips_curve
+name: "Phillips curve (inflation vs slack)"
+family: macro
+summary: >
+  The relationship between inflation and economic slack (output/unemployment gap) plus expectations —
+  the structural link the central bank leans on. GENERIC across jurisdictions.
+
+generic_over: [currency]
+jurisdictions: [US]
+implementation_coverage:
+  covers: []
+  gap: >
+    To BUILD (Deliverable 5): π_t = π^e + κ·gap + supply shocks; estimate κ (the slope) over a rolling
+    window. Inputs LIVE for US (core inflation + the output gap). A flat estimated κ is itself the
+    story (the 'flat Phillips curve' regime).
+
+spec:
+  form: >
+    π_t = π^e_t + κ·output_gap_t + ε (accelerationist / expectations-augmented). κ = the slope of the
+    trade-off; estimated by rolling regression. (§11 A — inflation dynamics.)
+  assumptions:
+    - "Expectations π^e anchor the level; the gap drives the cyclical component."
+    - "κ may be small/unstable (the flat-curve debate) — report the estimate + its history."
+  references:
+    - "docs/assessment/11-model-reference.md#a1"
+
+inputs:
+  - role: core_inflation
+    order: context
+    window: "13m"
+    horizon: spot
+    required: true
+    note: "Core inflation (the π being explained), as a §10 state (level + change)."
+  - role: real_gdp
+    order: level
+    window: "1q"
+    horizon: spot
+    required: true
+    note: "For the output-gap regressor (with potential_gdp)."
+  - role: potential_gdp
+    order: level
+    window: "1q"
+    horizon: spot
+    required: true
+    note: "Output-gap denominator."
+
+outputs:
+  - name: "kappa"
+    unit: "slope"
+    note: "Estimated Phillips-curve slope (inflation sensitivity to the gap)."
+  - name: "fitted_inflation"
+    unit: "%"
+    note: "Phillips-implied inflation given the gap + expectations."
+
+interpretation: >
+  "How much inflation the current slack 'should' generate. A flat slope (small κ) means the gap buys
+  little disinflation — a very different policy calculus from a steep curve."
+
+visualizations:
+  - id: phillips_scatter
+    form: "scatter of inflation vs the gap, with the fitted slope + regime coloring"
+    encodes: "core_inflation vs output_gap, kappa"
+    insight: "the trade-off's steepness (or flatness) and whether the regime has shifted"
+    color_job: sequential
+    dim: 2D
+
+build_stub: true

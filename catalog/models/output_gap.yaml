@@ -1,0 +1,60 @@
+model_id: output_gap
+name: "Output gap"
+family: macro
+summary: >
+  The economy's slack: 100·(real GDP − potential GDP)/potential, or the Okun's-law equivalent from
+  the unemployment gap. A core input to the reaction function and the Phillips curve. GENERIC across
+  jurisdictions.
+
+generic_over: [currency]
+jurisdictions: [US]
+implementation_coverage:
+  covers: [US]
+  gap: >
+    reaction_function.output_gap_pct (+ unemployment_gap_to_output_gap). Live for US. Non-US needs
+    real + potential GDP (or unemployment + NAIRU) per country — acquisition (directive #1).
+
+spec:
+  form: >
+    output_gap = 100·(GDP − potential)/potential. Okun alternative: gap ≈ −2·(u − u*). GDP and
+    potential MUST be date-aligned (potential carries projections). (§11 A1 context construct.)
+  assumptions:
+    - "Potential GDP / NAIRU are model estimates — the gap is only as good as they are."
+  params:
+    okun_coefficient: 2.0
+  references:
+    - "docs/assessment/11-model-reference.md#a1"
+    - "UMD analysis/reaction_function.py (output_gap_pct, unemployment_gap_to_output_gap)"
+
+inputs:
+  - role: real_gdp
+    order: level
+    window: "1q"
+    horizon: spot
+    required: true
+    note: "Latest actual real GDP quarter."
+  - role: potential_gdp
+    order: level
+    window: "1q"
+    horizon: spot
+    required: true
+    note: "Potential GDP at the SAME quarter as real_gdp."
+
+outputs:
+  - name: "output_gap_pct"
+    unit: "%"
+    note: "Percent of potential; sign = above/below capacity."
+
+interpretation: >
+  "How far the economy is from capacity — the slack the central bank is reacting to. A positive gap
+  with above-target inflation is the overheating signal; the sign and its change (§10) drive policy."
+
+visualizations:
+  - id: output_gap_history
+    form: "output gap time series with a zero line"
+    encodes: "output_gap_pct over time"
+    insight: "the cycle — above/below potential and turning points"
+    color_job: diverging
+    dim: 2D
+
+implemented_by: "unified_market_data.analysis.reaction_function.output_gap_pct"

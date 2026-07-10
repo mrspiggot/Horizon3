@@ -1,0 +1,92 @@
+model_id: reaction_function
+name: "Central-bank reaction function (Taylor rule + variants)"
+family: macro
+summary: >
+  The policy-rate PRESCRIPTION a central bank's rule implies from inflation and slack — Taylor 1993,
+  balanced-approach (1999), inertial, and first-difference variants. The insight is the DISPERSION
+  across variants (a fan) and the GAP vs the actual/market-priced rate. GENERIC across central banks.
+
+generic_over: [currency, central_bank]
+jurisdictions: [US]
+implementation_coverage:
+  covers: [US]
+  gap: >
+    reaction_function.taylor_variants — live for US (core PCE + GDP output gap + DFF). Extending to
+    EU/GB/JP needs each country's CORE INFLATION + REAL/POTENTIAL GDP (or unemployment + NAIRU) — a
+    data-acquisition task (directive #1); the rule itself is already generic. r* is a parameter (HLW
+    ≈0.7% for US) pending an ingested r-star estimate.
+
+spec:
+  form: >
+    Taylor 1993:       i* = r* + π + 0.5(π − π*) + 0.5·gap
+    Balanced-approach: i* = r* + π + 0.5(π − π*) + 1.0·gap   (doubles the gap weight)
+    Inertial:          i* = ρ·i_{t-1} + (1−ρ)·[Taylor]        (partial adjustment, ρ≈0.85)
+    First-difference:  Δi = 0.5(π − π*) + 0.5·Δgap            (no r* level)
+    π = core inflation (yoy); gap = output gap (§11 A1).
+  assumptions:
+    - "π* = 2% target; r* a slow-moving parameter (model-dependent — always show which estimate)."
+    - "Inputs consumed as a STATE (§10): the level AND the change (first-difference uses Δgap)."
+    - "GDP and potential must be DATE-ALIGNED (potential series carry projections) — a live-caught bug."
+  params:
+    inflation_target_pct: 2.0
+    r_star_pct: 0.7
+    rho: 0.85
+  references:
+    - "docs/assessment/11-model-reference.md#a1"
+    - "UMD analysis/reaction_function.py (taylor_variants, output_gap_pct)"
+
+inputs:
+  - role: core_inflation
+    order: context
+    window: "13m"
+    horizon: spot
+    required: true
+    note: "Core inflation, yoy (π). §10 state: level + its change feed the rule + first-difference variant."
+  - role: real_gdp
+    order: level
+    window: "1q"
+    horizon: spot
+    required: true
+    note: "Real GDP — output-gap numerator (date-aligned to potential)."
+  - role: potential_gdp
+    order: level
+    window: "1q"
+    horizon: spot
+    required: true
+    note: "Potential real GDP — output-gap denominator."
+  - role: policy_rate
+    order: level
+    window: "1d"
+    horizon: spot
+    required: true
+    note: "Current policy rate — anchors the inertial + first-difference variants, and the prescription gap."
+
+outputs:
+  - name: "prescription_by_variant"
+    unit: "%"
+    note: "The fan: taylor_1993 / balanced_approach / inertial / first_difference prescribed rates."
+  - name: "prescription_gap"
+    unit: "pp"
+    note: "Taylor prescription − actual policy rate. >0 = the rule says tighter than the CB is."
+
+interpretation: >
+  "Given this inflation and slack, the rule says policy SHOULD be here — and the gap vs where the CB
+  actually is (and where the market prices it) is the policy-stance signal. The dispersion across
+  variants is itself the story: a fan, not a point. (US now: rule ≈5.3-5.8% vs actual 3.6% → ~1.7pp
+  easier than the rule.)"
+
+visualizations:
+  - id: taylor_fan
+    form: "the variant fan (bar/range) + actual policy rate + market-implied path overlay"
+    encodes: "prescription_by_variant, policy_rate"
+    insight: "where the market sits within the rule fan — a positioning map (§11 A1)"
+    color_job: sequential
+    dim: 2D
+  - id: prescription_gap_history
+    form: "prescription_gap time series with a zero line"
+    encodes: "prescription_gap over time"
+    insight: "policy stance regime — persistently below the rule = accommodative"
+    color_job: diverging
+    dim: 2D
+
+implemented_by: "unified_market_data.analysis.reaction_function.taylor_variants"

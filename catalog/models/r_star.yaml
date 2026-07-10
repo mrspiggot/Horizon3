@@ -1,0 +1,70 @@
+model_id: r_star
+name: "Natural rate of interest (r*)"
+family: macro
+summary: >
+  The unobserved trend real rate that neither stimulates nor restrains — the anchor for the reaction
+  function. Estimated by state-space filtering (Laubach-Williams / Holston-Laubach-Williams).
+  GENERIC across jurisdictions.
+
+generic_over: [currency]
+jurisdictions: [US]
+implementation_coverage:
+  covers: []
+  gap: >
+    Currently a PARAMETER (HLW ≈0.7% for US) in the reaction function. To BUILD (Deliverable 5):
+    ingest the published HLW/HLW-2017 r* estimate (NY Fed publishes it as a downloadable file, like
+    the ACM term premia — a data-direct acquisition), OR run the Kalman state-space estimation. The
+    range across estimators (HLW ~0.7, Lubik-Matthes ~1.5, Fed staff ~1.0-1.2) bounds "how tight is
+    policy, really" — show which estimate.
+
+spec:
+  form: >
+    State-space / Kalman filter of an unobserved trend real rate from real GDP (trend & gap), core
+    inflation, and the real policy rate, estimated recursively (Laubach-Williams 2003; HLW 2017).
+    (§11 A2.)
+  assumptions:
+    - "r* is not observable — model-dependent; always report which estimator and its range."
+  references:
+    - "docs/assessment/11-model-reference.md#a2"
+
+inputs:
+  - role: real_gdp
+    order: context
+    window: "40q"
+    horizon: spot
+    required: true
+    note: "Real GDP trend & gap — the HLW growth input."
+  - role: core_inflation
+    order: context
+    window: "13m"
+    horizon: spot
+    required: true
+    note: "Core inflation trend."
+  - role: policy_rate
+    order: level
+    window: "1d"
+    horizon: spot
+    required: true
+    note: "Real policy rate = policy_rate − inflation."
+
+outputs:
+  - name: "r_star_pct"
+    unit: "%"
+    note: "Slow-moving natural-rate estimate."
+  - name: "r_star_range"
+    unit: "%"
+    note: "Range across estimators (HLW / Lubik-Matthes / Fed staff)."
+
+interpretation: >
+  "The neutral real rate — the anchor for the reaction function. Policy is restrictive when the real
+  policy rate exceeds r*, easy when below. The range across estimators bounds how tight policy is."
+
+visualizations:
+  - id: r_star_history
+    form: "r* time series with the estimator range as a band"
+    encodes: "r_star_pct, r_star_range"
+    insight: "how tight is policy, really — real policy rate vs r* and its uncertainty"
+    color_job: sequential
+    dim: 2D
+
+build_stub: true
