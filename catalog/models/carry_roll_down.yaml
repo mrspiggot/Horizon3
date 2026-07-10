@@ -9,8 +9,8 @@ summary: >
 generic_over: [currency]
 jurisdictions: [US, EU, GB, JP, CH, CA, AU]
 implementation_coverage:
-  covers: []
-  gap: "No analysis/ implementation yet — buildable now for all majors (data present). Deliverable 5."
+  covers: [US, EU, GB, JP, CH, CA, AU]
+  gap: "Implemented 2026-07-10 (curve_analytics.carry_and_rolldown); reads the built OIS curve, generic over currency."
 
 spec:
   form: >
@@ -59,4 +59,4 @@ interpretation: >
   "You are paid (or pay) this much to hold the position if the curve does not move. Carry vs the
   fair-value/term-premium signal is the trade-selection frame for the book."
 
-build_stub: true
+implemented_by: "unified_market_data.analysis.curve_analytics.carry_and_rolldown"

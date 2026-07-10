@@ -9,8 +9,8 @@ summary: >
 generic_over: [currency]
 jurisdictions: [US, EU, GB, JP, CH, CA, AU]
 implementation_coverage:
-  covers: []
-  gap: "No PCA/Nelson-Siegel factor model in analysis/ yet — buildable now for all majors. Deliverable 5."
+  covers: [US, EU, GB, JP, CH, CA, AU]
+  gap: "Implemented 2026-07-10 (curve_analytics.curve_pca); SVD factor model on curve history, generic over currency. USD: level 91% / slope 7% / curvature 1% variance."
 
 spec:
   form: >
@@ -52,4 +52,4 @@ interpretation: >
   "A large curvature move is a different macro signal from a slope move; per-tenor residuals are the
   butterfly/spread rich-cheap signals. This is the 'fair value' role for the rates family."
 
-build_stub: true
+implemented_by: "unified_market_data.analysis.curve_analytics.curve_pca"
