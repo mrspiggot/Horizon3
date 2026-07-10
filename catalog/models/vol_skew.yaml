@@ -6,9 +6,9 @@ summary: >
   smile slope. Prices the market's demand for downside vs upside protection. GENERIC over underlying.
 
 generic_over: [underlying]
-instances: [SPY, BTC, ETH, SOFR]
+instances: [SPY, BTC, ETH, SOFR, UST2Y, UST5Y, UST10Y]
 implementation_coverage:
-  covers: [SPY, BTC, ETH, SOFR]
+  covers: [SPY, BTC, ETH, SOFR, UST2Y, UST5Y, UST10Y]
   gap: "Derived from the fitted smile (vol_surface.fit_smile → 25d skew); live for all 4."
 
 spec:

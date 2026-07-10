@@ -44,6 +44,29 @@ underlyings:
       implied_vol_atm:     {ref: "sofr",       source: computed, note: "ATM Bachelier vol from the SR3 smile."}
       realized_vol:        {ref: "SR3=F",      source: computed, note: "get_sr3_realized_vol."}
 
-  # Treasury (get_treasury_vol_surface) and FX (get_fx_vol_surface): code-ready, options chains
-  # currently EMPTY. Data-acquisition backlog — populate CME Treasury-option + FX-option scrapes,
-  # then add UST / EURUSD / … underlyings here.
+  # --- US Treasury option vol (CME options scraped + scheduler-wired, 2026-07-10) ---
+  - id: UST2Y
+    asset_class: rates
+    bindings:
+      implied_vol_surface: {ref: "treasury:2Y",  source: surface, note: "get_treasury_vol_surface(2Y) — CME ZT options. Live."}
+      implied_vol_atm:     {ref: "treasury:2Y",  source: computed}
+      realized_vol:        {ref: "ZT=F",         source: computed}
+  - id: UST5Y
+    asset_class: rates
+    bindings:
+      implied_vol_surface: {ref: "treasury:5Y",  source: surface, note: "get_treasury_vol_surface(5Y) — CME ZF options. Live."}
+      implied_vol_atm:     {ref: "treasury:5Y",  source: computed}
+      realized_vol:        {ref: "ZF=F",         source: computed}
+  - id: UST10Y
+    asset_class: rates
+    bindings:
+      implied_vol_surface: {ref: "treasury:10Y", source: surface, note: "get_treasury_vol_surface(10Y) — CME ZN options. Live."}
+      implied_vol_atm:     {ref: "treasury:10Y", source: computed}
+      realized_vol:        {ref: "ZN=F",         source: computed}
+
+  # --- Acquired but surface not yet fitting (honest follow-ups, deliberately NOT bound) ---
+  # UST30Y (ZB): options scraped (146) but ZB FUTURES are not cached (0 contracts) -> surface can't
+  #   centre. Fix: add ZB to the CME futures scrape, then bind UST30Y here.
+  # FX EURUSD/USDJPY (6E/6J): options scraped (89/82 strikes) + futures cached, but
+  #   get_fx_vol_surface mis-centres the fit band ("2 strikes in band") -> an F-centering/band-width
+  #   bug in the FX surface fitter. DATA is present; fix the fitter, then bind them here.

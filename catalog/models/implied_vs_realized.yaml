@@ -6,9 +6,9 @@ summary: >
   The spread (implied − realized) is the premium paid for volatility insurance. GENERIC over underlying.
 
 generic_over: [underlying]
-instances: [SPY, BTC, ETH, SOFR]
+instances: [SPY, BTC, ETH, SOFR, UST2Y, UST5Y, UST10Y]
 implementation_coverage:
-  covers: [SPY, BTC, ETH, SOFR]
+  covers: [SPY, BTC, ETH, SOFR, UST2Y, UST5Y, UST10Y]
   gap: "Realized via historical_vol.compute_log_vol; implied ATM from the fitted surface / VIX-type series. Live for all 4."
 
 spec:
