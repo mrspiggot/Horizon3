@@ -1,0 +1,14 @@
+GDPNow (Federal Reserve Bank of Atlanta) — curated reference note.
+Source: https://www.atlantafed.org/research-and-data/data/gdpnow/explainer
+GDPNow is a nowcasting model that produces a running estimate of current-quarter
+real GDP growth before the official release. It uses a dynamic factor model to
+fill in yet-to-be-released monthly source data, plus bridge equations and Bayesian
+vector autoregressions to nowcast the ~13 subcomponents of GDP, which are then
+aggregated. Inputs include the ISM manufacturing and non-manufacturing indexes,
+construction spending, manufacturing shipments, light-weight vehicle sales,
+international trade, the employment situation, wholesale/retail trade, PPI, CPI,
+the monthly Treasury statement, import/export prices, industrial production, and
+housing starts. The model is fundamentally driven by the CHANGES (rates of change)
+in these indicators — it is a working example of the input-as-state principle:
+level alone is insufficient; the model consumes the motion of many series. The
+nowcast updates with each data release; its revision path is itself a signal.

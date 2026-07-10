@@ -1,0 +1,18 @@
+Design Patterns for Building Agentic Workflows (Hugging Face, D. Carpintero) —
+curated reference note.
+Source: https://huggingface.co/blog/dcarpintero/design-patterns-for-building-agentic-workflows
+Catalogs the 2026 agentic patterns and maps them to reliable, number-grounded
+financial analysis: Evaluator-Optimizer (a separate judge scores against explicit
+criteria, making quality measurable not vibes-based); Context-Augmentation (the
+LLM selects external tools/data and never computes internally — numbers come from
+tools, preventing hallucination); Prompt-Chaining (sequential subtasks passing
+STRUCTURED data with validation gates between steps, so mistakes do not cascade —
+after retrieval, verify numbers match source schemas before narrative);
+Parallelization (independent checks with voting/consensus on a number's
+provenance); Routing (classify intent, dispatch to specialists so the narrator
+never attempts number generation); Orchestrator-Workers (workers retrieve and
+validate numbers, never author them). Guidance: pass only retrieved/computed
+fields to the narrative LLM, use a schema {value, source, timestamp, confidence},
+and define stopping criteria as source-verification passing. The constraint "the
+LLM selects and narrates but never authors numbers" maps to a Context-Augmentation
++ Prompt-Chaining hybrid with a validation gate.

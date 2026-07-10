@@ -1,0 +1,108 @@
+# Tracked concepts. curate.py watches each via the arXiv API and surfaces new
+# candidates for human review. `canonical` lists the registry ids that currently
+# define the concept; a human updates these as the field moves.
+#
+# schema: topics: [{id, label, queries[], canonical[], watch_since}]
+
+topics:
+  # ── Agentic / prompting / context engineering (how we build the agents) ──
+  - id: model-grounded-generation
+    label: "Model-grounded generation (RAG + KG + LLM, numbers from execution)"
+    queries:
+      - "model-grounded economic analysis LLM agent"
+      - "knowledge graph RAG grounded financial narrative generation"
+      - "LLM agent execute model not generate numbers"
+    canonical: [ai-economist-agent]
+    watch_since: "2026-01-01"
+
+  - id: agentic-architecture
+    label: "SoTA agentic design patterns / orchestration"
+    queries:
+      - "agentic design patterns orchestrator worker evaluator optimizer"
+      - "multi-agent LLM orchestration reflection tool use"
+      - "LLM agent planning routing reliability"
+    canonical: [ai-economist-agent]
+    watch_since: "2026-01-01"
+
+  - id: context-engineering
+    label: "Context engineering / agent memory / retrieval"
+    queries:
+      - "context engineering LLM agent memory compaction"
+      - "agentic memory knowledge graph retrieval temporal"
+      - "long-horizon LLM agent context management"
+    canonical: []
+    watch_since: "2026-01-01"
+
+  - id: data-faithful-visualization
+    label: "Data-faithful charts / infographics (numbers injected, not generated)"
+    queries:
+      - "data-faithful infographic generation LLM verified numbers"
+      - "automatic visualization generation grounded statistics"
+      - "chart generation numerical accuracy hallucination"
+    canonical: [infogen, lida]
+    watch_since: "2026-01-01"
+
+  # ── Economic / financial models (what the agents run) — §11 of the assessment ──
+  - id: reaction-function
+    label: "Central-bank reaction functions / Taylor rules / r-star"
+    queries:
+      - "Taylor rule variants Federal Reserve reaction function"
+      - "natural rate of interest r-star estimation"
+    canonical: []
+    watch_since: "2026-01-01"
+
+  - id: term-premium
+    label: "Affine term-structure / term premium (ACM, Kim-Wright)"
+    queries:
+      - "affine term structure model term premium estimation"
+      - "decompose treasury yield expectations term premium"
+    canonical: [acm-linear-regressions]
+    watch_since: "2020-01-01"
+
+  - id: credit-merton
+    label: "Structural credit / distance-to-default"
+    queries:
+      - "Merton structural credit risk distance to default"
+      - "structural model credit spread default probability"
+    canonical: []
+    watch_since: "2020-01-01"
+
+  - id: equity-erp
+    label: "Equity risk premium / DDM / Fed model"
+    queries:
+      - "equity risk premium dividend discount model estimation"
+      - "earnings yield bond yield Fed model equity valuation"
+    canonical: []
+    watch_since: "2020-01-01"
+
+  - id: fx-fair-value
+    label: "FX equilibrium models / carry (PPP, BEER, FEER, UIP)"
+    queries:
+      - "equilibrium exchange rate BEER FEER fair value"
+      - "uncovered interest parity carry trade currency"
+    canonical: []
+    watch_since: "2020-01-01"
+
+  - id: commodity-storage
+    label: "Commodity theory of storage / convenience yield"
+    queries:
+      - "theory of storage convenience yield commodity futures"
+      - "inventory backwardation contango commodity curve"
+    canonical: [nber-commodity-futures]
+    watch_since: "2005-01-01"
+
+  - id: variance-risk-premium
+    label: "Variance risk premium / implied vs realized vol"
+    queries:
+      - "variance risk premium implied realized volatility"
+      - "VIX expected variance premium options"
+    canonical: [carr-wu-vrp]
+    watch_since: "2009-01-01"
+
+  - id: nowcasting
+    label: "Macro nowcasting / dynamic factor models"
+    queries:
+      - "GDP nowcasting dynamic factor model real-time"
+      - "bridge equations mixed frequency nowcast"
+    canonical: []
+    watch_since: "2015-01-01"

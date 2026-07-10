@@ -1,0 +1,15 @@
+[project]
+name = "horizon3"
+version = "0.0.1"
+description = "Model->data->insight->decision engine (foundation phase: living knowledge corpus)"
+requires-python = ">=3.11"
+dependencies = [
+    "chromadb>=0.5",
+    "pymupdf>=1.24",      # PDF text extraction
+    "pyyaml>=6",
+    "requests>=2.31",     # arXiv API
+]
+
+[tool.horizon3]
+# ChromaDB collection for the living knowledge corpus.
+knowledge_collection = "knowledge_corpus"

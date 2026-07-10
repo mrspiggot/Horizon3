@@ -1,0 +1,123 @@
+# The curated knowledge corpus. Seeded from the references in
+# Horizon2/docs/assessment/*.md — the papers that drive our foundational
+# principles. Human-curated: curate.py only ever appends `candidate` entries.
+#
+# schema: papers: [{id, title, authors, url, arxiv_id, local_path, topics[],
+#                   tier, added, why, superseded_by, sha256}]
+#   tier: canonical  — a paper/official source that drives principles; keep a
+#                      physical copy in sources/ and index it.
+#         reference  — a guide/blog; indexed from a cached text extract.
+#         candidate  — auto-surfaced by curate.py, pending human review.
+
+papers:
+  # ── Model-grounded generation / agentic architecture ──────────────────────
+  - id: ai-economist-agent
+    title: "AI Economist Agent: An Agentic Framework for Model-Grounded Economic Analysis with RAG, Knowledge Graphs, and LLMs"
+    authors: []
+    url: "https://arxiv.org/abs/2606.20041"
+    arxiv_id: "2606.20041"
+    local_path: sources/2606.20041.pdf
+    topics: [model-grounded-generation, agentic-architecture]
+    tier: canonical
+    added: "2026-07-10"
+    why: "The blueprint: model catalog (KG) + selection agent + non-LLM executor + grounded narrator + judge. Load-bearing principle — the LLM never authors numbers; model grounding requires execution."
+    superseded_by: null
+
+  - id: agentic-economic-modeling
+    title: "Agentic Economic Modeling"
+    authors: []
+    url: "https://arxiv.org/abs/2510.25743"
+    arxiv_id: "2510.25743"
+    local_path: sources/2510.25743.pdf
+    topics: [model-grounded-generation, agentic-architecture]
+    tier: canonical
+    added: "2026-07-10"
+    why: "Aligns LLM choices with human evidence for reliable econometric inference (bias-correction of synthetic choices)."
+    superseded_by: null
+
+  # ── Data-faithful visualization (infographics / charts) ───────────────────
+  - id: infogen
+    title: "Infogen: Generating Complex Statistical Infographics from Documents"
+    authors: []
+    url: "https://arxiv.org/abs/2507.20046"
+    arxiv_id: "2507.20046"
+    local_path: sources/2507.20046.pdf
+    topics: [data-faithful-visualization]
+    tier: canonical
+    added: "2026-07-10"
+    why: "The correct infographic mechanism: verified numbers -> structured metadata -> deterministic code (never a diffusion image). Numbers extracted once, never regenerated."
+    superseded_by: null
+
+  - id: lida
+    title: "LIDA: A Tool for Automatic Generation of Grammar-Agnostic Visualizations and Infographics using Large Language Models"
+    authors: ["Victor Dibia"]
+    url: "https://arxiv.org/abs/2303.02927"
+    arxiv_id: "2303.02927"
+    local_path: sources/2303.02927.pdf
+    topics: [data-faithful-visualization]
+    tier: canonical
+    added: "2026-07-10"
+    why: "Structured-data-then-render pattern; <3.5% numeric error; every data point traceable/auditable."
+    superseded_by: null
+
+  # ── Economic / financial models (§11) ─────────────────────────────────────
+  - id: acm-linear-regressions
+    title: "Pricing the Term Structure with Linear Regressions (ACM)"
+    authors: ["Tobias Adrian", "Richard Crump", "Emanuel Moench"]
+    url: "https://www.newyorkfed.org/medialibrary/media/research/staff_reports/sr340.pdf"
+    arxiv_id: null
+    local_path: sources/acm_sr340.pdf
+    topics: [term-premium]
+    tier: canonical
+    added: "2026-07-10"
+    why: "ACM affine term-structure model via 3-step linear regression; decomposes yields into expectations + term premium. Daily, robust."
+    superseded_by: null
+
+  - id: nber-commodity-futures
+    title: "The Fundamentals of Commodity Futures Returns"
+    authors: ["Gorton", "Hayashi", "Rouwenhorst"]
+    url: "https://www.nber.org/system/files/working_papers/w13249/w13249.pdf"
+    arxiv_id: null
+    local_path: sources/nber_w13249.pdf
+    topics: [commodity-storage]
+    tier: canonical
+    added: "2026-07-10"
+    why: "Theory of storage / convenience yield: inventory drives the futures curve (contango vs backwardation)."
+    superseded_by: null
+
+  - id: carr-wu-vrp
+    title: "Variance Risk Premia"
+    authors: ["Peter Carr", "Liuren Wu"]
+    url: "https://engineering.nyu.edu/sites/default/files/2019-01/CarrReviewofFinStudiesMarch2009-a.pdf"
+    arxiv_id: null
+    local_path: sources/carr_wu_vrp.pdf
+    topics: [variance-risk-premium]
+    tier: canonical
+    added: "2026-07-10"
+    why: "Defines and measures the variance risk premium (implied - expected realized); the vol-positioning signal."
+    superseded_by: null
+
+  # ── Reference-tier guides (indexed from cached extract; no PDF) ───────────
+  - id: gdpnow-explainer
+    title: "What Is GDPNow? (Atlanta Fed)"
+    authors: ["Federal Reserve Bank of Atlanta"]
+    url: "https://www.atlantafed.org/research-and-data/data/gdpnow/explainer"
+    arxiv_id: null
+    local_path: null
+    topics: [nowcasting]
+    tier: reference
+    added: "2026-07-10"
+    why: "Dynamic factor model + bridge equations + BVAR over 13 GDP subcomponents; inputs are fundamentally rates of change."
+    superseded_by: null
+
+  - id: agentic-patterns-hf
+    title: "Design Patterns for Building Agentic Workflows (Hugging Face)"
+    authors: ["D. Carpintero"]
+    url: "https://huggingface.co/blog/dcarpintero/design-patterns-for-building-agentic-workflows"
+    arxiv_id: null
+    local_path: null
+    topics: [agentic-architecture, context-engineering]
+    tier: reference
+    added: "2026-07-10"
+    why: "Concrete pattern catalog mapped to number-grounding: context-augmentation + prompt-chaining with validation gates so the LLM narrates but never authors numbers."
+    superseded_by: null

@@ -1,0 +1,21 @@
+# env / secrets
+.env
+.env.generated
+.venv/
+
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# corpus: the physical paper copies (sources/) ARE committed — durable
+# preservation against link-rot is the whole point. Only regenerated artifacts
+# and local run-state are ignored.
+knowledge/digests/*.md
+knowledge/digests/notify.log.jsonl
+knowledge/.curate_state.json
+knowledge/candidates.yaml
+
+# editor
+.idea/
+~$*
