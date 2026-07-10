@@ -108,6 +108,34 @@ def vol_surface_3d(ax3d, moneyness, ttes, Z, *, title=None, zlabel="implied vol 
     return surf
 
 
+def overlay_lines(ax, x, series, *, band=None, xticklabels=None, title=None, ylabel="value",
+                  zero_line=False):
+    """Reusable time-series overlay (categorical identity). `series` = list of (label, y, style)
+    where style in {"solid","dashed"}; `band` = (lo, hi, label) shaded region (a gap/premium/spread).
+
+    Serves prescription-vs-actual, implied-vs-realized, divergence-with-threshold, ... — anywhere a
+    model's insight is the GAP between two lines over time.
+    """
+    theme.use_theme()
+    if band is not None:
+        lo, hi, blabel = band
+        ax.fill_between(x, lo, hi, color=theme.SEQUENTIAL[1], alpha=0.5, linewidth=0, label=blabel, zorder=1)
+    for i, (label, y, style) in enumerate(series):
+        ax.plot(x, y, color=theme.cat(i), lw=2, ls="--" if style == "dashed" else "-",
+                marker="o" if style != "dashed" else None, ms=3, label=label, zorder=4 + i)
+    if zero_line:
+        ax.axhline(0, color=theme.MUTED, lw=1, ls=":")
+    if xticklabels is not None:
+        step = max(1, len(xticklabels) // 12)
+        ax.set_xticks(list(range(0, len(xticklabels), step)))
+        ax.set_xticklabels(xticklabels[::step], rotation=45, ha="right", fontsize=8)
+    ax.set_ylabel(ylabel)
+    if title:
+        ax.set_title(title)
+    theme.style_axes(ax, grid_axis="y")
+    ax.legend(loc="best", fontsize=8, framealpha=0.9)
+
+
 def vol_smile(ax, smiles, *, title=None, xlabel="moneyness", ylabel="implied vol (%)"):
     """Vol smiles by expiry (categorical by tenor, sequential-ordered). `smiles` = list of
     (label, moneyness_array, vol_array)."""

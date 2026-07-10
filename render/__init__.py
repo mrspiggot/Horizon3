@@ -6,6 +6,7 @@ chart, by pure code. Reusable across every persona; the chart is Horizon3's diff
 from . import charts, theme
 from .charts import (
     fan_chart,
+    overlay_lines,
     prob_ylim,
     probability_heatmap,
     vol_smile,
@@ -14,5 +15,5 @@ from .charts import (
 
 __all__ = [
     "theme", "charts",
-    "fan_chart", "probability_heatmap", "vol_surface_3d", "vol_smile", "prob_ylim",
+    "fan_chart", "probability_heatmap", "vol_surface_3d", "vol_smile", "overlay_lines", "prob_ylim",
 ]
