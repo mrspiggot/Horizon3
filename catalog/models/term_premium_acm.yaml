@@ -60,4 +60,18 @@ interpretation: >
   holding duration. A term-premium-driven selloff (supply, uncertainty) is a different trade from an
   expectations-driven one (repricing the policy path)."
 
+visualizations:
+  - id: yield_decomposition
+    form: "stacked area by tenor: expectations + term premium = fitted yield"
+    encodes: "term_premium_by_tenor, expectations_by_tenor"
+    insight: "how much of each yield is expected rates vs duration risk premium"
+    color_job: categorical
+    dim: 2D
+  - id: term_premium_history
+    form: "term_premium_by_tenor (e.g. 10Y) time series"
+    encodes: "ACMTP10 over time"
+    insight: "TP regime — a TP-driven selloff (supply/uncertainty) ≠ an expectations-driven one"
+    color_job: sequential
+    dim: 2D
+
 data_direct: true   # US = read the published NY Fed ACM decomposition; no re-estimation needed.

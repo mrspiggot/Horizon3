@@ -83,5 +83,26 @@ interpretation: >
   "This is the policy path the market has already priced for THIS central bank. The trade is the gap
   between this implied path and the model/consensus path — position for the repricing, not the level."
 
+visualizations:
+  - id: policy_path_fan
+    form: "fan chart (median/mean + 25-75/10-90 bands) + market-forward overlay"
+    encodes: "quantiles of P(rate | meeting) over time"
+    insight: "central path + uncertainty cone; mean-vs-mode-vs-forward gap = skew (hike/cut risk)"
+    color_job: sequential
+    dim: 2D
+  - id: policy_path_heatmap
+    form: "probability heatmap (time × rate level) + modal/mean/forward lines"
+    encodes: "P(rate | meeting), full distribution"
+    insight: "the analyst read — bimodality shows as two ridges a fan hides"
+    color_job: sequential
+    dim: 2D
+  - id: meeting_prob_table
+    form: "meeting × rate-level heat-table, modal cell ringed"
+    encodes: "P(rate | meeting)"
+    insight: "auditable backing (hard rule #1) — every probability legible"
+    color_job: sequential
+    dim: table
+  # PROVEN: rendered live for BoE (SONIA OIS + real BoE calendar), 2026-07-10.
+
 implemented_by: "unified_market_data.analysis.curve_analytics.ois_implied_path"
 # US-only refinement (meeting-dated probabilities): unified_market_data.analysis.rate_path_model.build_rate_path_distribution

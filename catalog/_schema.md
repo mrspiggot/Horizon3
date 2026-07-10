@@ -59,6 +59,17 @@ outputs:                               # the named numbers the model PRODUCES (t
 interpretation: >                      # the `asserts` text the Narrator uses — what the number MEANS
   "This tenor is rich/cheap vs the fitted curve; the gap, not the level, is the trade."
 
+visualizations:                        # FIRST-CLASS. Charts are Horizon3's differentiator (H2's were
+                                        # the failure) — every model DECLARES its signature insight-chart(s),
+                                        # never an afterthought. Rendered deterministically from `outputs`.
+  - id: curve_richcheap                 # stable id
+    form: "bar (per tenor) + fitted-curve line"   # dataviz form(s)
+    encodes: "fair_value_residual_bp by tenor, vs the fitted curve"
+    insight: "which tenors are rich/cheap — the RV trade; the gap, not the level"
+    color_job: diverging                # sequential | diverging | categorical | status (per dataviz)
+    dim: 2D                             # 2D | 3D | table
+  # list the decision view + the analyst view + the auditable table where they differ.
+
 implemented_by: "unified_market_data.analysis.curve_builder.build_ois_curve"
   # module.fn in the UMD `analysis/` package that EXECUTES this model.
   # OR, when the model is named in §05/§11 but not yet built:

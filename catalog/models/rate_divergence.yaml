@@ -83,4 +83,18 @@ interpretation: >
   risk premium. A persistent, large divergence is the signal — one measure is mispricing the outcome.
   (Prediction-market rates liquidity is thin; treat the edge with caution — the value is the gap.)"
 
+visualizations:
+  - id: divergence_dumbbell
+    form: "dumbbell/lollipop: OIS-implied vs market-implied rate at the meeting"
+    encodes: "ois_implied_rate, market_implied_rate, divergence_bp"
+    insight: "the gap between the two measures IS the trade; length = edge"
+    color_job: diverging
+    dim: 2D
+  - id: divergence_timeseries
+    form: "divergence_bp time series with +/- alert-threshold band"
+    encodes: "divergence_bp over time, alert"
+    insight: "persistence — a durable, large divergence is the signal (thin PM liquidity: wider band)"
+    color_job: diverging
+    dim: 2D
+
 implemented_by: "unified_market_data.analysis.rate_divergence.compute_rate_divergence"

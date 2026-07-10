@@ -83,4 +83,18 @@ interpretation: >
   substrate: the policy-path, divergence, carry and rich/cheap models all read rates and discount
   factors off it. It asserts nothing about rich/cheap on its own."
 
+visualizations:
+  - id: term_structure
+    form: "zero + forward curve lines by tenor (dual series)"
+    encodes: "zero_rate_by_tenor, forward_rate_by_tenor"
+    insight: "curve shape — inversion/steepness; forwards vs spot = priced path"
+    color_job: categorical
+    dim: 2D
+  - id: g10_curve_small_multiples
+    form: "7-panel small multiples, one OIS curve per currency"
+    encodes: "zero_rate_by_tenor across USD/EUR/GB/JP/CH/CA/AU"
+    insight: "cross-market divergence — who is inverted, who steep (the generic payoff)"
+    color_job: categorical
+    dim: 2D
+
 implemented_by: "unified_market_data.analysis.curve_builder.build_ois_curve"

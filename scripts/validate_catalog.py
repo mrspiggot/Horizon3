@@ -176,6 +176,9 @@ def main() -> int:
         for k in ("model_id", "name", "family", "spec", "inputs", "outputs", "interpretation"):
             if k not in doc:
                 errs.append(f"missing '{k}'")
+        # Charts are Horizon3's differentiator — every model DECLARES its signature chart(s).
+        if not (doc.get("visualizations") or []):
+            errs.append("no visualizations declared (charts are first-class)")
         if doc.get("family") not in FAMILIES:
             errs.append(f"family '{doc.get('family')}' invalid")
         n_kind = sum([("implemented_by" in doc), is_stub, is_direct])

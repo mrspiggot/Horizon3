@@ -52,4 +52,18 @@ interpretation: >
   "A large curvature move is a different macro signal from a slope move; per-tenor residuals are the
   butterfly/spread rich-cheap signals. This is the 'fair value' role for the rates family."
 
+visualizations:
+  - id: factor_loadings
+    form: "three loading curves (level / slope / curvature) across tenors"
+    encodes: "loadings, explained_var"
+    insight: "the shapes the curve actually moves in; explained variance ~91/7/1%"
+    color_job: categorical
+    dim: 2D
+  - id: richcheap_residuals
+    form: "residual bar per tenor (observed − factor-fitted)"
+    encodes: "residual_bp by tenor"
+    insight: "butterfly/RV rich-cheap signal — which tenors are off the fitted curve"
+    color_job: diverging
+    dim: 2D
+
 implemented_by: "unified_market_data.analysis.curve_analytics.curve_pca"

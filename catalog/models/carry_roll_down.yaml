@@ -59,4 +59,18 @@ interpretation: >
   "You are paid (or pay) this much to hold the position if the curve does not move. Carry vs the
   fair-value/term-premium signal is the trade-selection frame for the book."
 
+visualizations:
+  - id: carry_roll_stack
+    form: "grouped/stacked bar per tenor: carry_bp + rolldown_bp = total"
+    encodes: "carry_bp, rolldown_bp, total_carry_bp by tenor"
+    insight: "where you are paid to hold; carry vs roll decomposition per tenor (sign matters)"
+    color_job: diverging
+    dim: 2D
+  - id: carry_surface
+    form: "carry heatmap: tenor × holding-horizon"
+    encodes: "total_carry_bp(tenor, horizon)"
+    insight: "the sweet spot on the curve × horizon grid"
+    color_job: diverging
+    dim: 2D
+
 implemented_by: "unified_market_data.analysis.curve_analytics.carry_and_rolldown"
