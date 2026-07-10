@@ -1,0 +1,73 @@
+model_id: variance_risk_premium
+name: "Variance risk premium (VRP)"
+family: vol
+summary: >
+  The premium of implied variance over expected realized variance — compensation for bearing
+  variance risk (Carr-Wu). VRP = implied_var − E[realized_var]. GENERIC over underlying.
+
+generic_over: [underlying]
+instances: [SPY, BTC, ETH, SOFR]
+implementation_coverage:
+  covers: []
+  gap: >
+    Thin composition to BUILD (Deliverable 5): implied variance (from the fitted ATM surface / VIX²)
+    minus an expected-realized-variance forecast (trailing realized via compute_log_vol as the
+    proxy, or a HAR forecast). Both inputs are LIVE for all 4 underlyings — buildable now.
+
+spec:
+  form: >
+    VRP(t,τ) = IV(t,τ)² − E_t[RV(t,t+τ)²]. VIX²≈30d implied variance for SPX; the realized-variance
+    forecast uses trailing realized (compute_log_vol) as the standard proxy, or a HAR-RV model.
+    A term structure of VRP across τ. (§11 G1, Carr-Wu.)
+  assumptions:
+    - "Trailing realized variance is an unbiased-enough proxy for E[realized] at the chosen horizon."
+    - "Implied variance from the model-free / ATM surface, matched tenor."
+  params:
+    horizon_days: 30
+    rv_forecast: "trailing (proxy) | HAR"
+  references:
+    - "docs/assessment/11-model-reference.md#g1"
+    - "Carr-Wu variance risk premia (corpus)"
+
+inputs:
+  - role: implied_vol_atm
+    order: level
+    window: "1d"
+    horizon: spot
+    required: true
+    note: "Implied variance leg (IV², e.g. VIX² for SPX)."
+  - role: realized_vol
+    order: context
+    window: "30d"
+    horizon: spot
+    required: true
+    note: "Expected-realized-variance leg (trailing RV² proxy / HAR forecast)."
+
+outputs:
+  - name: "vrp"
+    unit: "variance pts"
+    note: "implied_var − expected_realized_var."
+  - name: "vrp_term_structure"
+    unit: "variance pts"
+    note: "VRP across tenors."
+
+interpretation: >
+  "Options are pricing this much more variance than is likely to realize. A large positive VRP is
+  compensation for selling insurance; VRP vs its history is the vol-positioning signal, and the
+  sign/change flags regime shifts."
+
+visualizations:
+  - id: vrp_history
+    form: "2D: VRP time series with a zero line and +/- regime shading"
+    encodes: "vrp over time"
+    insight: "the premium regime — persistently positive (sell-vol carry) vs negative (stress)"
+    color_job: diverging
+    dim: 2D
+  - id: vrp_term
+    form: "VRP term structure across tenors"
+    encodes: "vrp_term_structure"
+    insight: "where variance is richest to sell / cheapest to own"
+    color_job: diverging
+    dim: 2D
+
+build_stub: true

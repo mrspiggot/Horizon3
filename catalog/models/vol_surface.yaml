@@ -1,0 +1,81 @@
+model_id: vol_surface
+name: "Implied volatility surface (SABR + SVI)"
+family: vol
+summary: >
+  Fits the implied-volatility smile across strikes for each expiry (SABR lognormal + SVI total
+  variance), producing the arbitrage-checked vol surface and the risk-neutral density. GENERIC over
+  underlying — the same fit serves SPX equity, BTC/ETH crypto and SOFR rate vol.
+
+generic_over: [underlying]
+instances: [SPY, BTC, ETH, SOFR]
+implementation_coverage:
+  covers: [SPY, BTC, ETH, SOFR]
+  gap: >
+    Verified live (2026-07-10) — get_*_vol_surface returns full smile+density for SPY/BTC/ETH/SOFR.
+    Treasury + FX surfaces are code-ready but options chains are empty ("too thin") — a data-
+    acquisition gap (populate CME UST-option + FX-option scrapes, then add those underlyings).
+
+spec:
+  form: >
+    Per expiry: fit the OTM implied-vol smile with SABR (lognormal) and SVI (raw total variance),
+    invert to IV(strike), assemble across expiries into a surface, and differentiate twice
+    (Breuden-Litzenberger) for the risk-neutral density. Arbitrage checks: butterfly (density
+    positivity) + calendar. (§11 G1 surface.)
+  assumptions:
+    - "OTM quotes are clean; wings extrapolated by the parametric fit."
+    - "Density from the fitted smile (positivity-clipped, arb-checked) — not raw finite differences."
+  params:
+    smile_models: ["SABR-lognormal", "SVI"]
+    density: "Breeden-Litzenberger from fitted smile"
+  references:
+    - "docs/assessment/11-model-reference.md#g1"
+    - "UMD analysis/vol_surface.py (fit_smile, sabr_lognormal_vol, svi_total_variance)"
+
+inputs:
+  - role: implied_vol_surface
+    order: level
+    window: "1d"
+    horizon: term_structure
+    required: true
+    note: "The options chain / fitted smile per expiry (get_*_vol_surface)."
+
+outputs:
+  - name: "iv_by_strike_tenor"
+    unit: "vol (%/bp)"
+    note: "The implied-vol surface: IV over moneyness × tenor."
+  - name: "atm_vol_by_tenor"
+    unit: "vol"
+    note: "ATM implied vol term structure."
+  - name: "risk_neutral_density"
+    unit: "pdf"
+    note: "Breeden-Litzenberger density per expiry (arb-checked)."
+  - name: "smile_params"
+    unit: "SABR α/ρ/ν · SVI"
+    note: "Fitted smile parameters per expiry."
+
+interpretation: >
+  "This is what the options market prices for the whole distribution of the underlying — not just
+  a single vol number. The shape (skew, wings, term structure) is the positioning signal; a
+  dislocation vs history or vs realized is the trade."
+
+visualizations:
+  - id: vol_surface_3d
+    form: "3D surface: moneyness × tenor × implied vol"
+    encodes: "iv_by_strike_tenor"
+    insight: "the whole surface at a glance — skew (tilt), wings, term-structure slope; the FLAGSHIP vol chart"
+    color_job: sequential
+    dim: 3D
+  - id: smile_per_expiry
+    form: "2D smile: IV vs moneyness/delta, one line per expiry"
+    encodes: "iv_by_strike_tenor sliced by tenor"
+    insight: "the analyst's precise read of skew + wing convexity per expiry"
+    color_job: categorical
+    dim: 2D
+  - id: rn_density
+    form: "risk-neutral density curve per expiry"
+    encodes: "risk_neutral_density"
+    insight: "the market-implied distribution of the underlying — fat tails, bimodality"
+    color_job: sequential
+    dim: 2D
+
+implemented_by: "unified_market_data.analysis.vol_surface.fit_smile"

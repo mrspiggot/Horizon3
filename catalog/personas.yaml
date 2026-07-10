@@ -68,8 +68,7 @@ personas:
   - persona_id: volatility_trader
     name: "Volatility / derivatives trader"
     decision: "Vol positioning."
-    uses: []                   # TODO: implied_vs_realized, vol_surface, skew, variance_risk_premium (impls exist in UMD)
-    status: pending_authoring
+    uses: [vol_surface, implied_vs_realized, vol_skew, variance_risk_premium]  # generic over UNDERLYING (SPY/BTC/ETH/SOFR)
 
   - persona_id: event_prediction_trader
     name: "Event / prediction-market trader"

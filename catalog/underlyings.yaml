@@ -1,0 +1,49 @@
+# Underlying bindings — the generalization axis for the VOLATILITY family (parallel to
+# jurisdictions.yaml for rates). A vol model is generic over UNDERLYING, not currency: the same
+# SABR/SVI smile fit serves SPX equity, BTC/ETH crypto, and SOFR rate vol. USD/SPX is one
+# instantiation, never the definition (hard-rule #6, applied to a second axis).
+#
+# Verified LIVE via MarketDataAPI.get_*_vol_surface (2026-07-10): SPY, BTC, ETH, SOFR return full
+# smile+density. Treasury and FX are CODE-READY but options chains are empty ("too thin") — a
+# data-acquisition gap (directive #1), documented not bound.
+
+# Role vocabulary (vol family). `surface`/`computed` sources are API/analysis-derived (not a raw
+# observations series); the validator treats them as declared (API-verified) rather than DB-checked.
+roles:
+  implied_vol_surface: {kind: surface,      desc: "Fitted implied-vol smile/surface (SABR+SVI) from the options chain."}
+  implied_vol_atm:     {kind: computed,     desc: "ATM implied vol (headline vol level; VIX-type where a series exists)."}
+  realized_vol:        {kind: computed, optional: true, desc: "Realized vol of the underlying (historical_vol.compute_log_vol)."}
+  spot:                {kind: observations, optional: true, desc: "Underlying spot/level."}
+
+underlyings:
+  - id: SPY
+    asset_class: equity
+    bindings:
+      implied_vol_surface: {ref: "equity:SPY", source: surface, note: "get_equity_vol_surface(product=SPY)"}
+      implied_vol_atm:     {ref: "^VIX",       source: observations, note: "VIX ≈ SPX 30d ATM implied."}
+      realized_vol:        {ref: "SPY",        source: computed, note: "log-return vol from equity_prices."}
+
+  - id: BTC
+    asset_class: crypto
+    bindings:
+      implied_vol_surface: {ref: "crypto:BTC", source: surface, note: "get_crypto_vol_surface(BTC) — Deribit."}
+      implied_vol_atm:     {ref: "crypto:BTC", source: computed, note: "ATM from the fitted surface."}
+      realized_vol:        {ref: "BTC",        source: computed}
+
+  - id: ETH
+    asset_class: crypto
+    bindings:
+      implied_vol_surface: {ref: "crypto:ETH", source: surface, note: "get_crypto_vol_surface(ETH) — Deribit."}
+      implied_vol_atm:     {ref: "crypto:ETH", source: computed}
+      realized_vol:        {ref: "ETH",        source: computed}
+
+  - id: SOFR
+    asset_class: rates
+    bindings:
+      implied_vol_surface: {ref: "sofr",       source: surface, note: "get_sofr_vol_surface — CME SR3 options."}
+      implied_vol_atm:     {ref: "sofr",       source: computed, note: "ATM Bachelier vol from the SR3 smile."}
+      realized_vol:        {ref: "SR3=F",      source: computed, note: "get_sr3_realized_vol."}
+
+  # Treasury (get_treasury_vol_surface) and FX (get_fx_vol_surface): code-ready, options chains
+  # currently EMPTY. Data-acquisition backlog — populate CME Treasury-option + FX-option scrapes,
+  # then add UST / EURUSD / … underlyings here.

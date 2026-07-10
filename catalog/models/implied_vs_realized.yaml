@@ -1,0 +1,73 @@
+model_id: implied_vs_realized
+name: "Implied vs realized volatility"
+family: vol
+summary: >
+  Compares the market's implied (ATM) volatility against the underlying's realized volatility.
+  The spread (implied − realized) is the premium paid for volatility insurance. GENERIC over underlying.
+
+generic_over: [underlying]
+instances: [SPY, BTC, ETH, SOFR]
+implementation_coverage:
+  covers: [SPY, BTC, ETH, SOFR]
+  gap: "Realized via historical_vol.compute_log_vol; implied ATM from the fitted surface / VIX-type series. Live for all 4."
+
+spec:
+  form: >
+    implied = ATM implied vol (from the fitted surface, or a VIX-type series); realized =
+    annualized stdev of log returns over a matching window (compute_log_vol). spread = implied −
+    realized. Term-structure = the spread across tenors. (§11 G1.)
+  assumptions:
+    - "Realized window matched to the implied tenor (e.g. 30d implied vs 30d realized)."
+    - "Log-return realized vol, 252-day annualization for price underlyings."
+  params:
+    window_days: 30
+    annualization: 252
+  references:
+    - "docs/assessment/11-model-reference.md#g1"
+    - "UMD analysis/historical_vol.py (compute_log_vol)"
+
+inputs:
+  - role: implied_vol_atm
+    order: level
+    window: "1d"
+    horizon: spot
+    required: true
+    note: "ATM implied vol (SPY=^VIX; others = ATM from the fitted surface)."
+  - role: realized_vol
+    order: level
+    window: "30d"
+    horizon: spot
+    required: true
+    note: "Annualized log-return realized vol over the matching window."
+
+outputs:
+  - name: "implied_vol"
+    unit: "vol"
+    note: "ATM implied vol."
+  - name: "realized_vol"
+    unit: "vol"
+    note: "Realized vol over the matching window."
+  - name: "iv_rv_spread"
+    unit: "vol pts"
+    note: "implied − realized; the vol risk premium proxy."
+
+interpretation: >
+  "Options are pricing this much more (or less) volatility than the underlying has recently realized.
+  A large positive spread is compensation for selling insurance; the sign and its change flag
+  regime shifts. The gap, not either level alone, is the vol trade."
+
+visualizations:
+  - id: iv_rv_lines
+    form: "2D: implied and realized vol time series (two lines) + shaded spread"
+    encodes: "implied_vol, realized_vol, iv_rv_spread"
+    insight: "the premium and its regime; the shaded gap is the carry of a short-vol position"
+    color_job: categorical
+    dim: 2D
+  - id: iv_rv_term
+    form: "spread across tenors (term structure of the vol premium)"
+    encodes: "iv_rv_spread by tenor"
+    insight: "where on the curve vol is richest/cheapest"
+    color_job: diverging
+    dim: 2D
+
+implemented_by: "unified_market_data.analysis.historical_vol.compute_log_vol"

@@ -52,10 +52,18 @@ _load_dotenv(REPO / ".env")
 MODELS_DIR = REPO / "catalog" / "models"
 PERSONAS_FILE = REPO / "catalog" / "personas.yaml"
 JURIS_FILE = REPO / "catalog" / "jurisdictions.yaml"
+UNDERLYINGS_FILE = REPO / "catalog" / "underlyings.yaml"
+
+# Generalization axes: which binding file + list key + model "claimed instances" field each uses.
+AXES = {
+    "currency":   {"file": JURIS_FILE,       "list_key": "jurisdictions", "claim_field": "jurisdictions"},
+    "underlying": {"file": UNDERLYINGS_FILE,  "list_key": "underlyings",   "claim_field": "instances"},
+}
 
 FAMILIES = {"rates", "vol", "credit", "fx", "commodity", "equity", "macro", "event"}
 ORDERS = {"level", "delta", "delta2", "context", "diffusion", "surprise"}
-SOURCES = {"observations", "curve", "derived", "event"}
+# surface/computed = API/analysis-derived (not a raw series) → declared, not DB-checked.
+SOURCES = {"observations", "curve", "derived", "event", "surface", "computed"}
 
 _TTY = sys.stdout.isatty()
 def c(code: str, s: str) -> str:
@@ -110,6 +118,8 @@ class Estate:
 
     def binding_exists(self, binding: dict) -> bool:
         ref, source = binding.get("ref"), binding.get("source")
+        if source in ("surface", "computed"):
+            return True  # API/analysis-derived — declared (manually API-verified), not DB-checked
         if source in ("observations", "event"):
             return self.series_exists(ref)
         if source == "curve":
@@ -133,11 +143,16 @@ def resolve_callable(dotted: str, src: Path) -> tuple[bool, str]:
     return False, f"'{fn}' not in {path.name}"
 
 
+def _load_axis(cfg: dict) -> dict:
+    if not cfg["file"].exists():
+        return {"roles": set(), "insts": {}, "order": [], "claim": cfg["claim_field"]}
+    d = yaml.safe_load(cfg["file"].read_text())
+    insts = {x["id"]: x for x in d.get(cfg["list_key"], [])}
+    return {"roles": set(d.get("roles", {})), "insts": insts, "order": list(insts), "claim": cfg["claim_field"]}
+
+
 def main() -> int:
-    juri = yaml.safe_load(JURIS_FILE.read_text())
-    role_vocab = set(juri.get("roles", {}).keys())
-    jurisdictions = {j["id"]: j for j in juri.get("jurisdictions", [])}
-    jur_order = list(jurisdictions.keys())
+    axes = {name: _load_axis(cfg) for name, cfg in AXES.items()}
 
     model_files = sorted(MODELS_DIR.glob("*.yaml"))
     docs = {f.stem: yaml.safe_load(f.read_text()) for f in model_files}
@@ -151,10 +166,13 @@ def main() -> int:
     estate, src = Estate(conn), umd_src()
     print(f"UMD source: {src}")
     print(f"UMD estate: {dsn().split('password=')[0].strip()}")
-    print(f"Jurisdictions: {', '.join(jur_order)}\n")
+    for name, ax in axes.items():
+        if ax["order"]:
+            print(f"Axis '{name}': {', '.join(ax['order'])}")
+    print()
 
     over_claims = 0
-    matrix: dict[str, dict[str, str]] = {}   # model -> jur -> cell
+    matrices: dict[str, dict[str, dict[str, str]]] = {name: {} for name in AXES}
 
     for stem, doc in docs.items():
         mid = doc.get("model_id", stem)
@@ -162,21 +180,24 @@ def main() -> int:
         is_stub = doc.get("build_stub") is True
         is_direct = doc.get("data_direct") is True
         covers = set((doc.get("implementation_coverage") or {}).get("covers", []) or [])
-        claimed = doc.get("jurisdictions", []) or []
+        # pick the generalization axis this model varies over
+        axis_name = "underlying" if "underlying" in (doc.get("generic_over") or []) else "currency"
+        ax = axes[axis_name]
+        role_vocab, insts, order = ax["roles"], ax["insts"], ax["order"]
+        claimed = doc.get(ax["claim"], []) or []
         if is_stub:
             kind = f"{STUB}"
         elif is_direct:
             kind = "data-direct (published series)"
         else:
             kind = f"impl: {doc.get('implemented_by','—').split('.')[-1]}"
-        print(f"MODEL {mid}  [{fam}]  {kind}  covers: {sorted(covers) or '—'}")
+        print(f"MODEL {mid}  [{fam}]  ({axis_name})  {kind}  covers: {sorted(covers) or '—'}")
 
         # schema
         errs = []
         for k in ("model_id", "name", "family", "spec", "inputs", "outputs", "interpretation"):
             if k not in doc:
                 errs.append(f"missing '{k}'")
-        # Charts are Horizon3's differentiator — every model DECLARES its signature chart(s).
         if not (doc.get("visualizations") or []):
             errs.append("no visualizations declared (charts are first-class)")
         if doc.get("family") not in FAMILIES:
@@ -188,15 +209,15 @@ def main() -> int:
         for inp in doc.get("inputs", []) or []:
             r = inp.get("role")
             if r not in role_vocab:
-                errs.append(f"input.role '{r}' not in vocab")
+                errs.append(f"input.role '{r}' not in {axis_name} vocab")
             (req_roles if inp.get("required") else opt_roles).append(r)
             if inp.get("order") not in ORDERS:
                 errs.append(f"bad order '{inp.get('order')}'")
             if not inp.get("horizon"):
                 errs.append(f"role {r} missing horizon")
         for j in claimed:
-            if j not in jurisdictions:
-                errs.append(f"unknown jurisdiction '{j}'")
+            if j not in insts:
+                errs.append(f"unknown {axis_name} '{j}'")
         print(f"  schema           {OK if not errs else FAIL}" + ("" if not errs else "  " + "; ".join(errs)))
 
         if "implemented_by" in doc:
@@ -207,14 +228,13 @@ def main() -> int:
 
         print(f"  roles: required={sorted(set(req_roles))}  optional={sorted(set(opt_roles))}")
 
-        # jurisdiction matrix
-        matrix[mid] = {}
+        matrices[axis_name][mid] = {}
         cells = []
-        for j in jur_order:
+        for j in order:
             if j not in claimed:
-                matrix[mid][j] = " -"
+                matrices[axis_name][mid][j] = " -"
                 continue
-            bindings = jurisdictions[j].get("bindings", {}) or {}
+            bindings = insts[j].get("bindings", {}) or {}
             missing = []
             for role in set(req_roles):
                 b = bindings.get(role)
@@ -225,24 +245,30 @@ def main() -> int:
             data_ok = not missing
             impl_ok = (j in covers)
             cell = (TICK if data_ok else CROSS) + (TICK if impl_ok else GAP)
-            matrix[mid][j] = cell
+            matrices[axis_name][mid][j] = cell
             cells.append(f"{j} {cell}" + ("" if data_ok else f" ({'; '.join(missing)})"))
             if not data_ok:
                 over_claims += 1
-        print("  DATA/IMPL by jurisdiction:")
+        print(f"  DATA/IMPL by {axis_name}:")
         for line in cells:
             print(f"    {line}")
         print(f"  => {'STUB (D5 impl)' if is_stub else 'authored'}\n")
 
-    # compact matrix
-    print("CURRENCY × MODEL MATRIX   (cell = DATA/IMPL:  " + f"{TICK}{TICK}=both  {TICK}{GAP}=data-only(impl gap)  {CROSS}{GAP}=data-missing  -=not claimed)")
-    w = max(len(m) for m in matrix)
-    print(" " * (w + 2) + "  ".join(f"{j:>3}" for j in jur_order))
-    for mid, row in matrix.items():
-        print(f"  {mid:<{w}} " + "  ".join(f"{row[j]:>3}" for j in jur_order))
+    # one compact matrix per axis that has models
+    for axis_name, mtx in matrices.items():
+        if not mtx:
+            continue
+        order = axes[axis_name]["order"]
+        print(f"{axis_name.upper()} × MODEL MATRIX   (cell = DATA/IMPL:  "
+              f"{TICK}{TICK}=both  {TICK}{GAP}=data-only(impl gap)  {CROSS}{GAP}=data-missing  -=not claimed)")
+        w = max(len(m) for m in mtx)
+        print(" " * (w + 2) + "  ".join(f"{j:>4}" for j in order))
+        for mid, row in mtx.items():
+            print(f"  {mid:<{w}} " + "  ".join(f"{row[j]:>4}" for j in order))
+        print()
 
     # personas
-    print("\nPERSONAS")
+    print("PERSONAS")
     persona_fail = 0
     personas = yaml.safe_load(PERSONAS_FILE.read_text()).get("personas", [])
     known = set(docs.keys())

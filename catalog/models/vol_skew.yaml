@@ -1,0 +1,65 @@
+model_id: vol_skew
+name: "Volatility skew / risk reversal"
+family: vol
+summary: >
+  The asymmetry of the implied-vol smile — the 25-delta risk reversal (put IV − call IV) and the
+  smile slope. Prices the market's demand for downside vs upside protection. GENERIC over underlying.
+
+generic_over: [underlying]
+instances: [SPY, BTC, ETH, SOFR]
+implementation_coverage:
+  covers: [SPY, BTC, ETH, SOFR]
+  gap: "Derived from the fitted smile (vol_surface.fit_smile → 25d skew); live for all 4."
+
+spec:
+  form: >
+    From the fitted smile per expiry: skew_25d = IV(25d put) − IV(25d call) (risk reversal);
+    also the local smile slope ∂IV/∂(log-moneyness) at ATM. Term structure = skew across expiries.
+    (§11 G1 skew.)
+  assumptions:
+    - "Smile parametrically fitted (SABR/SVI) so 25d wings are well-defined even if not quoted."
+  params:
+    delta: 0.25
+  references:
+    - "docs/assessment/11-model-reference.md#g1"
+    - "UMD analysis/vol_surface.py (fit_smile → skew_25d_bp)"
+
+inputs:
+  - role: implied_vol_surface
+    order: level
+    window: "1d"
+    horizon: term_structure
+    required: true
+    note: "The fitted smile per expiry (25d wings)."
+
+outputs:
+  - name: "skew_25d_bp"
+    unit: "bp / vol pts"
+    note: "25-delta risk reversal (put − call IV) per expiry."
+  - name: "smile_slope_atm"
+    unit: "dIV/dk"
+    note: "Local smile slope at ATM."
+  - name: "skew_term_structure"
+    unit: "bp"
+    note: "25d skew across expiries."
+
+interpretation: >
+  "How much more the market pays for downside vs upside protection. A steep, rising put skew flags
+  crash-hedging demand / fear; a flattening skew flags complacency. Skew vs its own history is the
+  signal, not the level."
+
+visualizations:
+  - id: skew_curve
+    form: "2D: 25d risk reversal across expiries (skew term structure)"
+    encodes: "skew_term_structure"
+    insight: "near-dated fear vs far-dated — the shape of protection demand"
+    color_job: diverging
+    dim: 2D
+  - id: skew_history
+    form: "skew_25d time series with history band"
+    encodes: "skew_25d_bp over time"
+    insight: "skew percentile — complacency vs fear regime"
+    color_job: diverging
+    dim: 2D
+
+implemented_by: "unified_market_data.analysis.vol_surface.fit_smile"
