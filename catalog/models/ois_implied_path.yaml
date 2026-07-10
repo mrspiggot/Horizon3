@@ -15,12 +15,14 @@ jurisdictions: [US, EU, GB, JP, CH, CA, AU]
 implementation_coverage:
   covers: [US, EU, GB, JP, CH, CA, AU]
   gap: >
-    GENERALISED (2026-07-10): curve_analytics.ois_implied_path reads the OIS forward path directly
-    from the built curve — the market-implied expected-rate path, generic over currency (verified
-    all 7; e.g. JPY implied +36..+85bp over 18m = BoJ normalisation). The meeting-dated cut/hold/hike
-    PROBABILITY decomposition + terminal distribution (rate_path_model.build_rate_path_distribution)
-    stay US-ONLY — they need each CB's exact meeting dates, a per-CB calendar acquisition task
-    (directive #1). So the expected-rate path is ✓✓ for all 7; the probabilistic refinement is US-only.
+    FULLY GENERALISED (2026-07-10). Two layers, both now currency-generic:
+    (1) expected-rate path — curve_analytics.ois_implied_path reads OIS forwards from the built curve;
+    (2) meeting-dated cut/hold/hike decomposition + terminal distribution —
+    curve_analytics.implied_path_distribution drives rate_path_model off an OIS-forward strip + the
+    central bank's real meeting calendar (analysis.cb_meeting_calendars, sourced from each CB's
+    published schedule). Verified for US/EU/GB/JP/CA/AU on their actual 2026 meeting dates. CHF is
+    partial (SNB Sep/Dec 2026 not yet published — pending verification, not guessed). This is the
+    former "US-only" gap closed.
 
 spec:
   form: >
