@@ -1,0 +1,65 @@
+model_id: swap_spread
+name: "Swap-spread fair value"
+family: rates
+summary: >
+  Swap rate minus government yield per tenor — the swap spread. Its level (and rich/cheap vs history)
+  is a core relative-value trade; the long-end sign and squeezes are the signal. GENERIC over any
+  currency with both a swap (IRS) and a government curve.
+
+generic_over: [currency]
+jurisdictions: [EU, AU]
+implementation_coverage:
+  covers: [EU, AU]
+  gap: >
+    curve_analytics.swap_spread — live for EUR (EURIBOR IRS vs Bund) + AUD (both curves present).
+    Extends to any currency with both a swap and a government curve (US govt is too sparse; GB has no
+    government curve scraped — acquisition items).
+
+spec:
+  form: >
+    spread(tenor) = swap_rate(tenor) − government_yield(tenor), in bp. Read off the aligned IRS and
+    government par curves. (§11 B — relative value.)
+  assumptions:
+    - "Swap and government curves are same-currency, same-tenor grid, same snapshot date."
+  references:
+    - "docs/assessment/11-model-reference.md#b"
+    - "UMD analysis/curve_analytics.py (swap_spread)"
+
+inputs:
+  - role: swap_par_curve
+    order: level
+    window: "1d"
+    horizon: full_curve
+    required: true
+    note: "IRS/swap par curve (curve_snapshots CCY/irs)."
+  - role: govt_par_curve
+    order: level
+    window: "1d"
+    horizon: full_curve
+    required: true
+    note: "Government par curve (curve_snapshots CCY/government)."
+
+outputs:
+  - name: "spread_by_tenor_bp"
+    unit: "bp"
+    note: "swap − government per tenor; sign = swap rich/cheap to govt."
+
+interpretation: >
+  "How rich or cheap swaps are to government bonds at each tenor. The spread vs its own history is the
+  RV trade; a negative long-end spread (common in EUR) and its squeezes are the positioning signal."
+
+visualizations:
+  - id: swap_spread_curve
+    form: "swap-spread by tenor (bar), sign-colored"
+    encodes: "spread_by_tenor_bp by tenor"
+    insight: "the spread curve — where swaps are rich/cheap to govt"
+    color_job: diverging
+    dim: 2D
+  - id: swap_spread_history
+    form: "swap-spread (per tenor) time series with a history band"
+    encodes: "spread_by_tenor_bp over time"
+    insight: "rich/cheap vs history + squeezes — the RV entry/exit"
+    color_job: diverging
+    dim: 2D
+
+implemented_by: "unified_market_data.analysis.curve_analytics.swap_spread"

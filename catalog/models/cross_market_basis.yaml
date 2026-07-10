@@ -1,0 +1,58 @@
+model_id: cross_market_basis
+name: "Cross-market basis"
+family: rates
+summary: >
+  The basis between economically-similar instruments across markets (e.g. a bond future vs its
+  cheapest-to-deliver, or one market's curve vs another's) — a relative-value dislocation to fade.
+  GENERIC over currency.
+
+generic_over: [currency]
+jurisdictions: [EU, AU]
+implementation_coverage:
+  covers: []
+  gap: >
+    To BUILD (Deliverable 5): align two curves/instruments (futures-implied vs cash, or cross-market)
+    and compute the basis + its history. Curve data present for EUR/AUD; futures baskets need the CTD
+    mapping. A thin composition once the instrument pairs are defined.
+
+spec:
+  form: >
+    basis = instrument_A_yield − instrument_B_yield for economically-matched A, B (e.g. futures-implied
+    vs cash bond, or cross-currency-adjusted). Rich/cheap vs history is the trade. (§11 B — RV.)
+  assumptions:
+    - "A and B are genuinely matched (tenor, credit, delivery) — otherwise the basis is not arbitrageable."
+  references:
+    - "docs/assessment/11-model-reference.md#b"
+
+inputs:
+  - role: swap_par_curve
+    order: level
+    window: "1d"
+    horizon: full_curve
+    required: true
+    note: "One leg (e.g. swap/futures-implied)."
+  - role: govt_par_curve
+    order: level
+    window: "1d"
+    horizon: full_curve
+    required: true
+    note: "The other leg (e.g. cash government)."
+
+outputs:
+  - name: "basis_by_tenor_bp"
+    unit: "bp"
+    note: "Cross-market basis per tenor/node."
+
+interpretation: >
+  "Two things that should trade together have diverged — the basis is the dislocation to fade, sized
+  by how far it is from its history and the cost of putting the arbitrage on."
+
+visualizations:
+  - id: basis_history
+    form: "basis time series with a history band"
+    encodes: "basis_by_tenor_bp over time"
+    insight: "dislocation vs history — the RV entry"
+    color_job: diverging
+    dim: 2D
+
+build_stub: true

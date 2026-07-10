@@ -29,9 +29,7 @@ personas:
   - persona_id: relative_value_fi_trader
     name: "Relative-value FI trader"
     decision: "Spread / basis trades."
-    uses: [curve_pca]          # shared with macro_rates_trader (authored). TODO: swap_spread_fair_value,
-                               # butterfly_curve_rv, cross_market_basis, asset_swap
-    status: pending_authoring
+    uses: [curve_pca, swap_spread, cross_market_basis, asset_swap]  # curve_pca (butterfly/RV) shared with macro_rates_trader
 
   - persona_id: corporate_treasurer
     name: "Corporate treasurer"

@@ -1,0 +1,58 @@
+model_id: asset_swap
+name: "Asset-swap spread"
+family: rates
+summary: >
+  The spread of a specific bond over the swap curve when swapped to floating (asset-swap spread /
+  Z-spread) — the per-bond richness/cheapness once curve and coupon effects are stripped out.
+  GENERIC over currency.
+
+generic_over: [currency]
+jurisdictions: [EU, AU]
+implementation_coverage:
+  covers: []
+  gap: >
+    To BUILD (Deliverable 5): discount a bond's cashflows off the swap curve and solve for the spread
+    that reprices it (par asset-swap / Z-spread). Needs per-bond cashflows (not just the curve) — a
+    bond-static-data acquisition. The swap curve leg is present for EUR/AUD.
+
+spec:
+  form: >
+    ASW = the constant spread over the floating leg that makes the swapped bond price to par; Z-spread
+    = the constant add-on to the swap zero curve that reprices the bond. (§11 B — RV.)
+  assumptions:
+    - "Bond cashflows + clean price are known; swap curve is the discounting basis."
+  references:
+    - "docs/assessment/11-model-reference.md#b"
+
+inputs:
+  - role: swap_par_curve
+    order: level
+    window: "1d"
+    horizon: full_curve
+    required: true
+    note: "Swap curve — the discounting basis for the asset-swap."
+  - role: govt_par_curve
+    order: level
+    window: "1d"
+    horizon: full_curve
+    required: true
+    note: "Government curve (the bond universe reference)."
+
+outputs:
+  - name: "asw_spread_bp"
+    unit: "bp"
+    note: "Asset-swap / Z-spread per bond."
+
+interpretation: >
+  "Once you strip out the curve and coupon, this is how rich or cheap the specific bond is — the
+  clean per-bond RV signal, comparable across the universe."
+
+visualizations:
+  - id: asw_by_bond
+    form: "asset-swap spread per bond (bar), sign-colored"
+    encodes: "asw_spread_bp across the bond universe"
+    insight: "the rich/cheap bonds — the RV shopping list"
+    color_job: diverging
+    dim: 2D
+
+build_stub: true
