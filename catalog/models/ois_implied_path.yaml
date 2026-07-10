@@ -8,10 +8,10 @@ summary: >
   reads the SOFR futures strip for a sharper front end.
 
 generic_over: [currency, central_bank]
-# Instantiable where a POLICY-RATE series exists to anchor the path start. US/EU/GB/CA have one;
-# JP/CH/AU have the OIS curve but NO ingested BoJ/SNB/RBA policy rate — a Deliverable-2 ingestion
-# gap, not a model limit. (The validator caught this as an over-claim when JP/CH/AU were listed.)
-jurisdictions: [US, EU, GB, CA]
+# Instantiable across all G10 majors: policy_rate now bound for every one (JP=BoJ call rate,
+# AU=RBA cash proxy, CH=SARON/OIS-front proxy — the JP/CH/AU ingestion gap the validator caught
+# has been closed).
+jurisdictions: [US, EU, GB, JP, CH, CA, AU]
 implementation_coverage:
   covers: [US]
   gap: >

@@ -80,7 +80,7 @@ jurisdictions:
       ois_par_curve:            {ref: "JPY:ois",            source: curve}
       govt_par_curve:           {ref: "JPY:government",      source: curve, note: "Present (75 snapshots) — richer than USD govt."}
       overnight_index:          {ref: "JPY:ois",            source: curve, note: "TONAR via OIS front; no standalone fixing series ingested."}
-      policy_rate:              null   # no BoJ policy-rate standalone series ingested
+      policy_rate:              {ref: "IRSTCI01JPM156N",     source: observations, note: "BoJ policy proxy (immediate call rate, monthly)."}
       overnight_deposit_anchor: {ref: "JPY:ois",            source: curve}
       rate_futures_strip:       null
       pm_implied_rate:          null
@@ -94,7 +94,7 @@ jurisdictions:
       ois_par_curve:            {ref: "CHF:ois",            source: curve}
       govt_par_curve:           {ref: "CHF:government",      source: curve, note: "Present (75 snapshots)."}
       overnight_index:          {ref: "CHF:ois",            source: curve, note: "SARON via OIS front; no standalone fixing ingested."}
-      policy_rate:              null
+      policy_rate:              {ref: "CHF:ois",            source: curve, note: "SARON via OIS front proxies SNB policy rate; OECD call-rate series discontinued 2024."}
       overnight_deposit_anchor: {ref: "CHF:ois",            source: curve}
       rate_futures_strip:       null
       pm_implied_rate:          null
@@ -122,7 +122,7 @@ jurisdictions:
       ois_par_curve:            {ref: "AUD:ois",            source: curve}
       govt_par_curve:           {ref: "AUD:government",      source: curve, note: "Present (74 snapshots)."}
       overnight_index:          {ref: "AUD:ois",            source: curve, note: "AONIA via OIS front; no standalone fixing ingested."}
-      policy_rate:              null
+      policy_rate:              {ref: "IRSTCI01AUM156N",     source: observations, note: "RBA cash rate proxy (immediate call rate, monthly)."}
       overnight_deposit_anchor: {ref: "AUD:ois",            source: curve}
       rate_futures_strip:       null
       pm_implied_rate:          null

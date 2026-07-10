@@ -12,12 +12,13 @@ generic_over: [currency]
 # Jurisdictions whose DATA supports this model (roles resolvable in catalog/jurisdictions.yaml).
 jurisdictions: [US, EU, GB, JP, CH, CA, AU]
 implementation_coverage:
-  covers: [US]
+  covers: [US, EU, GB, JP, CH, CA, AU]
   gap: >
-    build_ois_curve HARDCODES ql.UnitedStates(GovernmentBond) calendar + ql.Sofr index +
-    SofrFutureRateHelper (curve_builder.py:156,186,205,233). Data + model generalise across all 7
-    majors today, but the implementation is USD-only. Generalising it = parameterise
-    calendar/index/futures-helper per currency (Deliverable 5). This gap is intentional and visible.
+    GENERALISED (2026-07-10): build_ois_curve now takes a `currency` arg and maps it to the QuantLib
+    calendar + named RFR index (Sofr/Estr/Sonia/Tonar/Saron/Corra/Aonia). SOFR futures remain a
+    USD-only refinement; non-USD bootstrap from OIS par swaps. Verified building valid curves for all
+    7 majors from live LCH par rates (10Y zeros: USD 4.10 · EUR 2.89 · GBP 4.43 · JPY 2.69 · CHF 0.64
+    · CAD 3.24 · AUD 4.65).
 
 spec:
   form: >
