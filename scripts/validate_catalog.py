@@ -270,8 +270,31 @@ def main() -> int:
             print(f"  {mid:<{w}} " + "  ".join(f"{row[j]:>4}" for j in order))
         print()
 
+    # renderability — how many declared viz specs map to a render primitive (render/from_catalog)
+    _RENDERERS = {"fan", "heatmap", "surface3d", "smile", "lines", "bar", "dumbbell"}
+    _INFER = [("fan", ["fan"]), ("surface3d", ["3d surface"]), ("smile", ["smile"]),
+              ("heatmap", ["heatmap"]), ("dumbbell", ["dumbbell", "lollipop"]), ("bar", ["bar"]),
+              ("scatter", ["scatter"]), ("stacked_area", ["stacked area"]), ("table", ["table"]),
+              ("lines", ["time series", "over time", "lines", "curve", "term structure", "smiles by",
+                         "reliability", "density", "loading", "ridge"])]
+
+    def _ct(v):
+        if v.get("chart_type"):
+            return v["chart_type"]
+        t = (str(v.get("form", "")) + " " + str(v.get("id", ""))).lower()
+        for ct, kws in _INFER:
+            if any(k in t for k in kws):
+                return ct
+        return None
+
+    viz = [v for d in docs.values() for v in (d.get("visualizations") or [])]
+    unwired = sorted({_ct(v) or "unknown" for v in viz if _ct(v) not in _RENDERERS})
+    ren = sum(1 for v in viz if _ct(v) in _RENDERERS)
+    print(f"RENDERABILITY: {ren}/{len(viz)} declared viz specs map to a render primitive"
+          + (f"  (unwired chart_types: {unwired})" if unwired else ""))
+
     # personas
-    print("PERSONAS")
+    print("\nPERSONAS")
     persona_fail = 0
     personas = yaml.safe_load(PERSONAS_FILE.read_text()).get("personas", [])
     known = set(docs.keys())

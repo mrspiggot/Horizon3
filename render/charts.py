@@ -108,6 +108,47 @@ def vol_surface_3d(ax3d, moneyness, ttes, Z, *, title=None, zlabel="implied vol 
     return surf
 
 
+def bar(ax, labels, values, *, color_job="diverging", title=None, ylabel="value", ref=None):
+    """Bar/lollipop per category. diverging color_job -> signed coloring (rich/cheap, edge, carry);
+    sequential -> single hue. `ref` draws a reference marker line (e.g. an actual/market value)."""
+    theme.use_theme()
+    vals = np.asarray(values, dtype=float)
+    if color_job == "diverging":
+        m = np.max(np.abs(vals)) or 1.0
+        colors = [theme.div_cmap()(0.5 + 0.5 * v / m) for v in vals]
+    else:
+        colors = [theme.SEQUENTIAL[3]] * len(vals)
+    ax.bar(range(len(vals)), vals, color=colors, width=0.7, zorder=3)
+    ax.axhline(0, color=theme.MUTED, lw=1)
+    if ref is not None:
+        ax.axhline(ref, color=theme.FORWARD, lw=1.6, ls="--", label="reference")
+        ax.legend(fontsize=8)
+    ax.set_xticks(range(len(labels)))
+    ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=8)
+    ax.set_ylabel(ylabel)
+    if title:
+        ax.set_title(title)
+    theme.style_axes(ax, grid_axis="y")
+
+
+def dumbbell(ax, labels, left, right, *, title=None, xlabel="value",
+             left_label="model", right_label="market"):
+    """Dumbbell: two values per row (e.g. model fair value vs market), the gap = the trade/edge."""
+    theme.use_theme()
+    y = range(len(labels))
+    for i in y:
+        ax.plot([left[i], right[i]], [i, i], color=theme.GRID, lw=2, zorder=1)
+    ax.scatter(left, list(y), color=theme.cat(0), s=45, zorder=3, label=left_label)
+    ax.scatter(right, list(y), color=theme.cat(1), s=45, zorder=3, label=right_label)
+    ax.set_yticks(list(y))
+    ax.set_yticklabels(labels, fontsize=8)
+    ax.set_xlabel(xlabel)
+    if title:
+        ax.set_title(title)
+    theme.style_axes(ax, grid_axis="x")
+    ax.legend(fontsize=8, framealpha=0.9)
+
+
 def overlay_lines(ax, x, series, *, band=None, xticklabels=None, title=None, ylabel="value",
                   zero_line=False):
     """Reusable time-series overlay (categorical identity). `series` = list of (label, y, style)

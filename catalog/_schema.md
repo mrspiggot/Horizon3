@@ -62,8 +62,12 @@ interpretation: >                      # the `asserts` text the Narrator uses �
 visualizations:                        # FIRST-CLASS. Charts are Horizon3's differentiator (H2's were
                                         # the failure) — every model DECLARES its signature insight-chart(s),
                                         # never an afterthought. Rendered deterministically from `outputs`.
-  - id: curve_richcheap                 # stable id
+  - id: curve_richcheap                 # stable id (the render bridge keys data by this id)
     form: "bar (per tenor) + fitted-curve line"   # dataviz form(s)
+    chart_type: bar                     # CANONICAL renderer key (optional): fan | heatmap | surface3d |
+                                        # smile | lines | bar | dumbbell | scatter | stacked_area | table.
+                                        # If absent, render/from_catalog infers it from `form`. Maps to a
+                                        # render.charts primitive — charts generate straight from this spec.
     encodes: "fair_value_residual_bp by tenor, vs the fitted curve"
     insight: "which tenors are rich/cheap — the RV trade; the gap, not the level"
     color_job: diverging                # sequential | diverging | categorical | status (per dataviz)
