@@ -1,0 +1,61 @@
+model_id: calibration_bias_correction
+name: "Prediction-market calibration / bias correction"
+family: event
+summary: >
+  Corrects the raw Kalshi implied probabilities for known, empirically-calibrated biases (per
+  domain) — the favourite-longshot bias and platform-specific mispricings — yielding a calibrated
+  probability. GENERIC over event family.
+
+generic_over: [event]
+instances: [KXFED, KXUST, KXCPI, KXGDP, KXBTC, KXETH]
+implementation_coverage:
+  covers: [KXFED, KXUST, KXCPI, KXGDP, KXBTC, KXETH]
+  gap: "kalshi_bias_correction.apply_bias_correction — domain-specific BiasParameters; live for all 6."
+
+spec:
+  form: >
+    p_calibrated = sigmoid(a + b · logit(p_raw)) with (a, b) = BiasParameters for the event's domain
+    (get_parameters(domain)). Calibration params fit on historical implied-vs-realised outcomes
+    (the calibration receipt). (§11 I1.)
+  assumptions:
+    - "Biases are stable within a domain over the calibration window."
+    - "The calibration receipt (past implied vs realised) backs the correction — it is auditable."
+  references:
+    - "docs/assessment/11-model-reference.md#i1"
+    - "UMD analysis/kalshi_bias_correction.py (apply_bias_correction, get_parameters, bias_correct_series)"
+
+inputs:
+  - role: contract_prices
+    order: level
+    window: "1d"
+    horizon: target_event
+    required: true
+    note: "Raw implied probabilities from the contract ladder (calibrated per the event's domain)."
+
+outputs:
+  - name: "calibrated_probability"
+    unit: "probability"
+    note: "Bias-corrected probability per outcome."
+  - name: "calibration_receipt"
+    unit: "reliability"
+    note: "Historical implied-vs-realised reliability supporting the correction."
+
+interpretation: >
+  "The raw crowd price is biased in known ways; this is the calibrated read. The correction — and the
+  receipt showing it has worked historically — is what makes the edge credible, not just plausible."
+
+visualizations:
+  - id: raw_vs_calibrated
+    form: "raw vs calibrated probability by outcome (paired bars/lines)"
+    encodes: "calibrated_probability vs raw"
+    insight: "how far the crowd is mispriced, and which way (favourite-longshot)"
+    color_job: diverging
+    dim: 2D
+  - id: reliability_diagram
+    form: "reliability curve: predicted vs realised frequency"
+    encodes: "calibration_receipt"
+    insight: "the credibility receipt — is the model actually calibrated?"
+    color_job: sequential
+    dim: 2D
+
+implemented_by: "unified_market_data.analysis.kalshi_bias_correction.apply_bias_correction"

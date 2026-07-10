@@ -73,8 +73,7 @@ personas:
   - persona_id: event_prediction_trader
     name: "Event / prediction-market trader"
     decision: "Event bets."
-    uses: []                   # TODO: implied_probability, calibration_bias_correction, fair_value_vs_market (impls exist in UMD)
-    status: pending_authoring
+    uses: [implied_probability, calibration_bias_correction, fair_value_vs_market]  # generic over EVENT family (KXFED/KXBTC/...)
 
   - persona_id: economist_forecaster
     name: "Economist / forecaster"

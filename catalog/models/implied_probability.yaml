@@ -1,0 +1,63 @@
+model_id: implied_probability
+name: "Prediction-market implied distribution"
+family: event
+summary: >
+  Converts a Kalshi contract ladder into a coherent implied probability distribution (CDF/PDF) over
+  the event outcomes, enforcing monotonicity (isotonic PAV). GENERIC over event family.
+
+generic_over: [event]
+instances: [KXFED, KXUST, KXCPI, KXGDP, KXBTC, KXETH]
+implementation_coverage:
+  covers: [KXFED, KXUST, KXCPI, KXGDP, KXBTC, KXETH]
+  gap: "kalshi_implied_distribution.extract_kalshi_implied_cdf — live for all 6 financial event families."
+
+spec:
+  form: >
+    Take the strike ladder of contract mids (P(outcome ≥ K)); enforce a non-increasing CDF via
+    pool-adjacent-violators (PAV) isotonic regression; differentiate to the implied PDF; expose
+    P(below K) / P(above K). (§11 I1.)
+  assumptions:
+    - "Mid = (bid+ask)/2 is a fair probability estimate; thin books widen the uncertainty."
+    - "Contracts on one event family are mutually consistent (a single outcome variable)."
+  references:
+    - "docs/assessment/11-model-reference.md#i1"
+    - "UMD analysis/kalshi_implied_distribution.py (extract_kalshi_implied_cdf, implied_probability_above/below)"
+
+inputs:
+  - role: contract_prices
+    order: level
+    window: "1d"
+    horizon: target_event
+    required: true
+    note: "The Kalshi contract ladder (mids/orderbook) for the event family."
+
+outputs:
+  - name: "implied_cdf"
+    unit: "probability"
+    note: "Monotone P(outcome ≥ K) across the ladder."
+  - name: "implied_pdf"
+    unit: "probability"
+    note: "Implied distribution over outcomes."
+  - name: "implied_point"
+    unit: "outcome units"
+    note: "Mean / modal implied outcome (e.g. implied rate, implied price)."
+
+interpretation: >
+  "This is the crowd's full distribution over the event outcome, not just a single number. Its shape
+  (skew, bimodality) and its point estimate are the market's forecast — the thing to trade against."
+
+visualizations:
+  - id: implied_pdf_curve
+    form: "implied PDF + CDF over outcomes (two panels)"
+    encodes: "implied_pdf, implied_cdf"
+    insight: "the crowd's full distribution — bimodality = a two-scenario event"
+    color_job: sequential
+    dim: 2D
+  - id: outcome_prob_bars
+    form: "probability-by-outcome bar ladder"
+    encodes: "implied_pdf by outcome bucket"
+    insight: "where the mass sits; the modal outcome"
+    color_job: sequential
+    dim: 2D
+
+implemented_by: "unified_market_data.analysis.kalshi_implied_distribution.extract_kalshi_implied_cdf"

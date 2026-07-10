@@ -1,0 +1,44 @@
+# Event bindings — the generalization axis for the EVENT / PREDICTION-MARKET trader (third axis,
+# parallel to jurisdictions.yaml for rates and underlyings.yaml for vol). A prediction-market model
+# (implied distribution, calibration, fair-value edge) is generic over the EVENT FAMILY: the same
+# machinery serves the Fed-rate, CPI, GDP, BTC-price, ETH-price and UST markets on Kalshi.
+#
+# Instances verified LIVE in the estate (2026-07-10, distinct series per prefix):
+#   KXFED 214 · KXBTC 436 · KXETH 210 · KXGDP 61 · KXUST 35 · KXCPI 8.
+# KXNFP + KXSPX are tracked but currently have NO contract data — documented, not bound.
+
+roles:
+  contract_prices:  {kind: event,    desc: "Kalshi contract mids / orderbook ladder for the event family (KX<FAMILY>* series)."}
+  model_fair_value: {kind: computed, optional: true, desc: "External model's fair value for the event (per-domain: OIS for rates, Deribit for crypto, nowcast for macro)."}
+
+events:
+  - id: KXFED
+    domain: rates
+    bindings:
+      contract_prices:  {ref: "KXFED*", source: event, note: "Fed-rate event ladder (214 series)."}
+      model_fair_value: {ref: "ois_implied", source: computed, note: "OIS-implied policy rate (rate_divergence)."}
+  - id: KXUST
+    domain: rates
+    bindings:
+      contract_prices:  {ref: "KXUST*", source: event, note: "UST-yield event ladder (35 series)."}
+      model_fair_value: {ref: "ust_curve", source: computed}
+  - id: KXCPI
+    domain: inflation
+    bindings:
+      contract_prices:  {ref: "KXCPI*", source: event, note: "CPI-print event ladder (8 series)."}
+      model_fair_value: {ref: "cpi_nowcast", source: computed}
+  - id: KXGDP
+    domain: growth
+    bindings:
+      contract_prices:  {ref: "KXGDP*", source: event, note: "GDP event ladder (61 series)."}
+      model_fair_value: {ref: "gdp_nowcast", source: computed}
+  - id: KXBTC
+    domain: crypto
+    bindings:
+      contract_prices:  {ref: "KXBTC*", source: event, note: "BTC-price event ladder (436 series)."}
+      model_fair_value: {ref: "btc_deribit", source: computed, note: "Deribit option-implied distribution."}
+  - id: KXETH
+    domain: crypto
+    bindings:
+      contract_prices:  {ref: "KXETH*", source: event, note: "ETH-price event ladder (210 series)."}
+      model_fair_value: {ref: "eth_deribit", source: computed}

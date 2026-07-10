@@ -1,0 +1,70 @@
+model_id: fair_value_vs_market
+name: "Fair value vs market (event edge)"
+family: event
+summary: >
+  The trade: the edge between an EXTERNAL model's fair value for the event and the (calibrated)
+  market-implied value. edge = model_fair − market_implied. GENERIC over event, but the external
+  fair-value model is per-domain (OIS for rates, Deribit for crypto, nowcast for macro).
+
+generic_over: [event]
+instances: [KXFED, KXUST, KXCPI, KXGDP, KXBTC, KXETH]
+implementation_coverage:
+  covers: []
+  gap: >
+    Thin edge composition (edge = model_fair − calibrated_market), but the MODEL FAIR VALUE must be
+    wired per domain: rates -> rate_divergence (OIS-implied, exists); crypto -> Deribit option-implied
+    distribution (exists); macro (CPI/GDP) -> nowcast/consensus. Deliverable 5: bind model_fair_value
+    per event domain and compute the edge. Both legs' data are present.
+
+spec:
+  form: >
+    edge = model_fair_value − market_implied (from calibration_bias_correction). Sized by the
+    prediction market's liquidity (thin book -> wider band, smaller size). The sign + persistence of
+    the edge is the signal. (§11 I1.)
+  assumptions:
+    - "The external fair-value model and the market price the SAME event outcome + horizon."
+    - "Prediction-market liquidity gates position size (Kalshi books can be thin)."
+  references:
+    - "docs/assessment/11-model-reference.md#i1"
+
+inputs:
+  - role: contract_prices
+    order: level
+    window: "1d"
+    horizon: target_event
+    required: true
+    note: "Calibrated market-implied value (via calibration_bias_correction)."
+  - role: model_fair_value
+    order: level
+    window: "1d"
+    horizon: target_event
+    required: true
+    note: "External model fair value for the event (per domain: OIS / Deribit / nowcast)."
+
+outputs:
+  - name: "edge"
+    unit: "probability / outcome units"
+    note: "model_fair − market_implied; the trade."
+  - name: "edge_confidence"
+    unit: "band"
+    note: "Liquidity-scaled confidence (thin book -> wider)."
+
+interpretation: >
+  "The model says one thing, the crowd prices another — the gap is the trade. A persistent edge
+  beyond the liquidity-scaled band, backed by the calibration receipt, is actionable."
+
+visualizations:
+  - id: edge_dumbbell
+    form: "dumbbell: model fair value vs market-implied per event, edge annotated"
+    encodes: "edge, model_fair, market_implied"
+    insight: "the trade at a glance; length = edge, colour = sign"
+    color_job: diverging
+    dim: 2D
+  - id: edge_timeseries
+    form: "edge over time with liquidity-scaled band"
+    encodes: "edge, edge_confidence"
+    insight: "persistence — a durable edge beyond the band is the signal (mind thin liquidity)"
+    color_job: diverging
+    dim: 2D
+
+build_stub: true

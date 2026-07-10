@@ -53,11 +53,13 @@ MODELS_DIR = REPO / "catalog" / "models"
 PERSONAS_FILE = REPO / "catalog" / "personas.yaml"
 JURIS_FILE = REPO / "catalog" / "jurisdictions.yaml"
 UNDERLYINGS_FILE = REPO / "catalog" / "underlyings.yaml"
+EVENTS_FILE = REPO / "catalog" / "events.yaml"
 
 # Generalization axes: which binding file + list key + model "claimed instances" field each uses.
 AXES = {
     "currency":   {"file": JURIS_FILE,       "list_key": "jurisdictions", "claim_field": "jurisdictions"},
     "underlying": {"file": UNDERLYINGS_FILE,  "list_key": "underlyings",   "claim_field": "instances"},
+    "event":      {"file": EVENTS_FILE,       "list_key": "events",        "claim_field": "instances"},
 }
 
 FAMILIES = {"rates", "vol", "credit", "fx", "commodity", "equity", "macro", "event"}
@@ -181,7 +183,8 @@ def main() -> int:
         is_direct = doc.get("data_direct") is True
         covers = set((doc.get("implementation_coverage") or {}).get("covers", []) or [])
         # pick the generalization axis this model varies over
-        axis_name = "underlying" if "underlying" in (doc.get("generic_over") or []) else "currency"
+        _go = doc.get("generic_over") or []
+        axis_name = "event" if "event" in _go else ("underlying" if "underlying" in _go else "currency")
         ax = axes[axis_name]
         role_vocab, insts, order = ax["roles"], ax["insts"], ax["order"]
         claimed = doc.get(ax["claim"], []) or []
