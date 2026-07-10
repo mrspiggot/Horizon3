@@ -97,6 +97,43 @@ papers:
     why: "Defines and measures the variance risk premium (implied - expected realized); the vol-positioning signal."
     superseded_by: null
 
+  # ── Agentic chart development / multimodal chart+infographic generation ───
+  - id: chartllama
+    title: "ChartLlama: A Multimodal LLM for Chart Understanding and Generation"
+    authors: []
+    url: "https://arxiv.org/abs/2311.16483"
+    arxiv_id: "2311.16483"
+    local_path: sources/2311.16483.pdf
+    topics: [agentic-chart-generation, multimodal-infographic-generation]
+    tier: canonical
+    added: "2026-07-10"
+    why: "Multimodal LLM specialised for chart understanding AND generation; the instruction-tuning approach for chart-domain competence."
+    superseded_by: null
+
+  - id: multi-agent-text-to-chart
+    title: "Does It Run and Is That Enough? Revisiting Text-to-Chart Generation with a Multi-Agent Approach"
+    authors: []
+    url: "https://arxiv.org/abs/2506.06175"
+    arxiv_id: "2506.06175"
+    local_path: sources/2506.06175.pdf
+    topics: [agentic-chart-generation]
+    tier: canonical
+    added: "2026-07-10"
+    why: "Agentic/multi-agent chart generation beats single-shot prompting: more robust, higher visual fidelity, lower error — directly relevant to how we build charts as executed code, not one-shot."
+    superseded_by: null
+
+  - id: chartmimic
+    title: "ChartMimic: Evaluating LMM Cross-Modal Reasoning via Chart-to-Code Generation"
+    authors: []
+    url: "https://arxiv.org/abs/2406.09961"
+    arxiv_id: "2406.09961"
+    local_path: sources/2406.09961.pdf
+    topics: [multimodal-infographic-generation]
+    tier: canonical
+    added: "2026-07-10"
+    why: "Chart-to-code as the faithful-rendering mechanism (parallels Infogen for infographics): the LLM designs, code renders, numbers are exact — the anti-diffusion principle for visuals."
+    superseded_by: null
+
   # ── Reference-tier guides (indexed from cached extract; no PDF) ───────────
   - id: gdpnow-explainer
     title: "What Is GDPNow? (Atlanta Fed)"

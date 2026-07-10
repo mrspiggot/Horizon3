@@ -42,6 +42,24 @@ topics:
     canonical: [infogen, lida]
     watch_since: "2026-01-01"
 
+  - id: agentic-chart-generation
+    label: "Agentic chart development with LLMs (multi-agent, chart-to-code)"
+    queries:
+      - "agentic chart generation LLM multi-agent text-to-chart"
+      - "multimodal LLM chart understanding generation"
+      - "chart-to-code generation faithful visualization"
+    canonical: [chartllama, multi-agent-text-to-chart]
+    watch_since: "2023-01-01"
+
+  - id: multimodal-infographic-generation
+    label: "Multimodal LLMs for infographics (data-faithful, code-rendered)"
+    queries:
+      - "multimodal LLM infographic generation data-faithful"
+      - "LLM visualization code generation accurate numbers"
+      - "structured metadata infographic deterministic rendering"
+    canonical: [infogen, lida, chartmimic]
+    watch_since: "2023-01-01"
+
   # ── Economic / financial models (what the agents run) — §11 of the assessment ──
   - id: reaction-function
     label: "Central-bank reaction functions / Taylor rules / r-star"
