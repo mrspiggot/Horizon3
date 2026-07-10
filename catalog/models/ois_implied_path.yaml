@@ -1,0 +1,81 @@
+model_id: ois_implied_path
+name: "Market-implied policy-rate path"
+family: rates
+summary: >
+  Extracts the market-implied central-bank policy-rate path — per-meeting expected rate and
+  cut/hold/hike probabilities, plus the terminal rate distribution. GENERIC: any currency's OIS
+  forward curve implies a path against that central bank's meeting calendar. The US refinement
+  reads the SOFR futures strip for a sharper front end.
+
+generic_over: [currency, central_bank]
+# Instantiable where a POLICY-RATE series exists to anchor the path start. US/EU/GB/CA have one;
+# JP/CH/AU have the OIS curve but NO ingested BoJ/SNB/RBA policy rate — a Deliverable-2 ingestion
+# gap, not a model limit. (The validator caught this as an over-claim when JP/CH/AU were listed.)
+jurisdictions: [US, EU, GB, CA]
+implementation_coverage:
+  covers: [US]
+  gap: >
+    rate_path_model hardcodes the FOMC calendar (ALL_FOMC) + the CME SR3 strip. The GENERIC path is
+    the OIS forward curve read at each central bank's meeting dates — available for all 7 majors.
+    Generalising = per-CB meeting calendar + OIS-forward extraction (Deliverable 5).
+
+spec:
+  form: >
+    (1) Read forward rates from the OIS curve (generic) or interpolate the RFR futures strip (US) at
+        each scheduled policy meeting; optionally apply an RFR→policy basis.
+    (2) Per meeting, decompose the forward step diff = fwd − prev into cut/hold/hike probabilities on
+        the CB's move grid (25bp), with an exogenous per-meeting vol floor so the terminal
+        distribution does not collapse to "hold".
+    (3) Compound the per-meeting step distributions into the full path distribution.
+  assumptions:
+    - "OIS forwards approximate risk-neutral expected policy at each meeting horizon."
+    - "Move grid per CB (25bp default); vol floor injects realistic per-meeting move probability."
+  params:
+    step_size: 0.25
+    min_hike_cut_prob_per_meeting: 0.10
+  references:
+    - "docs/assessment/11-model-reference.md#b"
+    - "UMD analysis/rate_path_model.py (extract_meeting_forwards + build_rate_path_distribution)"
+
+inputs:
+  - role: policy_rate
+    order: level
+    window: "1d"
+    horizon: spot
+    required: true
+    note: "Current effective policy rate — the level the path starts from (US=DFF, EU=ECBDFR, GB=BOE_IUDBEDR...)."
+  - role: ois_par_curve
+    order: level
+    window: "1d"
+    horizon: full_curve
+    required: true
+    note: "OIS curve — its forwards are the generic implied path across all currencies."
+  - role: rate_futures_strip
+    order: level
+    window: "1d"
+    horizon: full_curve
+    required: false
+    note: "RFR futures strip (US=CME SR3) — a sharper front-end refinement where available."
+  - role: overnight_index
+    order: level
+    window: "1d"
+    horizon: spot
+    required: false
+    note: "RFR fixing — paired with policy_rate for the optional RFR→policy basis (US: SOFR−DFF)."
+
+outputs:
+  - name: "expected_rate_by_meeting"
+    unit: "%"
+    note: "Expected policy rate at each scheduled meeting."
+  - name: "step_probabilities_by_meeting"
+    unit: "probability"
+    note: "p_cut / p_hold / p_hike per meeting."
+  - name: "terminal_rate_distribution"
+    unit: "probability over rate"
+    note: "Compounded distribution of the policy rate at the horizon."
+
+interpretation: >
+  "This is the policy path the market has already priced for THIS central bank. The trade is the gap
+  between this implied path and the model/consensus path — position for the repricing, not the level."
+
+implemented_by: "unified_market_data.analysis.rate_path_model.build_rate_path_distribution"

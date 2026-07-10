@@ -1,0 +1,63 @@
+model_id: term_premium_acm
+name: "Term premium (ACM affine term-structure)"
+family: rates
+summary: >
+  Decomposes each nominal yield into a risk-neutral (expectations) component and a term-premium
+  component via the ACM affine term-structure model. For the US this is DATA-DIRECT: the NY Fed
+  (the model's own authors, Adrian-Crump-Moench) publishes the full per-tenor decomposition daily,
+  so the model consumes it rather than re-estimating. Re-estimation for other jurisdictions (from a
+  nominal zero curve) is a separate future model.
+
+generic_over: [currency]
+jurisdictions: [US]
+implementation_coverage:
+  covers: [US]
+  gap: >
+    US is data-direct (published NY Fed ACM, ingested via the nyfed_acm provider). Extending to
+    EU/JP/CA/CH/AU requires RE-ESTIMATING ACM ourselves from a nominal zero curve (govt par → zero
+    bootstrap = Deliverable 2) — a distinct future model (`term_premium_acm_estimated`), not this one.
+
+spec:
+  form: >
+    Adrian-Crump-Moench multi-factor affine term-structure model: yield(n) = risk_neutral(n) +
+    term_premium(n) for maturities n = 1..10y. Identity verified in the source to ~1e-16:
+    ACMY{n} = ACMRNY{n} + ACMTP{n}. (§11 B1.)
+  assumptions:
+    - "Affine, arbitrage-free dynamics; 5 pricing factors (NY Fed ACM specification)."
+    - "US consumes the published NY Fed estimates directly — no local estimation, no fitting error."
+  params:
+    estimator: "NY Fed ACM (published)"
+    tenors: "1Y..10Y"
+  references:
+    - "docs/assessment/11-model-reference.md#b1"
+    - "NY Fed Treasury Term Premia (Adrian-Crump-Moench), daily 1961–present"
+
+# DATA-DIRECT: the published series ARE the model outputs; no analysis/ computation for the US.
+inputs:
+  - role: term_premium_series
+    order: level
+    window: "1d"
+    horizon: full_curve
+    required: true
+    note: "Published per-tenor term premium (US = NY Fed ACM ACMTP01..10). This IS term_premium_by_tenor."
+  - role: expectations_series
+    order: level
+    window: "1d"
+    horizon: full_curve
+    required: true
+    note: "Published per-tenor risk-neutral yield (US = ACMRNY01..10). This IS expectations_by_tenor."
+
+outputs:
+  - name: "term_premium_by_tenor"
+    unit: "%"
+    note: "Term-premium component of each nominal yield, 1Y..10Y (= ACMTP*)."
+  - name: "expectations_by_tenor"
+    unit: "%"
+    note: "Expected-average-short-rate component of each nominal yield, 1Y..10Y (= ACMRNY*)."
+
+interpretation: >
+  "Of the 10y yield, this much is expected future short rates and this much is the risk premium for
+  holding duration. A term-premium-driven selloff (supply, uncertainty) is a different trade from an
+  expectations-driven one (repricing the policy path)."
+
+data_direct: true   # US = read the published NY Fed ACM decomposition; no re-estimation needed.

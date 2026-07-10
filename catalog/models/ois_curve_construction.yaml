@@ -1,0 +1,85 @@
+model_id: ois_curve_construction
+name: "OIS discount-curve bootstrap"
+family: rates
+summary: >
+  No-arbitrage bootstrap of an OIS discount curve D(0,t) from market instruments: an overnight
+  deposit anchor, (where available) RFR futures, and OIS par swaps. GENERIC over currency — the
+  same model builds the SOFR/ESTR/SONIA/TONAR/SARON/CORRA/AONIA curves; only the bound series
+  change. It is curve CONSTRUCTION, not rich/cheap (that is curve_pca).
+
+# --- generalization (assessment hard-rule #6) -------------------------------------------------
+generic_over: [currency]
+# Jurisdictions whose DATA supports this model (roles resolvable in catalog/jurisdictions.yaml).
+jurisdictions: [US, EU, GB, JP, CH, CA, AU]
+implementation_coverage:
+  covers: [US]
+  gap: >
+    build_ois_curve HARDCODES ql.UnitedStates(GovernmentBond) calendar + ql.Sofr index +
+    SofrFutureRateHelper (curve_builder.py:156,186,205,233). Data + model generalise across all 7
+    majors today, but the implementation is USD-only. Generalising it = parameterise
+    calendar/index/futures-helper per currency (Deliverable 5). This gap is intentional and visible.
+
+spec:
+  form: >
+    Piecewise bootstrap solving for D(0,t) by no-arbitrage across three instrument blocks:
+      (1) Overnight deposits (O/N, T/N, S/N):  D(0,t) = 1/(1 + r·τ), τ ACT/360.
+      (2) RFR futures (where available): each settle implies the forward rate over its reference
+          period (QuantLib SofrFutureRateHelper for USD; per-ccy analogue elsewhere). Optional.
+      (3) OIS par swaps (1Y..30Y): par rate S_T solves Σ_i D(0,t_i)·τ_i·S_T = 1 − D(0,T),
+          bootstrapped off a 3M estimating seed.
+    Interpolation: PiecewiseLogCubicDiscount on D; curve daycount ACT/365F.
+  assumptions:
+    - "OIS floating index is the currency's RFR (SOFR/ESTR/SONIA/TONAR/SARON/CORRA/AONIA)."
+    - "3M anchor seed; D(0,t) invariant to seed in [1%,6%] (ois_seed_sensitivity, USD-proven)."
+    - "Instruments correctly priced; no-arbitrage holds across the helper set."
+  params:
+    anchor_tenor: "3M"
+    long_end_tenors: ["1Y","2Y","3Y","5Y","7Y","10Y","15Y","20Y","30Y"]
+    deposit_daycount: "ACT/360"
+    curve_daycount: "ACT/365F"
+    interpolation: "PiecewiseLogCubicDiscount"
+  references:
+    - "docs/assessment/11-model-reference.md#b"
+    - "UMD analysis/curve_builder.py (Stage 1 §B; SOFR-index + 4-arg helper fixes)"
+
+# inputs reference ROLES (bound per jurisdiction in catalog/jurisdictions.yaml), never series.
+inputs:
+  - role: overnight_deposit_anchor
+    order: level
+    window: "1d"
+    horizon: spot
+    required: true
+    note: "Short-end O/N,T/N,S/N deposit anchor. US=OBFR; elsewhere the RFR / OIS front."
+  - role: rate_futures_strip
+    order: level
+    window: "1d"
+    horizon: full_curve
+    required: false
+    note: "RFR futures strip (US=CME SR1/SR3). Optional — most non-US curves bootstrap from OIS pars alone."
+  - role: ois_par_curve
+    order: level
+    window: "1d"
+    horizon: full_curve
+    required: true
+    note: "OIS par-swap rates by tenor (curve_snapshots CCY/ois, floating_index = the RFR). Long-end helpers."
+
+outputs:
+  - name: "discount_curve"
+    unit: "D(0,t) in [0,1]"
+    note: "Bootstrapped discount factors / yield term-structure handle."
+  - name: "zero_rate_by_tenor"
+    unit: "%"
+    note: "Continuously-compounded zero rates implied by D(0,t)."
+  - name: "forward_rate_by_tenor"
+    unit: "%"
+    note: "Period forward rates implied by the curve — the substrate for the implied-path model."
+  - name: "bootstrap_diagnostics"
+    unit: "counts"
+    note: "Helper counts (deposit/futures/OIS), in-progress skipped, anchor tenor+rate."
+
+interpretation: >
+  "This is the arbitrage-free discount curve the market implies for THIS currency today. It is the
+  substrate: the policy-path, divergence, carry and rich/cheap models all read rates and discount
+  factors off it. It asserts nothing about rich/cheap on its own."
+
+implemented_by: "unified_market_data.analysis.curve_builder.build_ois_curve"

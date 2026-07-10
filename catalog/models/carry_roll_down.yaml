@@ -1,0 +1,62 @@
+model_id: carry_roll_down
+name: "Carry & roll-down"
+family: rates
+summary: >
+  Expected return of a rates position if the curve does not move: carry (running yield vs funding)
+  plus roll-down (sliding down a static curve as the position ages). GENERIC over currency — reads
+  any OIS/government curve.
+
+generic_over: [currency]
+jurisdictions: [US, EU, GB, JP, CH, CA, AU]
+implementation_coverage:
+  covers: []
+  gap: "No analysis/ implementation yet — buildable now for all majors (data present). Deliverable 5."
+
+spec:
+  form: >
+    total_carry(tenor, horizon) = carry + roll_down, where roll_down = y(tenor) − y(tenor − horizon)
+    read off a STATIC curve, and carry = position yield − funding. (§11 B3.)
+  assumptions:
+    - "Curve unchanged over the horizon (the 'if nothing moves' scenario)."
+    - "Funding at the front-end RFR/OIS rate."
+  params:
+    horizon: "3m"
+  references:
+    - "docs/assessment/11-model-reference.md#b3"
+
+inputs:
+  - role: ois_par_curve
+    order: level
+    window: "1d"
+    horizon: full_curve
+    required: true
+    note: "Curve level — read fair yields at tenor and tenor-minus-horizon."
+  - role: ois_par_curve
+    order: context
+    window: "1d"
+    horizon: full_curve
+    required: true
+    note: "Curve slope/shape — roll-down is a function of local steepness."
+  - role: overnight_deposit_anchor
+    order: level
+    window: "1d"
+    horizon: spot
+    required: true
+    note: "Funding rate for the carry leg."
+
+outputs:
+  - name: "carry_bp"
+    unit: "bp"
+    note: "Running carry over the horizon."
+  - name: "rolldown_bp"
+    unit: "bp"
+    note: "Roll-down over the horizon on a static curve."
+  - name: "total_carry_bp"
+    unit: "bp"
+    note: "carry_bp + rolldown_bp — expected return if nothing moves."
+
+interpretation: >
+  "You are paid (or pay) this much to hold the position if the curve does not move. Carry vs the
+  fair-value/term-premium signal is the trade-selection frame for the book."
+
+build_stub: true

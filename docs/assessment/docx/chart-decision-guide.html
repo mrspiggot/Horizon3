@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Which Chart for Which Data — One-Page Decision Guide</title>
+<style>
+  :root{
+    --ink:#1a1f26; --muted:#5b6472; --line:#e3e7ec; --bg:#ffffff; --panel:#f7f9fb;
+    --accent:#c0392b;        /* Economist-ish red */
+    --blue:#2b6cb0; --teal:#1b877a; --amber:#b7791f; --violet:#6b46c1; --slate:#475569;
+    --font: "Helvetica Neue", Arial, "Segoe UI", system-ui, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:#eef1f4;color:var(--ink);font-family:var(--font);
+       -webkit-font-smoothing:antialiased;line-height:1.4;}
+  .page{max-width:1180px;margin:22px auto;background:var(--bg);padding:26px 30px 30px;
+        box-shadow:0 2px 14px rgba(0,0,0,.08);border-radius:6px;}
+  header{border-top:5px solid var(--accent);padding-top:12px;margin-bottom:14px;}
+  h1{font-size:24px;margin:0 0 3px;letter-spacing:-.3px;}
+  .sub{color:var(--muted);font-size:13px;margin:0;}
+  .flow{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 4px;font-size:12px;color:var(--slate);}
+  .flow b{color:var(--ink);}
+  .flow span{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:4px 11px;}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px;}
+  .card{border:1px solid var(--line);border-radius:7px;overflow:hidden;display:flex;flex-direction:column;}
+  .card h2{font-size:13.5px;margin:0;padding:8px 11px;color:#fff;display:flex;align-items:center;gap:7px;}
+  .card .q{font-size:11px;color:var(--muted);padding:7px 11px 2px;font-style:italic;}
+  .card ul{margin:4px 0 8px;padding:0 11px 0 26px;font-size:12px;}
+  .card li{margin:3px 0;}
+  .card li b{color:var(--ink);}
+  .tag{display:inline-block;font-size:9.5px;font-weight:700;letter-spacing:.3px;
+       padding:1px 5px;border-radius:3px;vertical-align:middle;margin-left:2px;}
+  .xl{background:#e6f0e6;color:#2f6b2f;}   /* in Excel */
+  .pl{background:#e7edfa;color:#274b8a;}   /* Plotly only / advanced */
+  .c-time h2{background:var(--blue);} .c-comp h2{background:var(--slate);}
+  .c-part h2{background:var(--teal);} .c-dist h2{background:var(--amber);}
+  .c-rel h2{background:var(--violet);} .c-multi h2{background:var(--accent);}
+  .c-flow h2{background:#0f766e;} .c-geo h2{background:#3f6212;} .c-hier h2{background:#7c2d12;}
+  .foot{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-top:16px;
+        border-top:1px solid var(--line);padding-top:12px;}
+  .foot h3{font-size:12px;margin:0 0 6px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);}
+  .foot p, .foot li{font-size:11.5px;color:var(--slate);margin:3px 0;}
+  .foot ul{margin:0;padding-left:16px;}
+  .legend{font-size:11px;color:var(--muted);margin-top:4px;}
+  .legend .tag{margin:0 3px 0 8px;}
+  @media print{
+    body{background:#fff;} .page{box-shadow:none;margin:0;max-width:none;padding:12px 14px;}
+    .grid{gap:8px;} .card{break-inside:avoid;}
+    @page{size:A4 landscape;margin:8mm;}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>Which Chart for Which Data?</h1>
+    <p class="sub">A one-page decision guide — start from what you want to <b>say</b>, not the chart you like. &nbsp;
+      <span class="legend">Availability: <span class="tag xl">Excel</span> native in Excel &nbsp; <span class="tag pl">Adv</span> Plotly / specialist tools</span>
+    </p>
+  </header>
+
+  <div class="flow">
+    <b>Ask first:</b>
+    <span>What's the <b>message</b>? (compare · trend · part-of-whole · spread · link · flow)</span>
+    <span>How many <b>variables</b>?</span>
+    <span>Categorical or <b>numeric</b>?</span>
+    <span>How many <b>data points</b>?</span>
+  </div>
+
+  <div class="grid">
+
+    <!-- TREND -->
+    <div class="card c-time">
+      <h2>📈 Change over time</h2>
+      <div class="q">"How has this moved across time?"</div>
+      <ul>
+        <li><b>Line chart</b> — 1+ series over time <span class="tag xl">Excel</span></li>
+        <li><b>Area / stacked area</b> — magnitude + composition <span class="tag xl">Excel</span></li>
+        <li><b>Column chart</b> — few, discrete periods <span class="tag xl">Excel</span></li>
+        <li><b>Slope chart</b> — just two time points <span class="tag pl">Adv</span></li>
+        <li><b>Candlestick / OHLC</b> — price data <span class="tag xl">Excel</span></li>
+        <li><b>Index chart</b> — rebase series to 100 <span class="tag pl">Adv</span></li>
+      </ul>
+    </div>
+
+    <!-- COMPARISON -->
+    <div class="card c-comp">
+      <h2>📊 Comparison</h2>
+      <div class="q">"Which is bigger / ranks higher?"</div>
+      <ul>
+        <li><b>Bar chart</b> — ranking, long labels <span class="tag xl">Excel</span></li>
+        <li><b>Column chart</b> — few categories <span class="tag xl">Excel</span></li>
+        <li><b>Grouped bar/column</b> — 2 categories <span class="tag xl">Excel</span></li>
+        <li><b>Dot plot</b> — many items, tidy <span class="tag pl">Adv</span></li>
+        <li><b>Dumbbell / range</b> — two values each <span class="tag pl">Adv</span></li>
+        <li><b>Radar</b> — one item on many metrics <span class="tag xl">Excel</span></li>
+      </ul>
+    </div>
+
+    <!-- PART TO WHOLE -->
+    <div class="card c-part">
+      <h2>🥧 Part-to-whole</h2>
+      <div class="q">"What share of the total?"</div>
+      <ul>
+        <li><b>Stacked bar/column</b> — shares over items/time <span class="tag xl">Excel</span></li>
+        <li><b>100% stacked</b> — proportions only <span class="tag xl">Excel</span></li>
+        <li><b>Pie / doughnut</b> — 2–4 slices max <span class="tag xl">Excel</span></li>
+        <li><b>Treemap</b> — many nested parts <span class="tag xl">Excel</span></li>
+        <li><b>Waffle chart</b> — a single percentage <span class="tag pl">Adv</span></li>
+        <li><b>Waterfall</b> — how a total is built up <span class="tag xl">Excel</span></li>
+      </ul>
+    </div>
+
+    <!-- DISTRIBUTION -->
+    <div class="card c-dist">
+      <h2>🔔 Distribution / spread</h2>
+      <div class="q">"How are values spread out?"</div>
+      <ul>
+        <li><b>Histogram</b> — shape of one variable <span class="tag xl">Excel</span></li>
+        <li><b>Box &amp; whisker</b> — compare spreads <span class="tag xl">Excel</span></li>
+        <li><b>Violin plot</b> — spread + density <span class="tag pl">Adv</span></li>
+        <li><b>Strip / beeswarm</b> — every point shown <span class="tag pl">Adv</span></li>
+        <li><b>Density / ECDF</b> — smooth or cumulative <span class="tag pl">Adv</span></li>
+        <li><b>Pareto</b> — ranked freq + cumulative <span class="tag xl">Excel</span></li>
+      </ul>
+    </div>
+
+    <!-- RELATIONSHIP -->
+    <div class="card c-rel">
+      <h2>🔗 Relationship</h2>
+      <div class="q">"Do two things move together?"</div>
+      <ul>
+        <li><b>Scatter plot</b> — 2 numeric variables <span class="tag xl">Excel</span></li>
+        <li><b>Bubble chart</b> — add size = 3rd var <span class="tag xl">Excel</span></li>
+        <li><b>Connected scatter</b> — pair + time path <span class="tag pl">Adv</span></li>
+        <li><b>Heatmap</b> — correlation matrix <span class="tag pl">Adv</span></li>
+        <li><b>2D density / hexbin</b> — many points <span class="tag pl">Adv</span></li>
+        <li><b>Trend line + scatter</b> — show the fit <span class="tag xl">Excel</span></li>
+      </ul>
+    </div>
+
+    <!-- MULTIDIMENSIONAL -->
+    <div class="card c-multi">
+      <h2>🧊 Many dimensions (3+)</h2>
+      <div class="q">"Lots of variables at once?"</div>
+      <ul>
+        <li><b>Bubble chart</b> — x, y, size, colour (4D) <span class="tag xl">Excel</span></li>
+        <li><b>3D scatter / bubble</b> — up to 5D <span class="tag pl">Adv</span></li>
+        <li><b>Parallel coordinates</b> — 5–15 vars <span class="tag pl">Adv</span></li>
+        <li><b>Scatterplot matrix (SPLOM)</b> — all pairs <span class="tag pl">Adv</span></li>
+        <li><b>Small multiples</b> — facet by a variable <span class="tag pl">Adv</span></li>
+        <li><b>PCA / t-SNE / UMAP scatter</b> — compress <span class="tag pl">Adv</span></li>
+      </ul>
+    </div>
+
+    <!-- FLOW -->
+    <div class="card c-flow">
+      <h2>🔀 Flow &amp; process</h2>
+      <div class="q">"How does volume move between stages?"</div>
+      <ul>
+        <li><b>Sankey diagram</b> — flows between nodes <span class="tag pl">Adv</span></li>
+        <li><b>Funnel</b> — drop-off through stages <span class="tag xl">Excel</span></li>
+        <li><b>Alluvial / parallel categories</b> <span class="tag pl">Adv</span></li>
+        <li><b>Streamgraph</b> — flows over time <span class="tag pl">Adv</span></li>
+      </ul>
+    </div>
+
+    <!-- GEO -->
+    <div class="card c-geo">
+      <h2>🗺️ Geospatial</h2>
+      <div class="q">"Where is it happening?"</div>
+      <ul>
+        <li><b>Choropleth (filled map)</b> — value by region <span class="tag xl">Excel</span></li>
+        <li><b>Bubble / symbol map</b> — size at points <span class="tag pl">Adv</span></li>
+        <li><b>Cartogram</b> — resize by value <span class="tag pl">Adv</span></li>
+        <li><b>Density / flow map</b> — hotspots, routes <span class="tag pl">Adv</span></li>
+      </ul>
+    </div>
+
+    <!-- HIERARCHY -->
+    <div class="card c-hier">
+      <h2>🌳 Hierarchy</h2>
+      <div class="q">"Nested categories / structure?"</div>
+      <ul>
+        <li><b>Treemap</b> — size = value, nested <span class="tag xl">Excel</span></li>
+        <li><b>Sunburst</b> — radial hierarchy <span class="tag xl">Excel</span></li>
+        <li><b>Icicle</b> — rectangular hierarchy <span class="tag pl">Adv</span></li>
+        <li><b>Dendrogram / tree</b> — branching links <span class="tag pl">Adv</span></li>
+      </ul>
+    </div>
+
+  </div>
+
+  <div class="foot">
+    <div>
+      <h3>Rules of thumb</h3>
+      <ul>
+        <li><b>One message per chart.</b> If you need a paragraph to explain it, split it in two.</li>
+        <li><b>Bar beats pie</b> whenever you have more than ~4 categories — length is easier to judge than angle.</li>
+        <li><b>Start bar/column axes at zero;</b> line charts for trends need not.</li>
+        <li><b>Up to ~4 numeric dimensions</b> → bubble or 3D bubble. Beyond that → parallel coordinates, SPLOM, or a dimensionality-reduction scatter.</li>
+        <li><b>Order categories by value,</b> not alphabetically, unless there's a natural sequence.</li>
+        <li><b>Label directly</b> instead of relying on a legend where you can.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Avoid</h3>
+      <ul>
+        <li>3D bar/pie for effect — it distorts the values.</li>
+        <li>Dual y-axes that imply a relationship that isn't there.</li>
+        <li>Too many colours; reserve colour for meaning.</li>
+        <li>Truncated axes that exaggerate small differences.</li>
+      </ul>
+      <p style="margin-top:8px;color:var(--muted);">Guide covers native Excel charts and common Plotly / specialist types.</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>

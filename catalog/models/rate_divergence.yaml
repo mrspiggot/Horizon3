@@ -1,0 +1,86 @@
+model_id: rate_divergence
+name: "Rate divergence (OIS vs prediction market, horizon-matched)"
+family: rates
+summary: >
+  At a specific policy-meeting horizon, compares the OIS-implied expected policy rate against a
+  prediction-market implied rate, and flags actionable divergence. The OIS leg is GENERIC across
+  currencies; the prediction-market leg is Kalshi = US-ONLY today, so full instantiation is US-only.
+  Both legs are read at the SAME meeting horizon (an OIS front rate vs a forward implied rate is a
+  category error — the defect that motivated the horizon field).
+
+generic_over: [currency, central_bank]
+# The OIS leg exists for all 7 majors; the model FULLY instantiates only where a prediction-market
+# leg exists. Kalshi has no BoE/ECB/BoJ market, so today that is US alone (honest, not a default).
+jurisdictions: [US]
+requires_roles: [pm_implied_rate]   # the binding role that gates instantiation
+implementation_coverage:
+  covers: [US]
+  gap: >
+    Generalising the divergence beyond US needs a non-OIS expectation leg for other CBs — a
+    prediction market (none exist) or a survey/consensus series. Until then the OIS leg is generic
+    but the comparison is US-only. This is a DATA gap (no non-US rate prediction markets), stated plainly.
+
+spec:
+  form: >
+    ois_leg    = OIS curve interpolated to meeting horizon T (Act/360 target_yf = days(T)/360) — the
+                 risk-neutral expected average overnight rate over [today,T].
+    market_leg = probability-weighted expected policy rate from the prediction-market distribution at T.
+    divergence_bps = (market_leg − ois_leg) × 100. Both legs decomposed to cut/hold/hike off the
+    current policy_rate on a 25bp grid. A structural-premium term (horizon_days, equity_vol) accounts
+    for the risk-premium wedge between the risk-neutral and prediction-market measures.
+  assumptions:
+    - "Both legs reference the same policy outcome and the same horizon T (horizon-matched)."
+    - "Structural premium is a slowly-varying function of horizon and equity vol."
+  params:
+    alert_threshold_bp: 10
+    move_size: 0.25
+  references:
+    - "docs/assessment/11-model-reference.md#i1"
+    - "UMD analysis/rate_divergence.py (extract_ois_implied_rate + extract_kalshi_rate_expectation + compute_rate_divergence)"
+
+inputs:
+  - role: ois_par_curve
+    order: level
+    window: "1d"
+    horizon: target_meeting
+    required: true
+    note: "OIS curve INTERPOLATED to the meeting date T (not the front). Risk-neutral leg. Horizon-matched."
+  - role: pm_implied_rate
+    order: level
+    window: "1d"
+    horizon: target_meeting
+    required: true
+    note: "Prediction-market implied policy rate at meeting T (US=KXFED_implied_rate). Horizon-matched. Kalshi rates markets are thin."
+  - role: policy_rate
+    order: level
+    window: "1d"
+    horizon: spot
+    required: true
+    note: "Current policy rate baseline for the cut/hold/hike decomposition."
+  - role: equity_vol
+    order: level
+    window: "1d"
+    horizon: spot
+    required: false
+    note: "Equity vol (US=^VIX) — input to the structural-premium term."
+
+outputs:
+  - name: "ois_implied_rate"
+    unit: "%"
+    note: "OIS-implied expected policy rate at meeting T."
+  - name: "market_implied_rate"
+    unit: "%"
+    note: "Prediction-market implied expected policy rate at meeting T."
+  - name: "divergence_bp"
+    unit: "bp"
+    note: "(market − ois) × 100, structural-premium aware."
+  - name: "alert"
+    unit: "boolean"
+    note: "True when |divergence_bp| exceeds the threshold."
+
+interpretation: >
+  "At this meeting, OIS and the crowd disagree on the expected policy rate by this much, after the
+  risk premium. A persistent, large divergence is the signal — one measure is mispricing the outcome.
+  (Prediction-market rates liquidity is thin; treat the edge with caution — the value is the gap.)"
+
+implemented_by: "unified_market_data.analysis.rate_divergence.compute_rate_divergence"

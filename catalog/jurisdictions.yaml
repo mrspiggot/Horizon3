@@ -1,0 +1,129 @@
+# Jurisdiction bindings — the generalization spine (assessment hard-rule #6: generic, not FOMC).
+#
+# A MODEL is jurisdiction-agnostic. It declares input ROLES (semantic slots: the OIS curve, the
+# policy rate, the futures strip, the prediction-market leg...). THIS file binds each role to a
+# concrete UMD series for each jurisdiction that has the data. USD/FOMC/Kalshi is ONE instantiation,
+# never the definition. The rates family generalises across every G10 OIS curve LCH publishes.
+#
+# Every ref below was verified present + fresh (2026-07-10) in the live UMD estate. Where a role
+# has no standalone series for a jurisdiction, the binding is honest about it (null, or via-curve).
+
+# ---------------------------------------------------------------------------------------------
+# Role vocabulary (rates family). A model input references one of these; it never names a series.
+roles:
+  ois_par_curve:            {kind: curve,        desc: "OIS par-swap curve (curve_snapshots CCY/ois)."}
+  govt_par_curve:           {kind: curve,        optional: true, desc: "Government par curve (curve_snapshots CCY/government). Nominal-zero bootstrap = a Deliverable-2 transform. Rich for EUR/JP/CA/CH/AU; SPARSE for USD; absent for GB."}
+  term_premium_series:      {kind: observations, optional: true, desc: "PUBLISHED per-tenor term premium (data-direct). US = NY Fed ACM ACMTP01..10. Where a CB publishes ACM, no re-estimation is needed."}
+  expectations_series:      {kind: observations, optional: true, desc: "PUBLISHED per-tenor risk-neutral/expectations yield. US = NY Fed ACM ACMRNY01..10 (the model's expectations component)."}
+  overnight_index:          {kind: observations, desc: "RFR overnight fixing (SOFR/ESTR/SONIA/...)."}
+  policy_rate:              {kind: observations, desc: "Central-bank target/effective policy rate."}
+  overnight_deposit_anchor: {kind: any,          desc: "Short-end bootstrap anchor (OBFR for US; RFR/curve-front elsewhere)."}
+  rate_futures_strip:       {kind: observations, optional: true, desc: "RFR futures strip (e.g. CME SR3). US-rich; sparse elsewhere."}
+  pm_implied_rate:          {kind: event,        optional: true, desc: "Prediction-market implied policy rate. Kalshi = US-only."}
+  equity_vol:               {kind: observations, optional: true, desc: "Equity vol index for structural-premium terms."}
+
+# ---------------------------------------------------------------------------------------------
+# Jurisdictions. `scope: major` = the G7-ish OIS majors we instantiate first (user priority:
+# generalise beyond USD). EM OIS curves (CLP/CNY/MXN/ZAR/SEK/NOK/NZD/INR/...) exist in
+# curve_snapshots as `scope: em` extensions but lack policy/RFR standalone series — documented, not
+# yet bound.
+jurisdictions:
+  - id: US
+    central_bank: "Federal Reserve"
+    ccy: USD
+    scope: major
+    bindings:
+      ois_par_curve:            {ref: "USD:ois",            source: curve}
+      govt_par_curve:           null   # curve_snapshots USD/government has only 2 snapshots — SPARSE, unusable
+      term_premium_series:      {ref: "ACMTP*",             source: observations, note: "NY Fed ACM per-tenor term premium (nyfed_acm provider)."}
+      expectations_series:      {ref: "ACMRNY*",            source: observations, note: "NY Fed ACM per-tenor risk-neutral/expectations yield."}
+      overnight_index:          {ref: "SOFR",               source: observations}
+      policy_rate:              {ref: "DFF",                source: observations}
+      overnight_deposit_anchor: {ref: "OBFR",               source: observations}
+      rate_futures_strip:       {ref: "CME_SR3_*",          source: observations}
+      pm_implied_rate:          {ref: "KXFED_implied_rate", source: event}
+      equity_vol:               {ref: "^VIX",               source: observations}
+
+  - id: EU
+    central_bank: "European Central Bank"
+    ccy: EUR
+    scope: major
+    bindings:
+      ois_par_curve:            {ref: "EUR:ois",            source: curve}
+      govt_par_curve:           {ref: "EUR:government",      source: curve, note: "Rich (305 snapshots)."}
+      overnight_index:          {ref: "ECB_ESTR_INDEX",     source: observations}
+      policy_rate:              {ref: "ECBDFR",             source: observations, note: "Deposit facility rate (ECBMRRFR = main refi alt)."}
+      overnight_deposit_anchor: {ref: "ECB_ESTR_INDEX",     source: observations}
+      rate_futures_strip:       null   # no ESTR futures strip ingested (Euribor/bund futures only)
+      pm_implied_rate:          null   # no ECB prediction market
+      equity_vol:               null   # V2X not ingested yet
+
+  - id: GB
+    central_bank: "Bank of England"
+    ccy: GBP
+    scope: major
+    bindings:
+      ois_par_curve:            {ref: "GBP:ois",            source: curve}
+      govt_par_curve:           null   # no GBP government curve in curve_snapshots (gilts not scraped)
+      overnight_index:          {ref: "BOE_IUDSOIA",        source: observations, note: "SONIA."}
+      policy_rate:              {ref: "BOE_IUDBEDR",        source: observations, note: "Bank Rate."}
+      overnight_deposit_anchor: {ref: "BOE_IUDSOIA",        source: observations}
+      rate_futures_strip:       null   # no SONIA futures strip ingested
+      pm_implied_rate:          null
+      equity_vol:               null
+
+  - id: JP
+    central_bank: "Bank of Japan"
+    ccy: JPY
+    scope: major
+    bindings:
+      ois_par_curve:            {ref: "JPY:ois",            source: curve}
+      govt_par_curve:           {ref: "JPY:government",      source: curve, note: "Present (75 snapshots) — richer than USD govt."}
+      overnight_index:          {ref: "JPY:ois",            source: curve, note: "TONAR via OIS front; no standalone fixing series ingested."}
+      policy_rate:              null   # no BoJ policy-rate standalone series ingested
+      overnight_deposit_anchor: {ref: "JPY:ois",            source: curve}
+      rate_futures_strip:       null
+      pm_implied_rate:          null
+      equity_vol:               null
+
+  - id: CH
+    central_bank: "Swiss National Bank"
+    ccy: CHF
+    scope: major
+    bindings:
+      ois_par_curve:            {ref: "CHF:ois",            source: curve}
+      govt_par_curve:           {ref: "CHF:government",      source: curve, note: "Present (75 snapshots)."}
+      overnight_index:          {ref: "CHF:ois",            source: curve, note: "SARON via OIS front; no standalone fixing ingested."}
+      policy_rate:              null
+      overnight_deposit_anchor: {ref: "CHF:ois",            source: curve}
+      rate_futures_strip:       null
+      pm_implied_rate:          null
+      equity_vol:               null
+
+  - id: CA
+    central_bank: "Bank of Canada"
+    ccy: CAD
+    scope: major
+    bindings:
+      ois_par_curve:            {ref: "CAD:ois",            source: curve}
+      govt_par_curve:           {ref: "CAD:government",      source: curve, note: "Rich (296 snapshots)."}
+      overnight_index:          {ref: "CAD:ois",            source: curve, note: "CORRA via OIS front; no standalone fixing ingested."}
+      policy_rate:              {ref: "CAD_POLICY_RATE",    source: observations}
+      overnight_deposit_anchor: {ref: "CAD:ois",            source: curve}
+      rate_futures_strip:       null
+      pm_implied_rate:          null
+      equity_vol:               null
+
+  - id: AU
+    central_bank: "Reserve Bank of Australia"
+    ccy: AUD
+    scope: major
+    bindings:
+      ois_par_curve:            {ref: "AUD:ois",            source: curve}
+      govt_par_curve:           {ref: "AUD:government",      source: curve, note: "Present (74 snapshots)."}
+      overnight_index:          {ref: "AUD:ois",            source: curve, note: "AONIA via OIS front; no standalone fixing ingested."}
+      policy_rate:              null
+      overnight_deposit_anchor: {ref: "AUD:ois",            source: curve}
+      rate_futures_strip:       null
+      pm_implied_rate:          null
+      equity_vol:               null
