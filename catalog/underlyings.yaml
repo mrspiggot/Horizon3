@@ -64,9 +64,22 @@ underlyings:
       implied_vol_atm:     {ref: "treasury:10Y", source: computed}
       realized_vol:        {ref: "ZN=F",         source: computed}
 
-  # --- Acquired but surface not yet fitting (honest follow-ups, deliberately NOT bound) ---
-  # UST30Y (ZB): options scraped (146) but ZB FUTURES are not cached (0 contracts) -> surface can't
-  #   centre. Fix: add ZB to the CME futures scrape, then bind UST30Y here.
-  # FX EURUSD/USDJPY (6E/6J): options scraped (89/82 strikes) + futures cached, but
-  #   get_fx_vol_surface mis-centres the fit band ("2 strikes in band") -> an F-centering/band-width
-  #   bug in the FX surface fitter. DATA is present; fix the fitter, then bind them here.
+  - id: UST30Y
+    asset_class: rates
+    bindings:
+      implied_vol_surface: {ref: "treasury:30Y", source: surface, note: "get_treasury_vol_surface(30Y) — CME ZB options + futures (added to CME_PRODUCTS). Live."}
+      implied_vol_atm:     {ref: "treasury:30Y", source: computed}
+      realized_vol:        {ref: "ZB=F",         source: computed}
+
+  # --- FX option vol (CME 6E/6J options scraped + scheduler-wired) ---
+  - id: EURUSD
+    asset_class: fx
+    bindings:
+      implied_vol_surface: {ref: "fx:EURUSD", source: surface, note: "get_fx_vol_surface(EURUSD) — CME 6E options. Live (after the current-month-skip fix)."}
+      implied_vol_atm:     {ref: "fx:EURUSD", source: computed}
+      realized_vol:        {ref: "EURUSD",    source: computed}
+
+  # --- Remaining follow-up (honest, NOT bound) ---
+  # FX USDJPY (6J): options + futures present, but get_fx_vol_surface raises "zero-size array to
+  #   reduction operation minimum" — a JPY tiny-price-scale edge in the fitter/summary. Fix the
+  #   scale handling, then bind USDJPY here.

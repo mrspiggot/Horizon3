@@ -6,7 +6,7 @@ summary: >
   variance risk (Carr-Wu). VRP = implied_var − E[realized_var]. GENERIC over underlying.
 
 generic_over: [underlying]
-instances: [SPY, BTC, ETH, SOFR, UST2Y, UST5Y, UST10Y]
+instances: [SPY, BTC, ETH, SOFR, UST2Y, UST5Y, UST10Y, UST30Y, EURUSD]
 implementation_coverage:
   covers: []
   gap: >
