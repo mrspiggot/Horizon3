@@ -1,0 +1,63 @@
+model_id: credit_quality_ladder
+name: "Credit quality ladder (IG / HY / EM OAS)"
+family: credit
+persona: credit_investor
+grounded_in: [longstaff-credit-spreads]
+spec:
+  equations: "compensation ladder across quality; HY-IG premium = extra spread for going down in quality"
+history: {start: "2025-07-10", end: "2026-07-09", cadence: weekly}
+inputs:
+  - {id: ig, series_id: BAMLC0A0CM, db_source: fred, state: level, context_window: 120}
+  - {id: hy, series_id: BAMLH0A0HYM2, db_source: fred, state: level, context_window: 120}
+  - {id: em, series_id: BAMLEMCBPIOAS, db_source: fred, state: level, context_window: 120}
+execution:
+  implemented_by: unified_market_data.analysis.term_premium.curve_slope
+  args: {short_pct: ig.level, long_pct: hy.level}
+outputs:
+  - {name: slope, unit: "%", meaning: "HY minus IG OAS — the down-in-quality premium"}
+interpretations:
+  - id: quality_compressed
+    when: "slope < 2.0"
+    says: "The HY-IG premium is thin — investors are paid little to move down in quality; complacency."
+charts:
+  - id: "The quality ladder (IG / HY / EM OAS)"
+    chart_type: series
+    color_job: sequential
+    insight: "the whole credit spread complex moving together through time"
+    data_contract:
+      kind: series
+      ylabel: "OAS (%)"
+      series:
+        - {label: "IG", from: "input:ig.level"}
+        - {label: "HY", from: "input:hy.level"}
+        - {label: "EM", from: "input:em.level"}
+  - id: "The down-in-quality premium (HY - IG)"
+    chart_type: gap_series
+    color_job: diverging
+    interpretation: quality_compressed
+    insight: "how much extra spread HY pays over IG — the risk appetite gauge"
+    data_contract:
+      kind: gap_series
+      ylabel: "percentage points"
+      label: "HY - IG"
+      minuend: "input:hy.level"
+      subtrahend: "input:ig.level"
+  - id: "EM vs IG premium"
+    chart_type: gap_series
+    color_job: diverging
+    insight: "the extra spread for emerging-market credit over US IG"
+    data_contract:
+      kind: gap_series
+      ylabel: "percentage points"
+      label: "EM - IG"
+      minuend: "input:em.level"
+      subtrahend: "input:ig.level"
+  - id: "The ladder today"
+    chart_type: bar
+    color_job: sequential
+    insight: "the current OAS at each quality rung"
+    data_contract:
+      kind: named_values
+      ylabel: "OAS (%)"
+      labels: ["IG", "HY", "EM"]
+      values: ["input:ig.level", "input:hy.level", "input:em.level"]

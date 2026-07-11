@@ -67,3 +67,24 @@ personas:
       three-month range — says whether that premium is cheap insurance or a trap. Three reads, one
       trade: harvest the premium while the curve is calm, and respect the tail when it isn't.
 
+  credit_investor:
+    name: "Credit investor"
+    decision: "Allocate across the quality ladder (IG / HY / EM)."
+    title: "Down the quality ladder: what is the market paying you to take default risk?"
+    models: [credit_quality_ladder, oas_implied_default, credit_spread_regime]
+    stub_charts:
+      - [credit_quality_ladder, "The quality ladder (IG / HY / EM OAS)"]
+      - [credit_quality_ladder, "The down-in-quality premium (HY - IG)"]
+      - [oas_implied_default, "HY implied annual default rate"]
+      - [credit_spread_regime, "HY spread vs its own range (z-score)"]
+    summary_template: >
+      Credit is a bet that the spread you are paid exceeds the losses you will take. Today the ladder
+      runs IG at {credit_quality_ladder.ig}%, high-yield at {credit_quality_ladder.hy}% and emerging
+      markets at {credit_quality_ladder.em}% option-adjusted spread — so going down from investment
+      grade to high-yield pays an extra {credit_quality_ladder.slope} points. Invert that HY spread
+      through the credit triangle and the market is pricing a {oas_implied_default.annual_pd_pct}%
+      annual default rate, {oas_implied_default.cumulative_pd_pct}% cumulative over five years, at a
+      40% recovery. And the regime: HY sits {credit_spread_regime.zscore} sigma versus its own recent
+      range — {credit_spread_regime.level_pct}% in absolute terms. One reading: spreads are tight and
+      the down-in-quality premium is being paid grudgingly; the compensation for default risk is thin.
+

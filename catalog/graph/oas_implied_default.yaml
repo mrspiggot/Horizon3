@@ -1,0 +1,61 @@
+model_id: oas_implied_default
+name: "OAS-implied default rate (HY)"
+family: credit
+persona: credit_investor
+grounded_in: [longstaff-credit-spreads]
+spec:
+  equations: "spread = PD x LGD (credit triangle); implied PD from HY OAS at 40% recovery"
+history: {start: "2025-07-10", end: "2026-07-09", cadence: weekly}
+inputs:
+  - {id: hy, series_id: BAMLH0A0HYM2, db_source: fred, state: level, context_window: 120}
+  - {id: ig, series_id: BAMLC0A0CM, db_source: fred, state: level, context_window: 120}
+  - {id: em, series_id: BAMLEMCBPIOAS, db_source: fred, state: level, context_window: 120}
+execution:
+  implemented_by: unified_market_data.analysis.credit_analytics.oas_implied_default
+  args: {oas_pct: hy.level, recovery: 0.4}
+outputs:
+  - {name: annual_pd_pct, unit: "%", meaning: "HY implied annual default probability"}
+  - {name: cumulative_pd_pct, unit: "%", meaning: "HY implied 5y cumulative default probability"}
+  - {name: hazard, unit: "rate", meaning: "annual hazard rate"}
+interpretations:
+  - id: default_pricing_up
+    when: "annual_pd_pct > 5"
+    says: "The HY market is pricing an annual default rate above 5% — meaningfully above the long-run average."
+charts:
+  - id: "HY implied annual default rate"
+    chart_type: series
+    color_job: sequential
+    interpretation: default_pricing_up
+    insight: "the default rate the HY market is pricing, through time"
+    data_contract:
+      kind: series
+      ylabel: "annual PD (%)"
+      series:
+        - {label: "implied annual PD", from: "output:annual_pd_pct"}
+  - id: "5-year cumulative default probability"
+    chart_type: series
+    color_job: sequential
+    insight: "the cumulative odds of default over 5 years priced into HY"
+    data_contract:
+      kind: series
+      ylabel: "5y cumulative PD (%)"
+      series:
+        - {label: "5y cumulative PD", from: "output:cumulative_pd_pct"}
+  - id: "HY OAS (the input spread)"
+    chart_type: series
+    color_job: diverging
+    insight: "the HY spread that drives the implied default rate"
+    data_contract:
+      kind: series
+      ylabel: "OAS (%)"
+      series:
+        - {label: "HY OAS", from: "input:hy.level"}
+  - id: "Implied default, IG vs HY vs EM (today)"
+    chart_type: bar
+    color_job: sequential
+    insight: "the current spread at each rung — the raw material of the implied default rate"
+    data_contract:
+      kind: named_values
+      ylabel: "OAS (%)"
+      labels: ["IG", "HY", "EM"]
+      values: ["input:ig.level", "input:hy.level", "input:em.level"]
