@@ -1,0 +1,52 @@
+model_id: crack_spread
+name: "Crack spread (refining margin)"
+family: commodity
+summary: >
+  The 3:2:1 crack spread — the refining margin from turning 3 barrels of crude into 2 of gasoline and
+  1 of heating oil. A core energy relative-value signal and a read on refined-product demand.
+
+generic_over: [commodity]
+instances: [CRACK321]
+implementation_coverage:
+  covers: [CRACK321]
+  gap: >
+    commodity_analytics.crack_321 — a COMPOSITE (crude + gasoline + heating oil, all present as CME
+    strips). NB: a multi-instance-input model; the catalog's per-instance binding shows only the crude
+    leg (a pattern to formalize, shared with FX pairs + cross_market_basis).
+
+spec:
+  form: >
+    crack_321 = (2·gasoline·42 + 1·heating_oil·42 − 3·crude) / 3, $/bbl (products converted $/gal→$/bbl
+    ×42). Positive = healthy refining margin. (§11 F — crack/spark spread.)
+  assumptions:
+    - "Front-month CL / RB / HO; a genuine 3:2:1 refinery yield approximation."
+  references:
+    - "docs/assessment/11-model-reference.md#f1"
+    - "UMD analysis/commodity_analytics.py (crack_321)"
+
+inputs:
+  - role: futures_strip
+    order: level
+    window: "1d"
+    horizon: spot
+    required: true
+    note: "Front CL + RB + HO (composite; binding shows the crude leg, RB/HO are the other legs)."
+
+outputs:
+  - name: "crack_spread_usd_bbl"
+    unit: "$/bbl"
+    note: "The 3:2:1 refining margin."
+
+interpretation: >
+  "The margin refiners earn — a read on refined-product demand vs crude. A widening crack signals
+  strong product demand / tight refining; vs its seasonal history is the trade."
+
+visualizations:
+  - id: crack_history
+    form: "crack spread ($/bbl) time series with seasonal band"
+    encodes: "crack_spread_usd_bbl over time"
+    insight: "refining-margin regime + vs seasonal norm"
+    color_job: sequential
+    dim: 2D
+
+implemented_by: "unified_market_data.analysis.commodity_analytics.crack_321"

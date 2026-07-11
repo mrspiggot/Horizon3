@@ -54,12 +54,14 @@ PERSONAS_FILE = REPO / "catalog" / "personas.yaml"
 JURIS_FILE = REPO / "catalog" / "jurisdictions.yaml"
 UNDERLYINGS_FILE = REPO / "catalog" / "underlyings.yaml"
 EVENTS_FILE = REPO / "catalog" / "events.yaml"
+COMMODITIES_FILE = REPO / "catalog" / "commodities.yaml"
 
 # Generalization axes: which binding file + list key + model "claimed instances" field each uses.
 AXES = {
-    "currency":   {"file": JURIS_FILE,       "list_key": "jurisdictions", "claim_field": "jurisdictions"},
-    "underlying": {"file": UNDERLYINGS_FILE,  "list_key": "underlyings",   "claim_field": "instances"},
-    "event":      {"file": EVENTS_FILE,       "list_key": "events",        "claim_field": "instances"},
+    "currency":   {"file": JURIS_FILE,        "list_key": "jurisdictions", "claim_field": "jurisdictions"},
+    "underlying": {"file": UNDERLYINGS_FILE,   "list_key": "underlyings",   "claim_field": "instances"},
+    "event":      {"file": EVENTS_FILE,        "list_key": "events",        "claim_field": "instances"},
+    "commodity":  {"file": COMMODITIES_FILE,   "list_key": "commodities",   "claim_field": "instances"},
 }
 
 FAMILIES = {"rates", "vol", "credit", "fx", "commodity", "equity", "macro", "event"}
@@ -184,7 +186,8 @@ def main() -> int:
         covers = set((doc.get("implementation_coverage") or {}).get("covers", []) or [])
         # pick the generalization axis this model varies over
         _go = doc.get("generic_over") or []
-        axis_name = "event" if "event" in _go else ("underlying" if "underlying" in _go else "currency")
+        axis_name = ("event" if "event" in _go else "commodity" if "commodity" in _go
+                     else "underlying" if "underlying" in _go else "currency")
         ax = axes[axis_name]
         role_vocab, insts, order = ax["roles"], ax["insts"], ax["order"]
         claimed = doc.get(ax["claim"], []) or []

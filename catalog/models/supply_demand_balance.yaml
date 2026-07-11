@@ -1,0 +1,55 @@
+model_id: supply_demand_balance
+name: "Supply / demand balance"
+family: commodity
+summary: >
+  The commodity's supply-demand balance (surplus/deficit) from production, consumption and inventory
+  data — the fundamental driver of the price band. GENERIC over commodity.
+
+generic_over: [commodity]
+instances: [CL, HO, RB, NG]
+implementation_coverage:
+  covers: []
+  gap: >
+    To BUILD (Deliverable 5): net balance = production − consumption ± inventory change, with the
+    inventory LEVEL and its CHANGE (§10) driving the convenience yield non-linearly (Working's storage
+    curve). Needs EIA/USDA balance + inventory series ingested (energy data present; the balance
+    assembly is the work).
+
+spec:
+  form: >
+    balance_t = production_t − consumption_t; inventory gap = inventory − seasonal_norm; the fair
+    price band follows from the balance + storage economics. (§11 F1.)
+  assumptions:
+    - "Inventory level AND change matter (convenience yield is non-linear in inventory)."
+  references:
+    - "docs/assessment/11-model-reference.md#f1"
+
+inputs:
+  - role: futures_strip
+    order: level
+    window: "1d"
+    horizon: full_curve
+    required: true
+    note: "Price/curve leg (paired with EIA/USDA inventory + production once ingested)."
+
+outputs:
+  - name: "balance_surplus_deficit"
+    unit: "units"
+    note: "Net supply-demand balance."
+  - name: "fair_price_band"
+    unit: "$"
+    note: "Implied fair price band from the balance."
+
+interpretation: >
+  "Is the market over- or under-supplied — the fundamental behind the price. A tightening balance
+  (falling inventories vs seasonal norm) is the bullish signal; the balance vs price is the trade."
+
+visualizations:
+  - id: balance_history
+    form: "supply-demand balance + inventory-vs-seasonal-norm time series"
+    encodes: "balance_surplus_deficit over time"
+    insight: "tightening vs loosening — the fundamental regime"
+    color_job: diverging
+    dim: 2D
+
+build_stub: true

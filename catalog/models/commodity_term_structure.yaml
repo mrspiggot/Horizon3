@@ -1,0 +1,64 @@
+model_id: commodity_term_structure
+name: "Commodity futures term structure (storage / convenience yield)"
+family: commodity
+summary: >
+  The shape of the futures curve — contango vs backwardation — and the implied roll/convenience yield.
+  Backwardation signals scarcity (high convenience yield); contango signals ample inventory (theory of
+  storage, §11 F1). GENERIC over commodity.
+
+generic_over: [commodity]
+instances: [CL, HO, RB, NG]
+implementation_coverage:
+  covers: [CL, HO, RB, NG]
+  gap: "commodity_analytics.futures_term_structure — live for CL/HO/RB/NG (CME strips). Verified: crude in backwardation (front 74.8 vs 12m 68.9, −8% roll)."
+
+spec:
+  form: >
+    From the futures strip: slope = (deferred − front)/front over the tenor gap; annualized roll =
+    slope × 12/gap. structure = contango (deferred>front) | backwardation (deferred<front). F = S +
+    storage − convenience yield, so backwardation ⇒ high convenience yield / scarcity. (§11 F1.)
+  assumptions:
+    - "The strip is a single commodity's consecutive expiries at one snapshot."
+    - "Convenience yield is a strongly non-linear function of inventory (Working) — the sign is the read."
+  references:
+    - "docs/assessment/11-model-reference.md#f1"
+    - "UMD analysis/commodity_analytics.py (futures_term_structure)"
+
+inputs:
+  - role: futures_strip
+    order: level
+    window: "1d"
+    horizon: full_curve
+    required: true
+    note: "Per-expiry futures settlements (CME_<PROD>_<MONYY>)."
+
+outputs:
+  - name: "structure"
+    unit: "label"
+    note: "contango | backwardation | flat."
+  - name: "annualized_roll_pct"
+    unit: "%"
+    note: "Front-to-deferred roll, annualized — the carry of a long position."
+  - name: "convenience_yield_signal"
+    unit: "sign"
+    note: "Backwardation ⇒ scarcity/high convenience yield."
+
+interpretation: >
+  "Is the market pricing scarcity or glut? Backwardation (and a steepening of it on a short-run shock)
+  is the scarcity/positioning signal; the roll is the carry you earn or pay to hold."
+
+visualizations:
+  - id: term_structure_curve
+    form: "futures curve: price by expiry (line), contango/backwardation shaded"
+    encodes: "the strip"
+    insight: "curve shape at a glance — scarcity vs glut"
+    color_job: sequential
+    dim: 2D
+  - id: roll_history
+    form: "annualized roll (per commodity) time series"
+    encodes: "annualized_roll_pct over time"
+    insight: "the carry regime + backwardation squeezes"
+    color_job: diverging
+    dim: 2D
+
+implemented_by: "unified_market_data.analysis.commodity_analytics.futures_term_structure"

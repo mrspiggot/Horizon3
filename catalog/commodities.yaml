@@ -1,0 +1,32 @@
+# Commodity bindings — the generalization axis for the COMMODITY ANALYST (parallel to
+# jurisdictions/underlyings/events). A commodity model (term structure / storage, crack spread) is
+# generic over the COMMODITY; instances are the CME futures complexes with a strip in the estate.
+#
+# Verified live (2026-07-11): CME_CL/HO/RB/NG each ~800 obs across per-expiry contracts.
+# CRACK321 is a COMPOSITE instance (3:2:1 = crude + gasoline + heating oil) — see the note on the
+# multi-instance-input pattern, a catalog design item shared with FX pairs + cross_market_basis.
+
+roles:
+  futures_strip: {kind: observations, desc: "Per-expiry futures settlement strip (CME_<PROD>_<MONYY> series)."}
+
+commodities:
+  - id: CL
+    sector: energy
+    bindings:
+      futures_strip: {ref: "CME_CL_*", source: observations, note: "WTI crude futures strip."}
+  - id: HO
+    sector: energy
+    bindings:
+      futures_strip: {ref: "CME_HO_*", source: observations, note: "Heating oil (ULSD) futures strip."}
+  - id: RB
+    sector: energy
+    bindings:
+      futures_strip: {ref: "CME_RB_*", source: observations, note: "RBOB gasoline futures strip."}
+  - id: NG
+    sector: energy
+    bindings:
+      futures_strip: {ref: "CME_NG_*", source: observations, note: "Henry Hub natural gas futures strip."}
+  - id: CRACK321
+    sector: energy
+    bindings:
+      futures_strip: {ref: "CME_CL_*", source: observations, note: "COMPOSITE 3:2:1 (crude+2 gasoline+1 heating oil). Multi-instance input — the catalog's per-instance binding shows only the crude leg; RB+HO are the other legs (pattern to formalize, shared with FX pairs)."}

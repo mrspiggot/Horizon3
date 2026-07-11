@@ -52,8 +52,7 @@ personas:
   - persona_id: commodity_analyst
     name: "Commodity analyst"
     decision: "Commodity positioning."
-    uses: []                   # TODO: supply_demand_balance, inventory_storage, cost_curve, seasonality, crack_spark_spread
-    status: pending_authoring
+    uses: [commodity_term_structure, crack_spread, supply_demand_balance]  # generic over COMMODITY (CL/HO/RB/NG); crack_spread composite (CRACK321)
 
   - persona_id: equity_multiasset_pm
     name: "Equity / multi-asset PM"
