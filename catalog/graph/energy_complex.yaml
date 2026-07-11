@@ -1,17 +1,21 @@
 model_id: energy_complex
-name: "Energy complex (crude / Brent / gas)"
+name: "Energy complex — the Brent-WTI location spread"
 family: commodity
 persona: commodity_analyst
 grounded_in: [gorton-rouwenhorst-facts, nber-commodity-futures]
-method: arithmetic
-method_note: "SLOP-ADJACENT: Brent-WTI subtraction + standardized levels; not the storage model"
+method: data-direct
+method_note: >
+  The Brent-WTI spread is a directly-observed relative price — the premium of seaborne (Brent) over
+  landlocked US (WTI) crude, driven by pipeline/export bottlenecks and shale supply (Gorton-Hayashi-
+  Rouwenhorst commodity fundamentals). Presented with the complex read as §10 states; an observed
+  spread, like a credit spread, not a fitted model.
 spec:
-  equations: "Brent-WTI spread = Brent - WTI (location/quality); complex read via standardized levels"
-history: {start: "2025-08-01", end: "2026-07-09", cadence: weekly}
+  equations: "Brent-WTI = BZ=F - CL=F ($/bbl). Positive = tight seaborne / ample US shale; the location premium."
+history: {start: "2010-01", end: "2026-07", cadence: monthly}
 inputs:
-  - {id: crude, series_id: "CL=F", db_source: yahoo, state: level, context_window: 250}
-  - {id: brent, series_id: "BZ=F", db_source: yahoo, state: level, context_window: 250}
-  - {id: natgas, series_id: "NG=F", db_source: yahoo, state: level, context_window: 250}
+  - {id: crude, series_id: "CL=F", db_source: yahoo, state: level, context_window: 252}
+  - {id: brent, series_id: "BZ=F", db_source: yahoo, state: level, context_window: 252}
+  - {id: natgas, series_id: "NG=F", db_source: yahoo, state: level, context_window: 252}
 execution:
   implemented_by: unified_market_data.analysis.term_premium.curve_slope
   args: {short_pct: crude.level, long_pct: brent.level}
@@ -20,12 +24,21 @@ outputs:
 interpretations:
   - id: brent_premium
     when: "slope > 4"
-    says: "Brent trades well above WTI — tight seaborne crude / ample US shale; a wide location spread."
+    says: >
+      Brent trades well above WTI — a wide location premium. This is the shale-era signature: abundant
+      landlocked US crude priced below waterborne Brent when export capacity binds (2011-2014), the
+      structural spread that made US pipeline and export infrastructure a decade-long trade.
+  - id: parity
+    when: "slope < 1.5"
+    says: >
+      The Brent-WTI spread has collapsed toward parity — US export capacity has caught up with shale
+      supply, or a global demand shock has hit both benchmarks alike. The location arbitrage is gone.
 charts:
   - id: "The energy complex (standardized)"
+    role: input
     chart_type: series
     color_job: categorical
-    insight: "crude, Brent and gas on a comparable (z-score) scale through time"
+    insight: "crude, Brent and gas on a comparable (z-score) scale — where crude and gas diverge, the driver is supply-specific (a freeze, a storage glut), not the macro demand cycle"
     data_contract:
       kind: series
       ylabel: "z-score"
@@ -34,11 +47,14 @@ charts:
         - {label: "WTI crude", from: "input:crude.zscore"}
         - {label: "Brent", from: "input:brent.zscore"}
         - {label: "nat gas", from: "input:natgas.zscore"}
-  - id: "Brent-WTI spread"
+  - id: "The Brent-WTI location spread over time"
+    role: outcome
     chart_type: gap_series
     color_job: diverging
     interpretation: brent_premium
-    insight: "the seaborne-vs-landlocked crude premium through time"
+    pos_label: "Brent premium (US glut / export bottleneck)"
+    neg_label: "WTI premium (rare)"
+    insight: "the seaborne-vs-landlocked premium — the 2011-2014 shale glut blew it out past $20, then US export capacity and the 2020 shock compressed it back toward parity"
     data_contract:
       kind: gap_series
       ylabel: "$/bbl"
@@ -46,9 +62,10 @@ charts:
       minuend: "input:brent.level"
       subtrahend: "input:crude.level"
   - id: "Crude vs gas (energy divergence)"
+    role: consequence
     chart_type: series
     color_job: categorical
-    insight: "when oil and gas diverge, the driver is supply-specific not macro"
+    insight: "oil and gas diverging is the tell that the move is supply-specific — the 2022 European gas crisis sent gas vertical while crude was range-bound"
     data_contract:
       kind: series
       ylabel: "z-score"
@@ -57,6 +74,7 @@ charts:
         - {label: "crude z", from: "input:crude.zscore"}
         - {label: "gas z", from: "input:natgas.zscore"}
   - id: "The energy complex today"
+    role: outcome
     chart_type: bar
     color_job: diverging
     insight: "the current standardized level of each energy contract"

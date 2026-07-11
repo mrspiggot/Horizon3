@@ -3,15 +3,21 @@ name: "Copper/gold ratio (growth vs fear)"
 family: commodity
 persona: commodity_analyst
 grounded_in: [gorton-rouwenhorst-facts]
-method: arithmetic
-method_note: "SLOP-ADJACENT: copper/gold ratio heuristic (Gundlach), not a published equation"
+method: data-direct
+method_note: >
+  The copper/gold ratio is a directly-observed relative price: copper is cyclical industrial demand
+  ('Dr. Copper'), gold is the monetary/fear bid. Their ratio is a widely-watched growth-vs-safety
+  gauge that co-moves with the 10y Treasury yield — a real, documented cross-asset relationship
+  (Gorton-Rouwenhorst commodity fundamentals; the metal complex as a macro read). An observed ratio,
+  not a fitted model and not a z-average.
 spec:
-  equations: "copper/gold x1000 — cyclical demand (copper) vs safety/inflation (gold); rising = growth"
-history: {start: "2025-08-01", end: "2026-07-09", cadence: weekly}
+  equations: "copper/gold x1000. Rising = cyclical growth priced over safety; historically tracks the 10y yield."
+history: {start: "2010-01", end: "2026-07", cadence: monthly}
 inputs:
-  - {id: copper, series_id: "HG=F", db_source: yahoo, state: level, context_window: 250}
-  - {id: gold, series_id: "GC=F", db_source: yahoo, state: level, context_window: 250}
-  - {id: silver, series_id: "SI=F", db_source: yahoo, state: level, context_window: 250}
+  - {id: copper, series_id: "HG=F", db_source: yahoo, state: level, context_window: 252}
+  - {id: gold, series_id: "GC=F", db_source: yahoo, state: level, context_window: 252}
+  - {id: silver, series_id: "SI=F", db_source: yahoo, state: level, context_window: 252}
+  - {id: y10, series_id: "DGS10", db_source: fred, state: level, context_window: 252}
 execution:
   implemented_by: unified_market_data.analysis.commodity_analytics.copper_gold_ratio
   args: {copper: copper.level, gold: gold.level}
@@ -19,23 +25,22 @@ outputs:
   - {name: ratio, unit: "x1000", meaning: "copper/gold x1000 — the growth-vs-fear signal"}
 interpretations:
   - id: growth_optimism
-    when: "ratio > 1.5"
-    says: "The copper/gold ratio is elevated — the commodity market is pricing cyclical growth over safety."
+    when: "ratio > 1.6"
+    says: >
+      The copper/gold ratio is elevated — the metal complex is pricing cyclical growth over safety.
+      Because the ratio co-moves with the 10y yield, an elevated reading is the commodity market
+      agreeing with a higher-growth, higher-rates world.
+  - id: fear_bid
+    when: "ratio < 1.3"
+    says: >
+      Copper is falling relative to gold — the safety/monetary bid is winning over industrial demand,
+      the metal-complex signature of a growth scare (2011-12, 2015-16, 2020) and typically falling yields.
 charts:
-  - id: "Copper/gold ratio (growth signal)"
-    chart_type: series
-    color_job: diverging
-    interpretation: growth_optimism
-    insight: "the market's growth-vs-fear read, through time"
-    data_contract:
-      kind: series
-      ylabel: "copper/gold x1000"
-      series:
-        - {label: "copper/gold", from: "output:ratio"}
-  - id: "Copper vs gold (standardized)"
+  - id: "Copper vs gold (the two legs, standardized)"
+    role: input
     chart_type: series
     color_job: categorical
-    insight: "the two legs of the ratio — cyclical demand against safety"
+    insight: "the ratio's two legs — cyclical demand (copper) against the safety/inflation bid (gold); the ratio rises when copper outruns gold"
     data_contract:
       kind: series
       ylabel: "z-score"
@@ -43,21 +48,34 @@ charts:
       series:
         - {label: "copper z", from: "input:copper.zscore"}
         - {label: "gold z", from: "input:gold.zscore"}
-  - id: "Gold vs silver (the precious pair)"
+  - id: "The copper/gold ratio (growth signal)"
+    role: outcome
+    chart_type: series
+    color_job: sequential
+    interpretation: growth_optimism
+    insight: "the market's growth-vs-fear read through time — the 2011 and 2020 troughs are growth scares, the 2021 and 2024-25 rebuilds are reflation"
+    data_contract:
+      kind: series
+      ylabel: "copper/gold x1000"
+      series:
+        - {label: "copper/gold", from: "output:ratio"}
+  - id: "Copper vs the 10y yield (the documented link)"
+    role: consequence
     chart_type: series
     color_job: categorical
-    insight: "silver is half-industrial; gold/silver divergence signals whether the bid is fear or growth"
+    insight: "copper — the growth leg — tracks the 10y Treasury yield closely; when they diverge, one market is mispricing growth and the gap tends to close"
     data_contract:
       kind: series
       ylabel: "z-score"
       zero_line: true
       series:
-        - {label: "gold z", from: "input:gold.zscore"}
-        - {label: "silver z", from: "input:silver.zscore"}
+        - {label: "copper z", from: "input:copper.zscore"}
+        - {label: "10y yield z", from: "input:y10.zscore"}
   - id: "Metals today"
+    role: outcome
     chart_type: bar
     color_job: diverging
-    insight: "the current standardized level of each metal"
+    insight: "the current standardized level of each metal — copper (industrial), gold and silver (precious)"
     data_contract:
       kind: named_values
       ylabel: "z-score"
