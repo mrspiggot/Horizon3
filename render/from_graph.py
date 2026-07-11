@@ -69,7 +69,8 @@ def render_chart(ax, chart: dict, history: list, *, fig=None) -> None:
                   for s in dc["series"]]
         charts.overlay_lines(ax, x, series, xticklabels=_xlabels(history), title=title,
                              ylabel=dc.get("ylabel", "%"), zero_line=dc.get("zero_line", False),
-                             robust_ylim=dc.get("robust_ylim", False))
+                             robust_ylim=dc.get("robust_ylim", False),
+                             hline=dc.get("hline"), hline_label=dc.get("hline_label"))
 
     elif kind == "gap_series":
         x = list(range(len(history)))

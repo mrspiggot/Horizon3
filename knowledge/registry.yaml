@@ -383,3 +383,37 @@ papers:
     added: "2026-07-11"
     why: "The inflation-unemployment trade-off (Phillips 1958) and its expectations-augmented rethink (Friedman 1968 / Phelps): the foundational macro relationship a central bank manages. Canonical — taught throughout economics."
     superseded_by: null
+
+  - id: okun-1962-potential
+    title: "Potential GNP: Its Measurement and Significance"
+    authors: ["Arthur M. Okun"]
+    url: "https://milescorak.com/wp-content/uploads/2016/08/okun-potential-gnp.pdf"
+    arxiv_id: null
+    local_path: null
+    topics: [okun-law, output-gap, unemployment, growth]
+    tier: reference
+    added: "2026-07-11"
+    why: "Okun's Law: the empirical trade-off between output growth and the change in unemployment (~2:1). Canonical macro relationship for the forecaster."
+    superseded_by: null
+  - id: sahm-2019-recession
+    title: "Direct Stimulus Payments to Individuals (the Sahm recession indicator)"
+    authors: ["Claudia Sahm"]
+    url: "https://www.hamiltonproject.org/publication/direct-stimulus-payments-to-individuals/"
+    arxiv_id: null
+    local_path: sources/sahm_2019.pdf
+    topics: [sahm-rule, recession, unemployment, real-time-indicator]
+    tier: canonical
+    added: "2026-07-11"
+    why: "The Sahm rule: unemployment's 3mo-avg rising >=0.5pp above its trailing-12mo min flags recession in real time. A fast labour-based signal."
+    superseded_by: null
+  - id: dmp-matching-beveridge
+    title: "Equilibrium Unemployment and the Beveridge Curve (Diamond-Mortensen-Pissarides)"
+    authors: ["Peter Diamond", "Dale Mortensen", "Christopher Pissarides"]
+    url: "https://www.nobelprize.org/uploads/2018/06/advanced-economicsciences2010.pdf"
+    arxiv_id: null
+    local_path: null
+    topics: [beveridge-curve, search-matching, labour-market, vacancies]
+    tier: reference
+    added: "2026-07-11"
+    why: "The search-and-matching foundation of the Beveridge curve (vacancies vs unemployment) and its shifts in matching efficiency. Nobel 2010."
+    superseded_by: null

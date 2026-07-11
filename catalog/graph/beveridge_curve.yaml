@@ -1,0 +1,90 @@
+model_id: beveridge_curve
+name: "The Beveridge curve (vacancies vs unemployment)"
+family: macro
+persona: economist_forecaster
+grounded_in: [dmp-matching-beveridge]
+method: published
+canonical: true
+method_note: >
+  The Beveridge curve: the downward-sloping locus of job vacancies against unemployment (the
+  Diamond-Mortensen-Pissarides search-and-matching model, Nobel 2010). The message is the curve's
+  SHAPE and its SHIFTS — an outward shift (more vacancies at any given unemployment) signals worse
+  matching efficiency, as after 2020. Read as a scatter with a chronological path; V/U is the
+  labour-market tightness ratio the Fed watches.
+spec:
+  equations: "downward-sloping V–U locus from search-and-matching; tightness = V/U. Outward shifts = lower matching efficiency."
+history: {start: "2001-01", end: "2026-05", cadence: monthly}
+inputs:
+  - {id: v, series_id: JTSJOR, db_source: fred, state: level, context_window: 60}
+  - {id: u, series_id: UNRATE, db_source: fred, state: level, context_window: 60}
+execution:
+  implemented_by: unified_market_data.analysis.macro_signals.beveridge_curve
+  args: {vacancy_rate_pct: v.level, unemployment_pct: u.level}
+outputs:
+  - {name: vacancy_rate_pct, unit: "%", meaning: "job openings rate (JOLTS)"}
+  - {name: unemployment_pct, unit: "%", meaning: "unemployment rate"}
+  - {name: tightness,        unit: "V/U", meaning: "vacancies per unemployed worker — labour-market tightness"}
+  - {name: tightness_excess, unit: "V/U-1", meaning: "tightness relative to balance (>0 tight, <0 slack)"}
+interpretations:
+  - id: tight
+    when: "tightness > 1.2"
+    says: >
+      More than one vacancy per unemployed worker — an exceptionally tight labour market (the 2022
+      peak reached ~2.0). On the Beveridge curve this is the top-left corner; the Fed reads it as wage
+      pressure and a job market it can cool without mass layoffs by moving V down before U moves up.
+  - id: slack
+    when: "unemployment_pct > 6"
+    says: >
+      High unemployment with few vacancies — the bottom-right of the curve, a slack labour market
+      (2009-2010). Recovery walks back up the curve toward the top-left.
+charts:
+  - id: "The Beveridge curve (vacancies vs unemployment)"
+    role: outcome
+    chart_type: scatter
+    color_job: sequential
+    interpretation: tight
+    insight: "the search-and-matching locus, and its most important feature — the SHIFT. The path shades 2001→2026: post-2020 the curve jumped OUTWARD (more vacancies at each unemployment rate), the visible drop in matching efficiency"
+    data_contract:
+      kind: scatter
+      xlabel: "unemployment (%)"
+      ylabel: "job openings rate (%)"
+      cbar_label: "2001 → 2026"
+      x: "output:unemployment_pct"
+      y: "output:vacancy_rate_pct"
+      fit: false
+      path: true
+      time_colour: true
+  - id: "Vacancies and unemployment over time"
+    role: input
+    chart_type: series
+    color_job: categorical
+    insight: "the two legs of the curve — the 2021-22 vacancy surge with unemployment already low is the tightness the curve encodes"
+    data_contract:
+      kind: series
+      ylabel: "%"
+      series:
+        - {label: "job openings rate", from: "output:vacancy_rate_pct"}
+        - {label: "unemployment rate", from: "output:unemployment_pct"}
+  - id: "Labour-market tightness (V/U)"
+    role: consequence
+    chart_type: gap_series
+    color_job: diverging
+    interpretation: tight
+    pos_label: "tight (V/U > 1)"
+    neg_label: "slack (V/U < 1)"
+    insight: "vacancies per unemployed worker relative to balance — above 1 is a tight market (the 2022 peak near 2.0), below 1 is slack (2009-10). The single number the Fed cites for labour-market heat"
+    data_contract:
+      kind: gap_series
+      ylabel: "V/U - 1"
+      label: "tightness vs balance"
+      minuend: "output:tightness_excess"
+  - id: "The labour market today"
+    role: outcome
+    chart_type: bar
+    color_job: sequential
+    insight: "the current vacancy rate, unemployment rate and tightness ratio"
+    data_contract:
+      kind: named_values
+      ylabel: "%  /  V/U"
+      labels: ["vacancy rate", "unemployment", "tightness (V/U)"]
+      values: ["output:vacancy_rate_pct", "output:unemployment_pct", "output:tightness"]

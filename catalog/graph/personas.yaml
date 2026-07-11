@@ -161,3 +161,27 @@ personas:
       weaker credits is open. One reading: nominal funding is rates-driven and the real cost is
       moderate; if the firm needs term debt, the credit door is open and the rate is the swing factor.
 
+
+  economist_forecaster:
+    name: "Economist / forecaster"
+    decision: "Read the business cycle — call growth, jobs and recession."
+    title: "The labour market as a business-cycle instrument: growth, jobs, and the recession call"
+    models: [okun_law, beveridge_curve, sahm_rule]
+    stub_charts:
+      - [okun_law, "Okun's Law (GDP growth vs change in unemployment)"]
+      - [beveridge_curve, "The Beveridge curve (vacancies vs unemployment)"]
+      - [sahm_rule, "Headroom to the recession trigger"]
+      - [beveridge_curve, "Labour-market tightness (V/U)"]
+    summary_template: >
+      The labour market is the cleanest read on the business cycle, and three canonical relationships
+      turn it into a forecast. Okun's Law ties output to jobs: real GDP is growing
+      {okun_law.gdp_growth_pct}% year-on-year and unemployment has moved {okun_law.unemployment_change_pp}
+      points over the year, the tight negative link that makes a growth call a jobs call. The Beveridge
+      curve reads tightness: at {beveridge_curve.unemployment_pct}% unemployment with a
+      {beveridge_curve.vacancy_rate_pct}% vacancy rate there are {beveridge_curve.tightness} openings per
+      unemployed worker — and the curve's post-2020 outward shift warns that matching efficiency
+      deteriorated. And the Sahm rule gives the real-time recession call: the 3-month unemployment
+      average sits {sahm_rule.sahm_gap_pp}pp above its recent low, {sahm_rule.headroom_pp}pp of headroom
+      to the 0.5-point trigger that has flagged every recession since 1970. One reading: growth and jobs
+      are consistent, the labour market is off its extreme tightness, and the recession trigger is close
+      but not yet tripped.

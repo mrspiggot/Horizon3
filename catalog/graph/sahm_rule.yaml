@@ -1,0 +1,85 @@
+model_id: sahm_rule
+name: "The Sahm rule (real-time recession trigger)"
+family: macro
+persona: economist_forecaster
+grounded_in: [sahm-2019-recession]
+method: published
+canonical: true   # a single-variable canonical indicator (the unemployment rate); floor waived
+method_note: >
+  The Sahm rule (Sahm 2019): when the 3-month moving average of the unemployment rate rises 0.5pp or
+  more above its minimum over the prior 12 months, the economy has — in every cycle since 1970 —
+  already entered recession. A fast, purely labour-based signal that complements the yield-curve
+  probit (which leads by ~a year but with more false positives).
+spec:
+  equations: "sahm_gap = MA3(U) - min_{t-12..t} MA3(U). Trigger when sahm_gap >= 0.5pp. headroom = 0.5 - sahm_gap."
+history: {start: "1962-01", end: "2026-06", cadence: monthly}
+inputs:
+  - {id: sahm, series_id: UNRATE, db_source: fred, transform: sahm, state: level, context_window: 120}
+  - {id: u,    series_id: UNRATE, db_source: fred, state: level, context_window: 120}
+execution:
+  implemented_by: unified_market_data.analysis.macro_signals.sahm_rule
+  args: {sahm_gap_pp: sahm.level, unemployment_pct: u.level}
+outputs:
+  - {name: sahm_gap_pp,     unit: "pp", meaning: "3mo-avg unemployment minus its trailing-12mo minimum"}
+  - {name: unemployment_pct, unit: "%", meaning: "unemployment rate"}
+  - {name: headroom_pp,     unit: "pp", meaning: "0.5 - sahm_gap: positive = safe, negative = triggered"}
+  - {name: triggered,       unit: "0/1", meaning: "1 if the Sahm rule is tripped (gap >= 0.5)"}
+interpretations:
+  - id: fired
+    when: "sahm_gap_pp >= 0.5"
+    says: >
+      The Sahm rule has tripped — the 3-month unemployment average is half a point above its recent
+      low. Historically this has meant a recession is already underway; it is the fastest reliable
+      real-time recession call, and it fired in mid-2024 before easing back.
+  - id: safe
+    when: "headroom_pp > 0.3"
+    says: >
+      Comfortable headroom below the trigger — the labour market is not deteriorating fast enough to
+      signal recession. The Sahm gap is well under 0.5pp.
+charts:
+  - id: "Headroom to the recession trigger"
+    role: outcome
+    chart_type: gap_series
+    color_job: diverging
+    interpretation: fired
+    pos_label: "headroom (safe)"
+    neg_label: "TRIGGERED (recession)"
+    insight: "the margin to the 0.5pp trigger — warm/negative is the Sahm rule firing. Every US recession since 1970 crossed below zero here; note the brief 2024 dip and recovery"
+    data_contract:
+      kind: gap_series
+      ylabel: "0.5 - Sahm gap (pp)"
+      label: "headroom"
+      minuend: "output:headroom_pp"
+  - id: "The Sahm gap vs its 0.5 threshold"
+    role: consequence
+    chart_type: series
+    color_job: sequential
+    interpretation: fired
+    insight: "the raw indicator against the trigger line — the recession spikes (1975, 1980, 1982, 1991, 2001, 2008, 2020) tower over 0.5pp"
+    data_contract:
+      kind: series
+      ylabel: "Sahm gap (pp)"
+      hline: 0.5
+      hline_label: "0.5pp trigger"
+      series:
+        - {label: "Sahm gap", from: "output:sahm_gap_pp"}
+  - id: "The unemployment rate"
+    role: input
+    chart_type: series
+    color_job: categorical
+    insight: "the single series the rule watches — the Sahm gap catches the EARLY upturn off the cycle low, before the level itself looks alarming"
+    data_contract:
+      kind: series
+      ylabel: "unemployment (%)"
+      series:
+        - {label: "unemployment rate", from: "output:unemployment_pct"}
+  - id: "The recession call today"
+    role: outcome
+    chart_type: bar
+    color_job: diverging
+    insight: "the current unemployment rate, Sahm gap, and how much headroom remains to the trigger"
+    data_contract:
+      kind: named_values
+      ylabel: "pp / %"
+      labels: ["unemployment", "Sahm gap", "headroom"]
+      values: ["output:unemployment_pct", "output:sahm_gap_pp", "output:headroom_pp"]

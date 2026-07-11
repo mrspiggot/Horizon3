@@ -150,7 +150,7 @@ def dumbbell(ax, labels, left, right, *, title=None, xlabel="value",
 
 
 def overlay_lines(ax, x, series, *, band=None, xticklabels=None, title=None, ylabel="value",
-                  zero_line=False, robust_ylim=False):
+                  zero_line=False, robust_ylim=False, hline=None, hline_label=None):
     """Reusable time-series overlay (categorical identity). `series` = list of (label, y, style)
     where style in {"solid","dashed"}; `band` = (lo, hi, label) shaded region (a gap/premium/spread).
 
@@ -166,6 +166,9 @@ def overlay_lines(ax, x, series, *, band=None, xticklabels=None, title=None, yla
                 marker="o" if style != "dashed" else None, ms=3, label=label, zorder=4 + i)
     if zero_line:
         ax.axhline(0, color=theme.MUTED, lw=1, ls=":")
+    if hline is not None:
+        ax.axhline(hline, color=theme.FORWARD, lw=1.4, ls="--",
+                   label=hline_label or f"{hline:g}")
     if robust_ylim:
         allv = np.concatenate([np.asarray(y, dtype=float) for _, y, _ in series]) if series else np.array([])
         allv = allv[np.isfinite(allv)]

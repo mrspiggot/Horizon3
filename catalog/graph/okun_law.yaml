@@ -1,0 +1,86 @@
+model_id: okun_law
+name: "Okun's Law (growth vs unemployment)"
+family: macro
+persona: economist_forecaster
+grounded_in: [okun-1962-potential]
+method: published
+canonical: true   # a two-variable textbook relationship — the >=3-input floor does not apply
+method_note: >
+  Okun's Law (Okun 1962): the empirical trade-off between real output growth and the change in the
+  unemployment rate — roughly, unemployment falls about half a point for each point of growth above
+  trend. A canonical relationship; the message is the downward-sloping (growth, ΔU) cloud and its
+  slope (the Okun coefficient), read as a scatter with an OLS fit.
+spec:
+  equations: "ΔU_yoy ≈ -c·(g_yoy - g*), g = real GDP growth (YoY %), ΔU = year-on-year change in the unemployment rate (pp)."
+history: {start: "1962-01", end: "2026-01", cadence: quarterly}
+inputs:
+  - {id: g,  series_id: GDPC1,  db_source: fred, transform: yoy,      state: level, context_window: 40}
+  - {id: du, series_id: UNRATE, db_source: fred, transform: yoy_diff, state: level, context_window: 40}
+execution:
+  implemented_by: unified_market_data.analysis.macro_signals.okun_law
+  args: {gdp_growth_pct: g.level, unemployment_change_pp: du.level}
+outputs:
+  - {name: gdp_growth_pct,       unit: "%",  meaning: "real GDP growth, YoY"}
+  - {name: unemployment_change_pp, unit: "pp", meaning: "year-on-year change in the unemployment rate"}
+interpretations:
+  - id: recession
+    when: "gdp_growth_pct < 0 and unemployment_change_pp > 0.5"
+    says: >
+      Output is contracting and unemployment is rising together — the bottom-right of Okun's scatter,
+      a recession. The tight negative relationship is why a growth forecast IS an unemployment forecast.
+  - id: hot
+    when: "gdp_growth_pct > 3 and unemployment_change_pp < 0"
+    says: >
+      Above-trend growth is pulling unemployment down — the top-left of the cloud. Okun's coefficient
+      lets you translate the growth surprise directly into how much slack is being absorbed.
+charts:
+  - id: "Okun's Law (GDP growth vs change in unemployment)"
+    role: outcome
+    chart_type: scatter
+    color_job: sequential
+    interpretation: recession
+    insight: "the canonical downward slope — faster growth means falling unemployment; the fitted slope IS Okun's coefficient (~ -0.4). Points shade 1962→2026; the recession clusters sit bottom-right (2008, 2020)"
+    data_contract:
+      kind: scatter
+      xlabel: "real GDP growth, YoY (%)"
+      ylabel: "change in unemployment (pp)"
+      cbar_label: "1962 → 2026"
+      x: "output:gdp_growth_pct"
+      y: "output:unemployment_change_pp"
+      fit: true
+      time_colour: true
+  - id: "Growth and unemployment change over time"
+    role: input
+    chart_type: series
+    color_job: categorical
+    insight: "the two series Okun relates — growth turning negative drags unemployment up with a short lag, most violently in 2008 and 2020"
+    data_contract:
+      kind: series
+      ylabel: "%  /  pp"
+      zero_line: true
+      series:
+        - {label: "real GDP growth (YoY %)", from: "output:gdp_growth_pct"}
+        - {label: "Δ unemployment (pp)", from: "output:unemployment_change_pp"}
+  - id: "The unemployment impulse (Okun's realization)"
+    role: consequence
+    chart_type: gap_series
+    color_job: diverging
+    interpretation: recession
+    pos_label: "unemployment rising (downturn)"
+    neg_label: "unemployment falling (expansion)"
+    insight: "the year-on-year change in unemployment — Okun's law made a time series; the sharp positive spikes ARE the recessions the growth collapse produced"
+    data_contract:
+      kind: gap_series
+      ylabel: "Δ unemployment (pp)"
+      label: "Δ unemployment"
+      minuend: "output:unemployment_change_pp"
+  - id: "Growth and jobs today"
+    role: outcome
+    chart_type: bar
+    color_job: diverging
+    insight: "the current growth rate and the year's change in unemployment"
+    data_contract:
+      kind: named_values
+      ylabel: "%  /  pp"
+      labels: ["GDP growth (YoY)", "Δ unemployment"]
+      values: ["output:gdp_growth_pct", "output:unemployment_change_pp"]
