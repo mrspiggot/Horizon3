@@ -132,3 +132,24 @@ personas:
       copper is doing the talking while the inflation impulse across the broad complex is muted — a
       complex to trade by leg, not as a bloc.
 
+  corporate_treasurer:
+    name: "Corporate treasurer"
+    decision: "Time and structure the firm's funding."
+    title: "The cost of money: is now the time to term out debt?"
+    models: [funding_cost, real_funding, funding_quality]
+    stub_charts:
+      - [funding_cost, "All-in funding cost"]
+      - [funding_cost, "Rates vs credit (what is driving the cost)"]
+      - [real_funding, "Real cost of debt"]
+      - [funding_quality, "The credit-quality funding premium (HY - IG)"]
+    summary_template: >
+      A treasurer's job is to borrow when money is cheap, so the question is always: is it? All-in
+      fixed investment-grade funding sits at {funding_cost.all_in_pct}% — {funding_cost.risk_free_pct}%
+      of risk-free rate plus {funding_cost.credit_oas_pct} points of credit spread, so the cost is a
+      rates story far more than a company-credit one. Strip out expected inflation and the REAL cost of
+      that debt is {real_funding.real_funding}% — the number that actually matters for whether to
+      borrow now or wait. Down the quality ladder, a sub-investment-grade issuer pays an extra
+      {funding_quality.quality_premium_pct} points, thin by historical standards, so the window for
+      weaker credits is open. One reading: nominal funding is rates-driven and the real cost is
+      moderate; if the firm needs term debt, the credit door is open and the rate is the swing factor.
+

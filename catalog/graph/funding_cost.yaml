@@ -1,0 +1,63 @@
+model_id: funding_cost
+name: "All-in funding cost (risk-free + credit)"
+family: credit
+persona: corporate_treasurer
+grounded_in: [hatzius-fci, longstaff-credit-spreads]
+spec:
+  equations: "all-in fixed IG funding = 5Y risk-free + IG OAS"
+history: {start: "2025-08-01", end: "2026-07-09", cadence: weekly}
+inputs:
+  - {id: rf, series_id: DGS5, db_source: fred, state: level, context_window: 250}
+  - {id: ig, series_id: BAMLC0A0CM, db_source: fred, state: level, context_window: 250}
+  - {id: hy, series_id: BAMLH0A0HYM2, db_source: fred, state: level, context_window: 250}
+execution:
+  implemented_by: unified_market_data.analysis.treasury_analytics.funding_cost
+  args: {risk_free_pct: rf.level, credit_oas_pct: ig.level}
+outputs:
+  - {name: all_in_pct, unit: "%", meaning: "all-in fixed IG funding cost"}
+  - {name: risk_free_pct, unit: "%", meaning: "5Y risk-free component"}
+  - {name: credit_oas_pct, unit: "%", meaning: "IG credit spread component"}
+interpretations:
+  - id: rates_driven
+    when: "risk_free_pct > 3.5"
+    says: "The funding cost is dominated by the risk-free rate, not credit — a rates story, not a company-credit story."
+charts:
+  - id: "All-in funding cost"
+    chart_type: series
+    color_job: sequential
+    interpretation: rates_driven
+    insight: "the treasurer's all-in cost of fixed funding, through time"
+    data_contract:
+      kind: series
+      ylabel: "all-in funding (%)"
+      series:
+        - {label: "all-in IG funding", from: "output:all_in_pct"}
+  - id: "Rates vs credit (what is driving the cost)"
+    chart_type: series
+    color_job: categorical
+    insight: "is the funding cost moving on the risk-free rate or on the credit spread?"
+    data_contract:
+      kind: series
+      ylabel: "%"
+      series:
+        - {label: "risk-free (5Y)", from: "output:risk_free_pct"}
+        - {label: "IG credit spread", from: "output:credit_oas_pct"}
+  - id: "IG vs HY spread (the quality choice)"
+    chart_type: series
+    color_job: categorical
+    insight: "the extra spread a sub-IG issuer pays over investment grade"
+    data_contract:
+      kind: series
+      ylabel: "OAS (%)"
+      series:
+        - {label: "IG OAS", from: "input:ig.level"}
+        - {label: "HY OAS", from: "input:hy.level"}
+  - id: "The funding stack today"
+    chart_type: bar
+    color_job: sequential
+    insight: "the current split of the all-in cost into rates and credit"
+    data_contract:
+      kind: named_values
+      ylabel: "%"
+      labels: ["risk-free", "IG spread", "all-in"]
+      values: ["output:risk_free_pct", "output:credit_oas_pct", "output:all_in_pct"]
