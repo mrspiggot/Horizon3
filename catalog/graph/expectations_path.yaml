@@ -1,0 +1,63 @@
+model_id: expectations_path
+name: "Market-implied rate path (ACM risk-neutral yields)"
+family: rates
+persona: macro_rates_trader
+grounded_in: [acm-linear-regressions]
+spec:
+  equations: "ACMRNY(n) = expected average short rate over n years (risk-neutral); slope = 10y - 2y"
+history: {start: "2025-07-10", end: "2026-07-09", cadence: weekly}
+inputs:
+  - {id: rny02, series_id: ACMRNY02, db_source: nyfed_acm, state: level, context_window: 120}
+  - {id: rny05, series_id: ACMRNY05, db_source: nyfed_acm, state: level, context_window: 120}
+  - {id: rny10, series_id: ACMRNY10, db_source: nyfed_acm, state: level, context_window: 120}
+execution:
+  implemented_by: unified_market_data.analysis.term_premium.curve_slope
+  args: {short_pct: rny02.level, long_pct: rny10.level}
+outputs:
+  - {name: slope, unit: "pp", meaning: "10Y minus 2Y risk-neutral yield — the expected-path slope"}
+interpretations:
+  - id: path_inverted
+    when: "slope < 0"
+    says: "The expectations curve is inverted — the market expects the average short rate to fall, i.e. cuts ahead."
+charts:
+  - id: "The market-implied path (2s / 5s / 10s expectations)"
+    chart_type: series
+    color_job: sequential
+    insight: "the risk-neutral (expectations) yields by tenor — what path the market prices, through time"
+    data_contract:
+      kind: series
+      ylabel: "expected avg short rate (%)"
+      series:
+        - {label: "2Y", from: "input:rny02.level"}
+        - {label: "5Y", from: "input:rny05.level"}
+        - {label: "10Y", from: "input:rny10.level"}
+  - id: "Expectations-curve slope (10Y - 2Y)"
+    chart_type: gap_series
+    color_job: diverging
+    interpretation: path_inverted
+    insight: "cuts vs hikes priced: an inverted expectations curve prices a falling short rate"
+    data_contract:
+      kind: gap_series
+      ylabel: "percentage points"
+      label: "10Y - 2Y expectations"
+      minuend: "input:rny10.level"
+      subtrahend: "input:rny02.level"
+  - id: "Near-term path (2Y expectations) vs its range"
+    chart_type: series
+    color_job: diverging
+    insight: "the front-end expected path and where it sits in its recent history"
+    data_contract:
+      kind: series
+      ylabel: "z-score"
+      zero_line: true
+      series:
+        - {label: "2Y expectations z-score", from: "input:rny02.zscore"}
+  - id: "The expectations curve today"
+    chart_type: bar
+    color_job: sequential
+    insight: "the current market-implied average short rate at each tenor"
+    data_contract:
+      kind: named_values
+      ylabel: "%"
+      labels: ["2Y", "5Y", "10Y"]
+      values: ["input:rny02.level", "input:rny05.level", "input:rny10.level"]

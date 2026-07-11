@@ -1,0 +1,67 @@
+model_id: term_premium_decomposition
+name: "ACM term-premium decomposition (10Y)"
+family: rates
+persona: macro_rates_trader
+grounded_in: [acm-linear-regressions]
+spec:
+  equations: "y = expectations + term_premium (ACM SR340); tp_share = term_premium / y"
+history: {start: "2025-07-10", end: "2026-07-09", cadence: weekly}
+inputs:
+  - {id: tp10, series_id: ACMTP10, db_source: nyfed_acm, state: level, context_window: 120}
+  - {id: exp10, series_id: ACMRNY10, db_source: nyfed_acm, state: level, context_window: 120}
+  - {id: y10, series_id: ACMY10, db_source: nyfed_acm, state: level, context_window: 120}
+execution:
+  implemented_by: unified_market_data.analysis.term_premium.acm_decomposition
+  args: {term_premium_pct: tp10.level, expectations_pct: exp10.level, fitted_yield_pct: y10.level}
+outputs:
+  - {name: fitted_yield_pct, unit: "%", meaning: "ACM fitted 10Y yield"}
+  - {name: term_premium_pct, unit: "%", meaning: "10Y term premium"}
+  - {name: expectations_pct, unit: "%", meaning: "risk-neutral (expected average short rate)"}
+  - {name: tp_share, unit: "0..1", meaning: "share of the 10Y yield that is term premium"}
+  - {name: identity_residual_pp, unit: "pp", meaning: "fitted - (tp+exp); ACM identity => ~0"}
+interpretations:
+  - id: tp_compressed
+    when: "term_premium_pct < 0.5"
+    says: "The 10Y term premium is compressed — most of the yield is expectations, so duration pays little for its risk."
+charts:
+  - id: "The 10Y, split: expectations + term premium"
+    chart_type: series
+    color_job: categorical
+    insight: "the fitted 10Y and its two ACM components through time"
+    data_contract:
+      kind: series
+      ylabel: "%"
+      series:
+        - {label: "fitted 10Y", from: "output:fitted_yield_pct"}
+        - {label: "expectations", from: "output:expectations_pct"}
+        - {label: "term premium", from: "output:term_premium_pct"}
+  - id: "The term premium alone"
+    chart_type: series
+    color_job: diverging
+    interpretation: tp_compressed
+    insight: "the 10Y term premium level — compensation for duration risk — through time"
+    data_contract:
+      kind: series
+      ylabel: "percentage points"
+      zero_line: true
+      series:
+        - {label: "10Y term premium", from: "output:term_premium_pct"}
+  - id: "Term-premium share of the yield"
+    chart_type: series
+    color_job: sequential
+    insight: "how much of the 10Y is risk premium vs expectations"
+    data_contract:
+      kind: series
+      ylabel: "share of yield"
+      zero_line: true
+      series:
+        - {label: "term-premium share", from: "output:tp_share"}
+  - id: "The decomposition today"
+    chart_type: bar
+    color_job: sequential
+    insight: "the current split of the 10Y into expectations and term premium"
+    data_contract:
+      kind: named_values
+      ylabel: "%"
+      labels: ["fitted 10Y", "expectations", "term premium"]
+      values: ["output:fitted_yield_pct", "output:expectations_pct", "output:term_premium_pct"]

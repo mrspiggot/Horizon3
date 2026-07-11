@@ -24,3 +24,25 @@ personas:
       through the Estrella-Mishkin probit, puts the twelve-month recession probability at
       {recession_probability.prob_12m} on a 0-to-1 scale. Three published models, one reading: policy
       is easing back toward the rule even as the curve stops flashing alarm.
+
+  macro_rates_trader:
+    name: "Macro rates trader"
+    decision: "Position the duration / swap book ahead of events."
+    title: "What is really in the 10-year: expectations, or risk premium?"
+    models: [term_premium_decomposition, term_premium_curve, expectations_path]
+    stub_charts:
+      - [term_premium_decomposition, "The 10Y, split: expectations + term premium"]
+      - [term_premium_decomposition, "The term premium alone"]
+      - [term_premium_curve, "TP-curve slope (10Y - 2Y)"]
+      - [expectations_path, "Expectations-curve slope (10Y - 2Y)"]
+    summary_template: >
+      A 10-year Treasury yield is two things at once, and a rates trader has to know which is moving.
+      The ACM decomposition splits today's {term_premium_decomposition.fitted_yield_pct}% fitted 10-year
+      into {term_premium_decomposition.expectations_pct}% of expected average short rate and just
+      {term_premium_decomposition.term_premium_pct}pp of term premium — only
+      {term_premium_decomposition.tp_share} of the yield is compensation for duration risk. That
+      premium is thin: the market is being paid little to own the long end. Across tenors the
+      term-premium curve slope (10s minus 2s) is {term_premium_curve.slope}pp, while the expectations
+      curve slope is {expectations_path.slope}pp — the shape of the path the market prices. Duration
+      here is an expectations bet, not a risk-premium one; the trade is in the path, not the premium.
+

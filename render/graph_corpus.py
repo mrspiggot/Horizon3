@@ -49,7 +49,16 @@ def _load_model(model_id: str) -> dict:
             "history": d.get("history", {}), "meta": d}
 
 
-def _monthly(start: str, end: str) -> list[str]:
+def _dates(start: str, end: str, cadence: str = "monthly") -> list[str]:
+    if cadence == "weekly":
+        from datetime import datetime, timedelta
+        d = datetime.fromisoformat(f"{start}-01" if len(start) == 7 else start)
+        e = datetime.fromisoformat(f"{end}-28" if len(end) == 7 else end)
+        out = []
+        while d <= e:
+            out.append(d.strftime("%Y-%m-%d"))
+            d += timedelta(days=7)
+        return out
     (ys, ms), (ye, me) = (int(x) for x in start.split("-")), (int(x) for x in end.split("-"))
     out, y, m = [], ys, ms
     while (y, m) <= (ye, me):
@@ -81,7 +90,8 @@ def _fetch_factory(conn, db_sources: dict[str, str]):
 def run_model(model_id: str, conn) -> dict:
     m = _load_model(model_id)
     ex = Executor(_fetch_factory(conn, m["db_sources"]))
-    dates = _monthly(m["history"].get("start", "2021-01"), m["history"].get("end", "2026-05"))
+    dates = _dates(m["history"].get("start", "2021-01"), m["history"].get("end", "2026-05"),
+                   m["history"].get("cadence", "monthly"))
     history = ex.run_history(m["spec"], dates)
     return {**m, "history": history, "latest": history[-1] if history else None}
 

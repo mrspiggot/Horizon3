@@ -1,0 +1,64 @@
+model_id: term_premium_curve
+name: "Term-premium curve (2s / 5s / 10s)"
+family: rates
+persona: macro_rates_trader
+grounded_in: [acm-linear-regressions]
+spec:
+  equations: "tp_slope = tp(10y) - tp(2y) — the steepness of the term-premium curve"
+history: {start: "2025-07-10", end: "2026-07-09", cadence: weekly}
+inputs:
+  - {id: tp02, series_id: ACMTP02, db_source: nyfed_acm, state: level, context_window: 120}
+  - {id: tp05, series_id: ACMTP05, db_source: nyfed_acm, state: level, context_window: 120}
+  - {id: tp10, series_id: ACMTP10, db_source: nyfed_acm, state: level, context_window: 120}
+execution:
+  implemented_by: unified_market_data.analysis.term_premium.curve_slope
+  args: {short_pct: tp02.level, long_pct: tp10.level}
+outputs:
+  - {name: slope, unit: "pp", meaning: "10Y minus 2Y term premium — the TP-curve slope"}
+interpretations:
+  - id: tp_steep
+    when: "slope > 0.5"
+    says: "The term-premium curve is steep — long duration is being paid materially more risk premium than the front."
+charts:
+  - id: "Term premium by tenor (2s / 5s / 10s)"
+    chart_type: series
+    color_job: sequential
+    insight: "the whole term-premium curve moving through time"
+    data_contract:
+      kind: series
+      ylabel: "term premium (pp)"
+      zero_line: true
+      series:
+        - {label: "2Y", from: "input:tp02.level"}
+        - {label: "5Y", from: "input:tp05.level"}
+        - {label: "10Y", from: "input:tp10.level"}
+  - id: "TP-curve slope (10Y - 2Y)"
+    chart_type: gap_series
+    color_job: diverging
+    interpretation: tp_steep
+    insight: "how much extra term premium the long end carries vs the front"
+    data_contract:
+      kind: gap_series
+      ylabel: "percentage points"
+      label: "10Y - 2Y term premium"
+      minuend: "input:tp10.level"
+      subtrahend: "input:tp02.level"
+  - id: "10Y term premium vs its own range"
+    chart_type: series
+    color_job: diverging
+    insight: "where the 10Y term premium sits in its recent distribution (z-score)"
+    data_contract:
+      kind: series
+      ylabel: "z-score"
+      zero_line: true
+      series:
+        - {label: "10Y TP z-score", from: "input:tp10.zscore"}
+  - id: "The term-premium curve today"
+    chart_type: bar
+    color_job: sequential
+    insight: "the current term premium at each tenor"
+    data_contract:
+      kind: named_values
+      ylabel: "term premium (pp)"
+      labels: ["2Y", "5Y", "10Y"]
+      values: ["input:tp02.level", "input:tp05.level", "input:tp10.level"]
