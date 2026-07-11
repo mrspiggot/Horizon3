@@ -1,0 +1,63 @@
+model_id: copper_gold_growth
+name: "Copper/gold ratio (growth vs fear)"
+family: commodity
+persona: commodity_analyst
+grounded_in: [gorton-rouwenhorst-facts]
+spec:
+  equations: "copper/gold x1000 — cyclical demand (copper) vs safety/inflation (gold); rising = growth"
+history: {start: "2025-08-01", end: "2026-07-09", cadence: weekly}
+inputs:
+  - {id: copper, series_id: "HG=F", db_source: yahoo, state: level, context_window: 250}
+  - {id: gold, series_id: "GC=F", db_source: yahoo, state: level, context_window: 250}
+  - {id: silver, series_id: "SI=F", db_source: yahoo, state: level, context_window: 250}
+execution:
+  implemented_by: unified_market_data.analysis.commodity_analytics.copper_gold_ratio
+  args: {copper: copper.level, gold: gold.level}
+outputs:
+  - {name: ratio, unit: "x1000", meaning: "copper/gold x1000 — the growth-vs-fear signal"}
+interpretations:
+  - id: growth_optimism
+    when: "ratio > 1.5"
+    says: "The copper/gold ratio is elevated — the commodity market is pricing cyclical growth over safety."
+charts:
+  - id: "Copper/gold ratio (growth signal)"
+    chart_type: series
+    color_job: diverging
+    interpretation: growth_optimism
+    insight: "the market's growth-vs-fear read, through time"
+    data_contract:
+      kind: series
+      ylabel: "copper/gold x1000"
+      series:
+        - {label: "copper/gold", from: "output:ratio"}
+  - id: "Copper vs gold (standardized)"
+    chart_type: series
+    color_job: categorical
+    insight: "the two legs of the ratio — cyclical demand against safety"
+    data_contract:
+      kind: series
+      ylabel: "z-score"
+      zero_line: true
+      series:
+        - {label: "copper z", from: "input:copper.zscore"}
+        - {label: "gold z", from: "input:gold.zscore"}
+  - id: "Gold vs silver (the precious pair)"
+    chart_type: series
+    color_job: categorical
+    insight: "silver is half-industrial; gold/silver divergence signals whether the bid is fear or growth"
+    data_contract:
+      kind: series
+      ylabel: "z-score"
+      zero_line: true
+      series:
+        - {label: "gold z", from: "input:gold.zscore"}
+        - {label: "silver z", from: "input:silver.zscore"}
+  - id: "Metals today"
+    chart_type: bar
+    color_job: diverging
+    insight: "the current standardized level of each metal"
+    data_contract:
+      kind: named_values
+      ylabel: "z-score"
+      labels: ["copper", "gold", "silver"]
+      values: ["input:copper.zscore", "input:gold.zscore", "input:silver.zscore"]

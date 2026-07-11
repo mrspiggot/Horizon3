@@ -111,3 +111,24 @@ personas:
       ({financial_conditions.credit_z} sigma). Risk appetite is firm and havens are quiet — a tape to
       respect, not chase.
 
+  commodity_analyst:
+    name: "Commodity analyst"
+    decision: "Position across the commodity complex (energy / metals / ags)."
+    title: "What the commodity complex is saying about growth and inflation"
+    models: [energy_complex, copper_gold_growth, commodity_reflation]
+    stub_charts:
+      - [copper_gold_growth, "Copper/gold ratio (growth signal)"]
+      - [commodity_reflation, "Commodity reflation breadth"]
+      - [energy_complex, "Brent-WTI spread"]
+      - [commodity_reflation, "The three legs (energy / metals / ags)"]
+    summary_template: >
+      Commodities are the economy's cleanest real-time read on growth and inflation, and right now the
+      complex is sending mixed signals. The copper/gold ratio — cyclical demand against safety — sits
+      at {copper_gold_growth.ratio}, its level a gauge of how much growth versus fear the market is
+      pricing. Broad reflation breadth across energy, metals and agriculture reads
+      {commodity_reflation.reflation} sigma — not firming in unison. Within energy the Brent-WTI spread
+      is ${energy_complex.slope} a barrel, a location premium
+      that says as much about seaborne supply as about demand. One reading: the growth signal from
+      copper is doing the talking while the inflation impulse across the broad complex is muted — a
+      complex to trade by leg, not as a bloc.
+

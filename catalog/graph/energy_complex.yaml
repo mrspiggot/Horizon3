@@ -1,0 +1,65 @@
+model_id: energy_complex
+name: "Energy complex (crude / Brent / gas)"
+family: commodity
+persona: commodity_analyst
+grounded_in: [gorton-rouwenhorst-facts, nber-commodity-futures]
+spec:
+  equations: "Brent-WTI spread = Brent - WTI (location/quality); complex read via standardized levels"
+history: {start: "2025-08-01", end: "2026-07-09", cadence: weekly}
+inputs:
+  - {id: crude, series_id: "CL=F", db_source: yahoo, state: level, context_window: 250}
+  - {id: brent, series_id: "BZ=F", db_source: yahoo, state: level, context_window: 250}
+  - {id: natgas, series_id: "NG=F", db_source: yahoo, state: level, context_window: 250}
+execution:
+  implemented_by: unified_market_data.analysis.term_premium.curve_slope
+  args: {short_pct: crude.level, long_pct: brent.level}
+outputs:
+  - {name: slope, unit: "$/bbl", meaning: "Brent minus WTI — the location/quality spread"}
+interpretations:
+  - id: brent_premium
+    when: "slope > 4"
+    says: "Brent trades well above WTI — tight seaborne crude / ample US shale; a wide location spread."
+charts:
+  - id: "The energy complex (standardized)"
+    chart_type: series
+    color_job: categorical
+    insight: "crude, Brent and gas on a comparable (z-score) scale through time"
+    data_contract:
+      kind: series
+      ylabel: "z-score"
+      zero_line: true
+      series:
+        - {label: "WTI crude", from: "input:crude.zscore"}
+        - {label: "Brent", from: "input:brent.zscore"}
+        - {label: "nat gas", from: "input:natgas.zscore"}
+  - id: "Brent-WTI spread"
+    chart_type: gap_series
+    color_job: diverging
+    interpretation: brent_premium
+    insight: "the seaborne-vs-landlocked crude premium through time"
+    data_contract:
+      kind: gap_series
+      ylabel: "$/bbl"
+      label: "Brent - WTI"
+      minuend: "input:brent.level"
+      subtrahend: "input:crude.level"
+  - id: "Crude vs gas (energy divergence)"
+    chart_type: series
+    color_job: categorical
+    insight: "when oil and gas diverge, the driver is supply-specific not macro"
+    data_contract:
+      kind: series
+      ylabel: "z-score"
+      zero_line: true
+      series:
+        - {label: "crude z", from: "input:crude.zscore"}
+        - {label: "gas z", from: "input:natgas.zscore"}
+  - id: "The energy complex today"
+    chart_type: bar
+    color_job: diverging
+    insight: "the current standardized level of each energy contract"
+    data_contract:
+      kind: named_values
+      ylabel: "z-score"
+      labels: ["WTI", "Brent", "nat gas"]
+      values: ["input:crude.zscore", "input:brent.zscore", "input:natgas.zscore"]
