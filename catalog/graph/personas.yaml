@@ -123,7 +123,7 @@ personas:
     stub_charts:
       - [commodity_momentum, "The momentum surface (commodity x time)"]
       - [commodity_momentum, "Momentum breadth (net share trending up)"]
-      - [copper_gold_growth, "Copper/gold ratio (growth signal)"]
+      - [copper_gold_growth, "The copper/gold ratio (growth signal)"]
       - [commodity_momentum, "Momentum across the complex today"]
     summary_template: >
       Commodities are the economy's cleanest real-time read on growth and inflation, and the two
@@ -143,10 +143,10 @@ personas:
     title: "The cost of money: is now the time to term out debt?"
     models: [funding_cost, real_funding, funding_quality]
     stub_charts:
-      - [funding_cost, "All-in funding cost"]
-      - [funding_cost, "Rates vs credit (what is driving the cost)"]
-      - [real_funding, "Real cost of debt"]
+      - [funding_cost, "All-in funding cost over time"]
+      - [real_funding, "The real-funding cycle"]
       - [funding_quality, "The credit-quality funding premium (HY - IG)"]
+      - [funding_cost, "Rates vs credit — what is driving the cost"]
     summary_template: >
       A treasurer's job is to borrow when money is cheap, so the question is always: is it? All-in
       fixed investment-grade funding sits at {funding_cost.all_in_pct}% — {funding_cost.risk_free_pct}%

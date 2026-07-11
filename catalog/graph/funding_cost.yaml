@@ -4,6 +4,7 @@ family: credit
 persona: corporate_treasurer
 grounded_in: [longstaff-credit-spreads]
 method: data-direct
+low_dimensional_exception: true   # all-in funding is definitionally two legs: risk-free + credit spread
 method_note: >
   The all-in fixed funding cost a treasurer actually pays = the risk-free term rate + the credit
   spread (Longstaff et al.: the spread is the market price of the issuer's default risk). The credit
