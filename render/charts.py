@@ -304,3 +304,61 @@ def color_table(ax, columns, row_labels, values, *, color_job="sequential", titl
             cell.get_text().set_color("white" if lum < 0.5 else theme.INK)
     if title:
         ax.set_title(title, pad=14)
+
+
+def matrix_heatmap(ax, matrix, row_labels, col_labels, *, color_job="diverging", title=None,
+                   cbar_label="", fig=None, fmt=None):
+    """Information-dense heatmap: a value matrix (rows x cols) as a color mesh — the term-premium
+    across tenors and time, a vol surface, a correlation grid. Diverging centers the scale at zero;
+    sequential runs light->dark. This is the form that shows a whole cross-section at once."""
+    theme.use_theme()
+    M = np.asarray(matrix, dtype=float)
+    cmap = theme.div_cmap() if color_job == "diverging" else theme.seq_cmap()
+    if color_job == "diverging":
+        m = float(np.nanmax(np.abs(M))) or 1.0
+        vmin, vmax = -m, m
+    else:
+        vmin, vmax = float(np.nanmin(M)), float(np.nanmax(M))
+    mesh = ax.pcolormesh(M, cmap=cmap, vmin=vmin, vmax=vmax, edgecolors="white", linewidth=0.4)
+    ax.set_yticks(np.arange(len(row_labels)) + 0.5)
+    ax.set_yticklabels(row_labels, fontsize=8)
+    step = max(1, len(col_labels) // 10)
+    ax.set_xticks(np.arange(0, len(col_labels), step) + 0.5)
+    ax.set_xticklabels([col_labels[i] for i in range(0, len(col_labels), step)],
+                       rotation=45, ha="right", fontsize=7.5)
+    ax.set_xlim(0, M.shape[1])
+    ax.set_ylim(0, M.shape[0])
+    ax.tick_params(length=0)
+    for sp in ax.spines.values():
+        sp.set_visible(False)
+    if fmt is not None:
+        for r in range(M.shape[0]):
+            for cc in range(M.shape[1]):
+                if step == 1 or cc % step == 0:
+                    ax.text(cc + 0.5, r + 0.5, fmt.format(M[r, cc]), ha="center", va="center",
+                            fontsize=6.5, color=theme.INK)
+    if fig is not None:
+        cb = fig.colorbar(mesh, ax=ax, fraction=0.035, pad=0.02)
+        cb.set_label(cbar_label, fontsize=8)
+        cb.ax.tick_params(labelsize=7)
+    if title:
+        ax.set_title(title)
+
+
+def curve_snapshot(ax, tenor_labels, curves, *, title=None, ylabel="value", xlabel="tenor"):
+    """Compare a term structure at several dates: `curves` = list of (label, [values across tenors],
+    style). Shows the SHAPE and how it shifted — a curve today vs a month ago, richer than a line."""
+    theme.use_theme()
+    x = list(range(len(tenor_labels)))
+    for i, (label, ys, style) in enumerate(curves):
+        ax.plot(x, ys, color=theme.cat(i), lw=2.4 if style != "faded" else 1.6,
+                ls="-" if style != "faded" else "--", marker="o", ms=5,
+                alpha=1.0 if style != "faded" else 0.6, label=label, zorder=4 - i)
+    ax.set_xticks(x)
+    ax.set_xticklabels(tenor_labels, fontsize=8)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    if title:
+        ax.set_title(title)
+    theme.style_axes(ax, grid_axis="y")
+    ax.legend(fontsize=8, framealpha=0.9)

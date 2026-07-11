@@ -49,7 +49,7 @@ def _xlabels(history):
     return [str(r.as_of)[:7] if r.as_of else "" for r in history]
 
 
-def render_chart(ax, chart: dict, history: list) -> None:
+def render_chart(ax, chart: dict, history: list, *, fig=None) -> None:
     dc = chart["data_contract"]
     kind = dc["kind"]
     latest = history[-1]
@@ -76,6 +76,33 @@ def render_chart(ax, chart: dict, history: list) -> None:
                              xticklabels=_xlabels(history), title=title,
                              ylabel=dc.get("ylabel", "pp"), zero_line=True)
 
+    elif kind == "heatmap":
+        # rows = a cross-section (tenors, ratings, ...); cols = time. The whole surface at once.
+        matrix = [_hist(history, r["from"]) for r in dc["rows"]]
+        row_labels = [r["label"] for r in dc["rows"]]
+        charts.matrix_heatmap(ax, matrix, row_labels, _xlabels(history), color_job=cj,
+                              title=title, cbar_label=dc.get("cbar_label", ""), fig=fig,
+                              fmt=dc.get("fmt"))
+
+    elif kind == "curve_snapshot":
+        # the term structure at several dates — its SHAPE and how it shifted
+        tenors = dc["tenor_labels"]
+        refs = dc["refs"]
+        curves = []
+        for lb in dc.get("lookbacks", [{"label": "now", "k": 0, "style": "solid"}]):
+            run = history[-1 - lb["k"]] if len(history) > lb["k"] else history[0]
+            curves.append((lb.get("label", str(run.as_of)[:10]),
+                           [_val(run, ref) for ref in refs], lb.get("style", "solid")))
+        charts.curve_snapshot(ax, tenors, curves, title=title, ylabel=dc.get("ylabel", "value"),
+                              xlabel=dc.get("xlabel", "tenor"))
+
+    elif kind == "stacked":
+        x = list(range(len(history)))
+        layers = [(s["label"], _hist(history, s["from"])) for s in dc["layers"]]
+        charts.stacked_area(ax, x, layers, xticklabels=_xlabels(history), title=title,
+                            ylabel=dc.get("ylabel", "%"),
+                            total_label=dc.get("total_label"))
+
     else:
         raise ValueError(f"unknown data_contract kind {kind!r}")
 
@@ -90,7 +117,7 @@ def render_model(history: list, charts_spec: list[dict], out_path: str, *, supti
     fig = plt.figure(figsize=(8.2 * ncol, 5.2 * nrow))
     for i, ch in enumerate(charts_spec):
         ax = fig.add_subplot(nrow, ncol, i + 1)
-        render_chart(ax, ch, history)
+        render_chart(ax, ch, history, fig=fig)
     if suptitle:
         fig.suptitle(suptitle, fontsize=12.5, y=1.0, fontweight="bold")
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)

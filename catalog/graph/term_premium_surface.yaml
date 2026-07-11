@@ -1,0 +1,77 @@
+model_id: term_premium_surface
+name: "Term-premium surface (tenor x time)"
+family: rates
+persona: macro_rates_trader
+grounded_in: [acm-linear-regressions]
+spec:
+  equations: "the ACM term premium across the whole tenor grid (1..10y) through time"
+history: {start: "2025-07-10", end: "2026-07-09", cadence: weekly}
+inputs:
+  - {id: tp1, series_id: ACMTP01, db_source: nyfed_acm, state: level, context_window: 250}
+  - {id: tp2, series_id: ACMTP02, db_source: nyfed_acm, state: level, context_window: 250}
+  - {id: tp3, series_id: ACMTP03, db_source: nyfed_acm, state: level, context_window: 250}
+  - {id: tp5, series_id: ACMTP05, db_source: nyfed_acm, state: level, context_window: 250}
+  - {id: tp7, series_id: ACMTP07, db_source: nyfed_acm, state: level, context_window: 250}
+  - {id: tp10, series_id: ACMTP10, db_source: nyfed_acm, state: level, context_window: 250}
+execution:
+  implemented_by: unified_market_data.analysis.term_premium.tenor_curve
+  args: {y1: tp1.level, y2: tp2.level, y3: tp3.level, y5: tp5.level, y7: tp7.level, y10: tp10.level}
+outputs:
+  - {name: t1y, unit: "pp", meaning: "1y term premium"}
+  - {name: t2y, unit: "pp", meaning: "2y term premium"}
+  - {name: t3y, unit: "pp", meaning: "3y term premium"}
+  - {name: t5y, unit: "pp", meaning: "5y term premium"}
+  - {name: t7y, unit: "pp", meaning: "7y term premium"}
+  - {name: t10y, unit: "pp", meaning: "10y term premium"}
+interpretations:
+  - id: premium_rebuild
+    when: "t10y - t1y > 0.5"
+    says: "The term-premium curve has re-steepened — the long end is repricing duration risk while the front stays anchored."
+charts:
+  - id: "Term-premium surface (tenor x time)"
+    chart_type: heatmap
+    color_job: diverging
+    interpretation: premium_rebuild
+    insight: "the ENTIRE term-premium curve through time in one view — where and when duration risk was priced"
+    data_contract:
+      kind: heatmap
+      cbar_label: "term premium (pp)"
+      rows:
+        - {label: "1y", from: "output:t1y"}
+        - {label: "2y", from: "output:t2y"}
+        - {label: "3y", from: "output:t3y"}
+        - {label: "5y", from: "output:t5y"}
+        - {label: "7y", from: "output:t7y"}
+        - {label: "10y", from: "output:t10y"}
+  - id: "The term-premium curve: now vs 3 months ago"
+    chart_type: curve_snapshot
+    color_job: categorical
+    insight: "how the whole curve of duration risk-premia shifted over the quarter"
+    data_contract:
+      kind: curve_snapshot
+      ylabel: "term premium (pp)"
+      xlabel: "tenor"
+      tenor_labels: ["1y", "2y", "3y", "5y", "7y", "10y"]
+      refs: ["output:t1y", "output:t2y", "output:t3y", "output:t5y", "output:t7y", "output:t10y"]
+      lookbacks:
+        - {label: "now", k: 0, style: solid}
+        - {label: "3 months ago", k: 13, style: faded}
+  - id: "Term premium by tenor today"
+    chart_type: bar
+    color_job: diverging
+    insight: "the current shape of the term-premium curve"
+    data_contract:
+      kind: named_values
+      ylabel: "term premium (pp)"
+      labels: ["1y", "2y", "3y", "5y", "7y", "10y"]
+      values: ["output:t1y", "output:t2y", "output:t3y", "output:t5y", "output:t7y", "output:t10y"]
+  - id: "The ends: 10y vs 1y term premium"
+    chart_type: series
+    color_job: categorical
+    insight: "the front and the long end of duration risk-premia, and the gap between them"
+    data_contract:
+      kind: series
+      ylabel: "term premium (pp)"
+      series:
+        - {label: "1y", from: "output:t1y"}
+        - {label: "10y", from: "output:t10y"}
