@@ -3,6 +3,8 @@ name: "Term-premium surface (tenor x time)"
 family: rates
 persona: macro_rates_trader
 grounded_in: [acm-linear-regressions]
+method: published
+method_note: "ACM term-premium tenor x time surface"
 spec:
   equations: "the ACM term premium across the whole tenor grid (1..10y) through time"
 history: {start: "2025-07-10", end: "2026-07-09", cadence: weekly}

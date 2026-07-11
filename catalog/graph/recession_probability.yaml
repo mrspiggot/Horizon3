@@ -3,6 +3,8 @@ name: "Recession probability (Estrella-Mishkin probit)"
 family: macro
 persona: central_bank_policymaker
 grounded_in: [estrella-mishkin-recession]
+method: published
+method_note: "Estrella-Mishkin probit P=Phi(a+b*spread), NY Fed coefficients"
 low_dimensional_exception: true   # canonical single-input model (the owner-agreed exception to >=3 inputs)
 spec:
   equations: "P(recession in 12m) = Phi(a + b * spread), spread = 10y - 3m ; a=-0.5333, b=-0.6330 (NY Fed)"

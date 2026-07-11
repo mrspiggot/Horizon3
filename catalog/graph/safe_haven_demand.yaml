@@ -3,6 +3,8 @@ name: "Safe-haven demand (dollar / gold / rates)"
 family: equity
 persona: equity_multiasset_pm
 grounded_in: [hatzius-fci]
+method: composite
+method_note: "SLOP: homemade mean of z-scores, no published method"
 spec:
   equations: "haven demand = mean(dollar_z, gold_z, -yield_z); >0 = flight to quality"
 history: {start: "2025-08-01", end: "2026-07-02", cadence: weekly}

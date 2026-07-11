@@ -3,6 +3,8 @@ name: "Credit quality ladder (IG / HY / EM OAS)"
 family: credit
 persona: credit_investor
 grounded_in: [longstaff-credit-spreads]
+method: data-direct
+method_note: "the published ICE BofA OAS quality ladder"
 spec:
   equations: "the OAS compensation ladder across quality; HY-IG = the down-in-quality premium"
 history: {start: "2025-07-10", end: "2026-07-09", cadence: weekly}

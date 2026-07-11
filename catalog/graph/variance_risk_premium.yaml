@@ -3,6 +3,8 @@ name: "Variance risk premium (implied vs realized)"
 family: vol
 persona: volatility_trader
 grounded_in: [carr-wu-vrp]
+method: published
+method_note: "Carr-Wu VRP = implied - realized variance"
 spec:
   equations: "VRP = implied vol (VIX) - realized vol; realized = 21d annualized log-return vol of SPX"
 history: {start: "2025-07-14", end: "2026-07-10", cadence: weekly}

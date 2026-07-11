@@ -3,6 +3,8 @@ name: "All-in funding cost (risk-free + credit)"
 family: credit
 persona: corporate_treasurer
 grounded_in: [hatzius-fci, longstaff-credit-spreads]
+method: arithmetic
+method_note: "SLOP-ADJACENT: all-in = risk-free + OAS (arithmetic, not a model)"
 spec:
   equations: "all-in fixed IG funding = 5Y risk-free + IG OAS"
 history: {start: "2025-08-01", end: "2026-07-09", cadence: weekly}

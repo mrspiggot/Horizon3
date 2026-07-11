@@ -3,6 +3,8 @@ name: "Taylor-rule reaction function"
 family: rates
 persona: central_bank_policymaker
 grounded_in: [taylor-1993-rule, hlw-natural-rate]
+method: published
+method_note: "Taylor (1993) rule variants — the actual equation"
 spec:
   equations: "i* = r* + pi + 0.5(pi - pi*) + 0.5*gap ; inertial i_t = rho*i_{t-1} + (1-rho)*i*"
   params: {r_star_pct: 0.7, inflation_target_pct: 2.0}

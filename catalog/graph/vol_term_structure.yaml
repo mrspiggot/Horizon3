@@ -3,6 +3,8 @@ name: "Volatility term structure (VIX curve)"
 family: vol
 persona: volatility_trader
 grounded_in: [carr-wu-vrp]
+method: data-direct
+method_note: "the published VIX term-structure curve"
 spec:
   equations: "the VIX curve (9d/1m/3m/6m); slope = VIX6M - VIX1M (>0 contango, <0 backwardation)"
 history: {start: "2025-07-14", end: "2026-07-10", cadence: weekly}

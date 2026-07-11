@@ -3,6 +3,8 @@ name: "Commodity reflation breadth (energy / metals / ags)"
 family: commodity
 persona: commodity_analyst
 grounded_in: [gorton-rouwenhorst-facts, nber-commodity-futures]
+method: composite
+method_note: "SLOP: homemade mean of z-scores, no published method"
 spec:
   equations: "reflation = mean(energy_z, metals_z, ags_z) — broad commodity inflation pressure"
 history: {start: "2025-08-01", end: "2026-07-09", cadence: weekly}

@@ -3,6 +3,8 @@ name: "Energy complex (crude / Brent / gas)"
 family: commodity
 persona: commodity_analyst
 grounded_in: [gorton-rouwenhorst-facts, nber-commodity-futures]
+method: arithmetic
+method_note: "SLOP-ADJACENT: Brent-WTI subtraction + standardized levels; not the storage model"
 spec:
   equations: "Brent-WTI spread = Brent - WTI (location/quality); complex read via standardized levels"
 history: {start: "2025-08-01", end: "2026-07-09", cadence: weekly}

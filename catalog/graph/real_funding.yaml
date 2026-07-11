@@ -3,6 +3,8 @@ name: "Real cost of debt (funding vs inflation)"
 family: credit
 persona: corporate_treasurer
 grounded_in: [hatzius-fci]
+method: arithmetic
+method_note: "SLOP-ADJACENT: all-in - breakeven (arithmetic)"
 spec:
   equations: "real funding = (risk-free + IG OAS) - expected inflation (10y breakeven)"
 history: {start: "2025-08-01", end: "2026-07-09", cadence: weekly}

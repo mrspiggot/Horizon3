@@ -3,6 +3,8 @@ name: "Policy stance — real rate vs r*"
 family: rates
 persona: central_bank_policymaker
 grounded_in: [hlw-natural-rate, taylor-1993-rule]
+method: arithmetic
+method_note: "SLOP-ADJACENT: real rate minus a CONSTANT r*; HLW-grounded but NOT the HLW Kalman estimate"
 spec:
   equations: "real_exante = nominal - E[pi]; real_expost = nominal - pi; stance = real_exante - r*"
   params: {r_star_pct: 0.7}

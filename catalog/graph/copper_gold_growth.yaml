@@ -3,6 +3,8 @@ name: "Copper/gold ratio (growth vs fear)"
 family: commodity
 persona: commodity_analyst
 grounded_in: [gorton-rouwenhorst-facts]
+method: arithmetic
+method_note: "SLOP-ADJACENT: copper/gold ratio heuristic (Gundlach), not a published equation"
 spec:
   equations: "copper/gold x1000 — cyclical demand (copper) vs safety/inflation (gold); rising = growth"
 history: {start: "2025-08-01", end: "2026-07-09", cadence: weekly}

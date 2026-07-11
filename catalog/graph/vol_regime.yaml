@@ -3,6 +3,8 @@ name: "Volatility regime (VIX as a state)"
 family: vol
 persona: volatility_trader
 grounded_in: [carr-wu-vrp]
+method: composite
+method_note: "SLOP: homemade level/z-score threshold classification, no published method"
 low_dimensional_exception: true   # one variable (VIX) read as a full §10 state — the exception
 spec:
   equations: "read VIX as a §10 state: level, direction (5d change), z-score vs 3m; regime = calm/elevated/stressed"

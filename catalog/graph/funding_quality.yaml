@@ -3,6 +3,8 @@ name: "Funding by credit quality (IG vs HY)"
 family: credit
 persona: corporate_treasurer
 grounded_in: [longstaff-credit-spreads, hatzius-fci]
+method: arithmetic
+method_note: "SLOP-ADJACENT: IG/HY all-in + premium (arithmetic)"
 spec:
   equations: "ig_all_in = rf + IG OAS; hy_all_in = rf + HY OAS; quality premium = hy - ig"
 history: {start: "2025-08-01", end: "2026-07-09", cadence: weekly}

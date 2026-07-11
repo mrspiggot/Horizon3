@@ -3,6 +3,8 @@ name: "Credit spread regime (HY as a state)"
 family: credit
 persona: credit_investor
 grounded_in: [longstaff-credit-spreads]
+method: composite
+method_note: "SLOP: homemade z-score state read, no published method"
 low_dimensional_exception: true   # one spread (HY OAS) read as a full §10 state
 spec:
   equations: "read HY OAS as a §10 state: level, direction (5w change), z-score; regime calm/elevated/stressed"
