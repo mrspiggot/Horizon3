@@ -1,0 +1,64 @@
+model_id: variance_risk_premium
+name: "Variance risk premium (implied vs realized)"
+family: vol
+persona: volatility_trader
+grounded_in: [carr-wu-vrp]
+spec:
+  equations: "VRP = implied vol (VIX) - realized vol; realized = 21d annualized log-return vol of SPX"
+history: {start: "2025-07-14", end: "2026-07-10", cadence: weekly}
+inputs:
+  - {id: vix, series_id: "^VIX", db_source: yahoo, state: level, context_window: 63}
+  - {id: realized, series_id: "^GSPC", db_source: yahoo, transform: realized_vol, state: level, context_window: 63}
+  - {id: vix9d, series_id: "^VIX9D", db_source: yahoo, state: level, context_window: 63}
+execution:
+  implemented_by: unified_market_data.analysis.vol_analytics.variance_risk_premium
+  args: {implied_vol_pct: vix.level, realized_vol_pct: realized.level}
+outputs:
+  - {name: implied_vol_pct, unit: "%", meaning: "ATM implied vol (VIX)"}
+  - {name: realized_vol_pct, unit: "%", meaning: "trailing 21d realized vol of SPX"}
+  - {name: vrp_vol_pts, unit: "vol pts", meaning: "implied - realized (the variance risk premium)"}
+interpretations:
+  - id: rich_vol
+    when: "vrp_vol_pts > 3"
+    says: "Implied vol trades well above realized — selling vol is being paid a fat premium."
+charts:
+  - id: "Implied (VIX) vs realized vol"
+    chart_type: series
+    color_job: categorical
+    insight: "the gap between implied and realized IS the variance risk premium"
+    data_contract:
+      kind: series
+      ylabel: "annualized vol (%)"
+      series:
+        - {label: "implied (VIX)", from: "output:implied_vol_pct"}
+        - {label: "realized (SPX 21d)", from: "output:realized_vol_pct"}
+  - id: "The variance risk premium"
+    chart_type: gap_series
+    color_job: diverging
+    interpretation: rich_vol
+    insight: "implied minus realized through time — positive = vol sellers paid"
+    data_contract:
+      kind: gap_series
+      ylabel: "vol points"
+      label: "VRP (implied - realized)"
+      minuend: "output:implied_vol_pct"
+      subtrahend: "output:realized_vol_pct"
+  - id: "Near-term vs 1-month implied (VIX9D vs VIX)"
+    chart_type: series
+    color_job: categorical
+    insight: "when 9-day implied jumps above 1-month, the market is pricing an imminent event"
+    data_contract:
+      kind: series
+      ylabel: "implied vol (%)"
+      series:
+        - {label: "VIX9D (9-day)", from: "input:vix9d.level"}
+        - {label: "VIX (1-month)", from: "input:vix.level"}
+  - id: "The premium today"
+    chart_type: bar
+    color_job: sequential
+    insight: "the current implied, realized and their spread"
+    data_contract:
+      kind: named_values
+      ylabel: "vol (%)"
+      labels: ["implied (VIX)", "realized", "VRP"]
+      values: ["output:implied_vol_pct", "output:realized_vol_pct", "output:vrp_vol_pts"]

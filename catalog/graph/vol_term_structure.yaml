@@ -1,0 +1,65 @@
+model_id: vol_term_structure
+name: "Volatility term structure (VIX curve)"
+family: vol
+persona: volatility_trader
+grounded_in: [carr-wu-vrp]
+spec:
+  equations: "slope = VIX6M - VIX; >0 = contango (calm), <0 = backwardation (stress)"
+history: {start: "2025-07-14", end: "2026-07-10", cadence: weekly}
+inputs:
+  - {id: vix9d, series_id: "^VIX9D", db_source: yahoo, state: level, context_window: 63}
+  - {id: vix, series_id: "^VIX", db_source: yahoo, state: level, context_window: 63}
+  - {id: vix3m, series_id: "^VIX3M", db_source: yahoo, state: level, context_window: 63}
+  - {id: vix6m, series_id: "^VIX6M", db_source: yahoo, state: level, context_window: 63}
+execution:
+  implemented_by: unified_market_data.analysis.term_premium.curve_slope
+  args: {short_pct: vix.level, long_pct: vix6m.level}
+outputs:
+  - {name: slope, unit: "vol pts", meaning: "VIX6M - VIX; >0 contango, <0 backwardation"}
+interpretations:
+  - id: backwardation
+    when: "slope < 0"
+    says: "The vol curve is in backwardation — near-term fear exceeds long-term; the market is stressed now."
+charts:
+  - id: "The VIX curve (9d / 1m / 3m / 6m)"
+    chart_type: series
+    color_job: sequential
+    insight: "the whole implied-vol term structure moving through time"
+    data_contract:
+      kind: series
+      ylabel: "implied vol (%)"
+      series:
+        - {label: "VIX9D", from: "input:vix9d.level"}
+        - {label: "VIX (1m)", from: "input:vix.level"}
+        - {label: "VIX3M", from: "input:vix3m.level"}
+        - {label: "VIX6M", from: "input:vix6m.level"}
+  - id: "Term-structure slope (6m - 1m)"
+    chart_type: gap_series
+    color_job: diverging
+    interpretation: backwardation
+    insight: "contango (positive, calm) vs backwardation (negative, stressed) through time"
+    data_contract:
+      kind: gap_series
+      ylabel: "vol points"
+      label: "VIX6M - VIX"
+      minuend: "input:vix6m.level"
+      subtrahend: "input:vix.level"
+  - id: "Front-end kink (9d - 1m)"
+    chart_type: gap_series
+    color_job: diverging
+    insight: "when 9-day implied spikes above 1-month, an event is priced into the very front"
+    data_contract:
+      kind: gap_series
+      ylabel: "vol points"
+      label: "VIX9D - VIX"
+      minuend: "input:vix9d.level"
+      subtrahend: "input:vix.level"
+  - id: "The vol curve today"
+    chart_type: bar
+    color_job: sequential
+    insight: "the current shape of the implied-vol term structure"
+    data_contract:
+      kind: named_values
+      ylabel: "implied vol (%)"
+      labels: ["9d", "1m", "3m", "6m"]
+      values: ["input:vix9d.level", "input:vix.level", "input:vix3m.level", "input:vix6m.level"]

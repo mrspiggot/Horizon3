@@ -1,0 +1,61 @@
+model_id: vol_regime
+name: "Volatility regime (VIX as a state)"
+family: vol
+persona: volatility_trader
+grounded_in: [carr-wu-vrp]
+low_dimensional_exception: true   # one variable (VIX) read as a full §10 state — the exception
+spec:
+  equations: "read VIX as a §10 state: level, direction (5d change), z-score vs 3m; regime = calm/elevated/stressed"
+history: {start: "2025-07-14", end: "2026-07-10", cadence: weekly}
+inputs:
+  - {id: vix, series_id: "^VIX", db_source: yahoo, state: level, step: 5, context_window: 63}
+execution:
+  implemented_by: unified_market_data.analysis.vol_analytics.vol_regime
+  args: {level_pct: vix.level, direction: vix.direction, zscore: vix.zscore}
+outputs:
+  - {name: level_pct, unit: "%", meaning: "VIX level"}
+  - {name: zscore, unit: "sigma", meaning: "VIX vs its own 3-month history"}
+interpretations:
+  - id: stressed
+    when: "level_pct > 30"
+    says: "VIX above 30 — the market is in a stressed regime; owning vol is expensive but tail-hedging."
+charts:
+  - id: "VIX level"
+    chart_type: series
+    color_job: sequential
+    interpretation: stressed
+    insight: "the fear gauge through time"
+    data_contract:
+      kind: series
+      ylabel: "VIX"
+      series:
+        - {label: "VIX", from: "input:vix.level"}
+  - id: "VIX vs its own range (z-score)"
+    chart_type: series
+    color_job: diverging
+    insight: "how extreme today's vol is versus its recent history — the context state"
+    data_contract:
+      kind: series
+      ylabel: "z-score"
+      zero_line: true
+      series:
+        - {label: "VIX z-score", from: "input:vix.zscore"}
+  - id: "Vol momentum (5-day change)"
+    chart_type: series
+    color_job: diverging
+    insight: "is stress building or fading — the first derivative of vol"
+    data_contract:
+      kind: series
+      ylabel: "5-day change (vol pts)"
+      zero_line: true
+      series:
+        - {label: "VIX 5d change", from: "input:vix.direction"}
+  - id: "Where VIX sits in its distribution"
+    chart_type: series
+    color_job: sequential
+    insight: "the percentile of today's VIX vs its recent history"
+    data_contract:
+      kind: series
+      ylabel: "percentile"
+      series:
+        - {label: "VIX percentile", from: "input:vix.percentile"}
