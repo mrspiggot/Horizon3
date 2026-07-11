@@ -29,11 +29,36 @@ interpretations:
     when: "taylor_1993 - policy.level > 1.0"
     says: "Policy sits more than 100bp below the 1993 rule — the Fed is running easier than the rule prescribes."
 charts:
-  - id: "Taylor-rule fan vs the funds rate"
+  - id: "The model's inputs — inflation & the output gap"
+    role: input
+    chart_type: series
+    color_job: categorical
+    insight: "the two state variables the rule ingests: core PCE inflation and the output gap"
+    data_contract:
+      kind: series
+      ylabel: "%"
+      zero_line: true
+      series:
+        - {label: "core PCE YoY", from: "input:cpi.level"}
+        - {label: "output gap", from: "input:gap"}
+  - id: "The inputs as §10 STATES — inflation momentum & acceleration"
+    role: input
+    chart_type: series
+    color_job: diverging
+    insight: "inflation is not a level but a state: its direction (1st derivative) and acceleration (2nd) change the prescription's trajectory"
+    data_contract:
+      kind: series
+      ylabel: "pp (3m change / change-in-change)"
+      zero_line: true
+      series:
+        - {label: "inflation momentum (Δ)", from: "input:cpi.direction"}
+        - {label: "inflation acceleration (ΔΔ)", from: "input:cpi.acceleration"}
+  - id: "The rule's outcome — the prescription fan"
+    role: outcome
     chart_type: series
     color_job: categorical
     interpretation: behind_the_curve
-    insight: "where the actual funds rate sits inside the fan of rule prescriptions, through the cycle"
+    insight: "what Taylor (1993) and its variants prescribe from those inputs, vs where the Fed actually set policy"
     data_contract:
       kind: series
       ylabel: "policy rate (%)"
@@ -42,32 +67,12 @@ charts:
         - {label: "Balanced-approach", from: "output:balanced_approach"}
         - {label: "Inertial rule", from: "output:inertial"}
         - {label: "Fed funds (actual)", from: "input:policy.level", style: dashed}
-  - id: "The rule's two inputs, as states"
-    chart_type: series
-    color_job: categorical
-    insight: "the inflation and output-gap states that drive the prescription"
-    data_contract:
-      kind: series
-      ylabel: "%"
-      zero_line: true
-      series:
-        - {label: "core PCE YoY", from: "input:cpi.level"}
-        - {label: "output gap", from: "input:gap"}
-  - id: "Where policy sits vs the rule fan (latest)"
-    chart_type: bar
-    color_job: sequential
-    insight: "the current gap between actual policy and each rule variant"
-    data_contract:
-      kind: named_values
-      ylabel: "policy rate (%)"
-      labels: ["Taylor '93", "Balanced", "Inertial", "Fed funds"]
-      values: ["output:taylor_1993", "output:balanced_approach", "output:inertial", "input:policy.level"]
-      ref: "input:policy.level"
-  - id: "The policy gap: Taylor '93 minus funds"
+  - id: "The consequence — how far the Fed is from its own rule"
+    role: consequence
     chart_type: gap_series
     color_job: diverging
     interpretation: behind_the_curve
-    insight: "how far ahead of / behind the rule the Fed has run, through the cycle"
+    insight: "the prescription-minus-actual gap IS the trade: a Fed running below the rule is the case to be short duration"
     data_contract:
       kind: gap_series
       ylabel: "percentage points"

@@ -53,7 +53,8 @@ def render_chart(ax, chart: dict, history: list, *, fig=None) -> None:
     dc = chart["data_contract"]
     kind = dc["kind"]
     latest = history[-1]
-    title = chart.get("id")
+    role = chart.get("role")
+    title = (f"{role.upper()}  ·  {chart.get('id')}" if role else chart.get("id"))
     cj = chart.get("color_job", "diverging")
 
     if kind == "named_values":
