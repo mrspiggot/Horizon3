@@ -1,0 +1,83 @@
+model_id: fx_carry
+name: "FX carry (interest-rate differential)"
+family: fx
+summary: >
+  The signed carry of a long-BASE position in a pair = base short rate − quote short rate (annualized).
+  You earn the base rate and fund at the quote rate; under covered interest parity this IS the forward
+  points. The classic carry trade goes long the high-yielder. GENERIC over currency-PAIR.
+
+generic_over: [pair]
+instances: [EURUSD, USDJPY, AUDUSD, USDCHF]
+implementation_coverage:
+  covers: [EURUSD, USDJPY, AUDUSD, USDCHF]
+  gap: >
+    fx_analytics.fx_carry — live for the four pairs whose both legs have a 1Y OIS snapshot
+    (USD/EUR/JPY/CHF/AUD). GBPUSD/USDCAD need GBP-SONIA / CAD-CORRA 1Y snapshots (acquisition gap).
+
+spec:
+  form: >
+    carry = base_short_rate − quote_short_rate (annualized %, long-base). carry_to_vol =
+    carry / implied_vol — a Sharpe-like screen (carry per unit of FX risk). §11: UIP predicts spot
+    should move to offset this; empirically it does not (the forward-premium puzzle), so realized
+    carry is a risk premium.
+  assumptions:
+    - "Short rates are the ~1Y OIS par of each leg; CIP holds so carry ≈ forward points."
+    - "Carry is a LEVEL and its CHANGE matters (§10) — a widening differential is the fresh signal."
+  references:
+    - "docs/assessment/11-model-reference.md"
+    - "UMD analysis/fx_analytics.py (fx_carry)"
+
+inputs:
+  - role: base_short_rate
+    order: level
+    window: "1d"
+    horizon: 1y
+    required: true
+    note: "Base-leg 1Y OIS — the rate you earn long-base."
+  - role: quote_short_rate
+    order: level
+    window: "1d"
+    horizon: 1y
+    required: true
+    note: "Quote-leg 1Y OIS — the funding rate."
+  - role: fx_spot
+    order: context
+    window: "1d"
+    horizon: spot
+    required: true
+    note: "Spot level (QUOTE per BASE) — context for the position and P&L."
+  - role: fx_vol
+    order: context
+    window: "1m"
+    horizon: 1m
+    required: false
+    note: "Implied vol — the risk denominator in carry-to-vol."
+
+outputs:
+  - name: "carry_pct"
+    unit: "%"
+    note: "Annualized carry of a long-base position."
+  - name: "carry_to_vol"
+    unit: "ratio"
+    note: "Carry per unit of implied vol — the RV screen across pairs."
+
+interpretation: >
+  "Which currency pays me to hold it, and is the pay worth the risk? Rank pairs by carry-to-vol; a
+  widening rate differential is the fresh long signal — but remember carry is compensation for the
+  tail risk that spot snaps back (the carry-crash asymmetry)."
+
+visualizations:
+  - id: carry_ranking
+    form: "carry-to-vol by pair (horizontal bar / dumbbell nominal-vs-real)"
+    encodes: "carry_to_vol per pair"
+    insight: "the cross-sectional carry screen at a glance"
+    color_job: diverging
+    dim: 2D
+  - id: carry_history
+    form: "carry (per pair) time series"
+    encodes: "carry_pct over time"
+    insight: "the carry regime + differential widening/compression"
+    color_job: categorical
+    dim: 2D
+
+implemented_by: "unified_market_data.analysis.fx_analytics.fx_carry"

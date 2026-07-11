@@ -1,0 +1,62 @@
+model_id: ppp_reer
+name: "PPP / real-effective-exchange-rate misalignment"
+family: fx
+summary: >
+  The long-run FX fair-value anchor: the real effective exchange rate (REER) vs its trend / PPP
+  equilibrium. A currency trading rich to REER is a medium-term fade; the deviation mean-reverts
+  slowly. GENERIC over currency-PAIR (and over a single currency's REER basket).
+
+generic_over: [pair]
+instances: [EURUSD, USDJPY, AUDUSD, USDCHF]
+implementation_coverage:
+  covers: []
+  gap: >
+    To BUILD (Deliverable 5): REER misalignment = REER − its long-run trend (HP / rolling mean);
+    PPP fair value from relative price levels. Needs BIS/IMF REER series ingested — NONE in the
+    estate today (acquisition trigger, directive #1: add a BIS-REER provider).
+
+spec:
+  form: >
+    misalignment = (REER − REER_trend) / REER_trend. PPP fair spot = spot × (base_price_level /
+    quote_price_level relative to base year). The LEVEL of the deviation and its slow reversion (§10)
+    are the signal.
+  assumptions:
+    - "REER is trade-weighted, CPI-deflated; PPP holds only in the long run."
+  references:
+    - "docs/assessment/11-model-reference.md"
+
+inputs:
+  - role: fx_spot
+    order: level
+    window: "1d"
+    horizon: spot
+    required: true
+    note: "Spot leg (paired with a BIS/IMF REER basket once ingested)."
+  - role: base_inflation
+    order: level
+    window: "1y"
+    horizon: latest
+    required: false
+    note: "Relative price level (for the PPP leg)."
+
+outputs:
+  - name: "reer_misalignment_pct"
+    unit: "%"
+    note: "Deviation of REER from its long-run trend."
+  - name: "ppp_fair_spot"
+    unit: "price"
+    note: "PPP-implied fair spot."
+
+interpretation: >
+  "Is the currency cheap or dear vs its long-run anchor? A large REER overvaluation is the
+  medium-term fade — but it mean-reverts slowly, so it is a valuation overlay, not a timing signal."
+
+visualizations:
+  - id: reer_misalignment
+    form: "REER vs trend + misalignment band, time series"
+    encodes: "reer_misalignment_pct over time"
+    insight: "rich/cheap vs the long-run anchor"
+    color_job: diverging
+    dim: 2D
+
+build_stub: true

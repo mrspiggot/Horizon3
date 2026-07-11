@@ -46,8 +46,7 @@ personas:
   - persona_id: fx_trader
     name: "FX trader"
     decision: "Currency positioning."
-    uses: []                   # TODO: rate_inflation_carry, ppp_reer, balance_of_payments
-    status: pending_authoring
+    uses: [fx_carry, fx_real_rate_differential, ppp_reer]  # generic over currency-PAIR (EURUSD/USDJPY/AUDUSD/USDCHF)
 
   - persona_id: commodity_analyst
     name: "Commodity analyst"

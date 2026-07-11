@@ -1,0 +1,81 @@
+model_id: fx_real_rate_differential
+name: "FX real-rate differential"
+family: fx
+summary: >
+  Nominal carry net of the inflation differential: (base_nominal − base_inflation) −
+  (quote_nominal − quote_inflation). The §11 FX literature says the REAL rate differential is the
+  sharper signal — realized carry returns compensate for the risk that spot fails to adjust to it.
+  GENERIC over currency-PAIR.
+
+generic_over: [pair]
+instances: []
+implementation_coverage:
+  covers: []
+  gap: >
+    The IMPL EXISTS and is unit-tested (fx_analytics.real_rate_differential) — the blocker is DATA,
+    not code (hard-rule #5, caught by a live spot-trace 2026-07-11): a real-rate differential needs
+    a clean, unit-CONSISTENT per-leg CORE inflation YoY%, and the estate has none ready — PCEPILFE is
+    an index LEVEL (needs the §10 YoY transform, a D2 task), CPILFESL_YOY_PCT is currently degenerate
+    (all zeros), euro HICP-core YoY is present (ECB_HICP_CORE ≈2.3%) but has no US counterpart to
+    pair with. Refuse the mixed-unit binding rather than ship a nonsense number. Flips to impl over
+    EURUSD (then USDJPY/AUDUSD/USDCHF as JP/CH/AU core CPI is ingested) once the D2 YoY transform
+    stack lands. NB claims ZERO instances until then — an honest empty row, not a green lie.
+
+spec:
+  form: >
+    real_diff = (base_nominal − base_inflation) − (quote_nominal − quote_inflation), % annualized.
+    Positive ⇒ the base offers a higher real return, the long-base signal. Inflation enters as a
+    LEVEL (YoY core) with its CHANGE the second-order read (§10). Both legs MUST be the same measure
+    (core, YoY, same basis) — a level-vs-YoY or core-vs-headline mix is a boundary refusal.
+  assumptions:
+    - "Nominal legs = 1Y OIS; inflation = latest YoY core (PCE / HICP-core), horizon-matched, same unit."
+  references:
+    - "docs/assessment/11-model-reference.md"
+    - "docs/assessment/10-input-state.md"
+    - "UMD analysis/fx_analytics.py (real_rate_differential — implemented + tested)"
+
+inputs:
+  - role: base_short_rate
+    order: level
+    window: "1d"
+    horizon: 1y
+    required: true
+    note: "Base-leg 1Y nominal OIS."
+  - role: quote_short_rate
+    order: level
+    window: "1d"
+    horizon: 1y
+    required: true
+    note: "Quote-leg 1Y nominal OIS."
+  - role: base_inflation
+    order: level
+    window: "1y"
+    horizon: latest
+    required: true
+    note: "Base-leg core inflation (YoY%, same measure as quote)."
+  - role: quote_inflation
+    order: level
+    window: "1y"
+    horizon: latest
+    required: true
+    note: "Quote-leg core inflation (YoY%, same measure as base)."
+
+outputs:
+  - name: "real_rate_differential"
+    unit: "%"
+    note: "Real-rate carry (nominal differential net of inflation differential)."
+
+interpretation: >
+  "Stripping out inflation, which currency actually pays a higher REAL return? A positive real
+  differential is the durable long-base signal — sharper than nominal carry because it is what the
+  UIP-failure premium is really compensating."
+
+visualizations:
+  - id: real_vs_nominal_carry
+    form: "nominal-vs-real carry by pair (dumbbell)"
+    encodes: "nominal carry and real_rate_differential per pair"
+    insight: "how much of the carry survives the inflation differential"
+    color_job: diverging
+    dim: 2D
+
+build_stub: true

@@ -1,0 +1,61 @@
+# Currency-PAIR bindings — the generalization axis for the FX TRADER (parallel to
+# jurisdictions/underlyings/events/commodities). An FX pair BASE/QUOTE is a COMPOSITE of two
+# jurisdictions: the carry model reads a short rate from EACH leg plus the spot. This is the same
+# multi-instance-input pattern noted for crack_spread — here made first-class as its own axis, with
+# each pair pre-binding both legs so a model still declares single roles (base_/quote_).
+#
+# Verified live (2026-07-11): EURUSD=X / USDJPY=X / AUDUSD=X / USDCHF=X ~6.6k obs each; the *_OIS_1Y
+# short-rate snapshots exist for USD/EUR/JPY/CHF/AUD; core inflation for US (PCEPILFE) + EU
+# (ECB_HICP_CORE) only — JP/CH/AU core inflation is an acquisition gap (real-rate model covers EURUSD).
+#
+# Acquisition backlog (directive #1): JP/CH/AU core CPI (→ widen fx_real_rate_differential);
+# GBPUSD/USDCAD short-rate 1Y snapshots (GBP SONIA / CAD CORRA OIS not yet in observations);
+# BIS REER (→ unblock ppp_reer stub).
+
+roles:
+  fx_spot:          {kind: observations, desc: "Spot rate, QUOTE per 1 BASE (e.g. EURUSD=X = USD per EUR)."}
+  base_short_rate:  {kind: observations, desc: "Base-leg ~1Y OIS / short rate (the leg you earn long-base)."}
+  quote_short_rate: {kind: observations, desc: "Quote-leg ~1Y OIS / short rate (the funding leg)."}
+  base_inflation:   {kind: observations, desc: "Base-leg core inflation (for the real-rate differential)."}
+  quote_inflation:  {kind: observations, desc: "Quote-leg core inflation (for the real-rate differential)."}
+  fx_vol:           {kind: surface,      desc: "Pair implied vol (from the vol-surface estate) — carry-to-vol screen."}
+
+pairs:
+  - id: EURUSD
+    base: EUR
+    quote: USD
+    bindings:
+      fx_spot:          {ref: "EURUSD=X", source: observations, note: "USD per EUR."}
+      base_short_rate:  {ref: "EUR_OIS_1Y", source: observations, note: "ESTR OIS 1Y."}
+      quote_short_rate: {ref: "USD_OIS_1Y", source: observations, note: "SOFR OIS 1Y."}
+      base_inflation:   {ref: "ECB_HICP_CORE", source: observations, note: "Euro-area core HICP."}
+      quote_inflation:  {ref: "PCEPILFE", source: observations, note: "US core PCE."}
+      fx_vol:           {ref: "EURUSD", source: surface, note: "EURUSD vol surface (underlyings axis)."}
+  - id: USDJPY
+    base: USD
+    quote: JPY
+    bindings:
+      fx_spot:          {ref: "USDJPY=X", source: observations, note: "JPY per USD."}
+      base_short_rate:  {ref: "USD_OIS_1Y", source: observations, note: "SOFR OIS 1Y."}
+      quote_short_rate: {ref: "JPY_OIS_1Y", source: observations, note: "TONAR OIS 1Y."}
+      base_inflation:   {ref: "PCEPILFE", source: observations, note: "US core PCE."}
+      # quote_inflation (JP core CPI) — NOT yet ingested (acquisition gap): real-rate model skips USDJPY.
+      fx_vol:           {ref: "USDJPY", source: surface, note: "USDJPY vol surface (6J)."}
+  - id: AUDUSD
+    base: AUD
+    quote: USD
+    bindings:
+      fx_spot:          {ref: "AUDUSD=X", source: observations, note: "USD per AUD."}
+      base_short_rate:  {ref: "AUD_OIS_1Y", source: observations, note: "AONIA OIS 1Y."}
+      quote_short_rate: {ref: "USD_OIS_1Y", source: observations, note: "SOFR OIS 1Y."}
+      # base_inflation (AU core CPI) — acquisition gap.
+      quote_inflation:  {ref: "PCEPILFE", source: observations, note: "US core PCE."}
+  - id: USDCHF
+    base: USD
+    quote: CHF
+    bindings:
+      fx_spot:          {ref: "USDCHF=X", source: observations, note: "CHF per USD."}
+      base_short_rate:  {ref: "USD_OIS_1Y", source: observations, note: "SOFR OIS 1Y."}
+      quote_short_rate: {ref: "CHF_OIS_1Y", source: observations, note: "SARON OIS 1Y."}
+      base_inflation:   {ref: "PCEPILFE", source: observations, note: "US core PCE."}
+      # quote_inflation (CH core CPI) — acquisition gap.
