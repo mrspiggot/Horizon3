@@ -1,0 +1,26 @@
+# Persona article stubs — each = title + <150-word summary (grounded in executed outputs) + the
+# selected insight charts. summary_template is Python .format()'d with {model_id.output_name} (and
+# {model_id.input_id}) filled from each model's LATEST ModelRun. The prose is authored; every number
+# is injected from execution.
+personas:
+  central_bank_policymaker:
+    name: "Central-bank policymaker"
+    decision: "Set the policy rate."
+    title: "The Fed versus its own rulebook: how far behind the curve?"
+    models: [reaction_function, policy_stance, recession_probability]
+    stub_charts:
+      - [reaction_function, "The policy gap: Taylor '93 minus funds"]
+      - [reaction_function, "Taylor-rule fan vs the funds rate"]
+      - [policy_stance, "Policy stance vs r* (restrictive above 0)"]
+      - [recession_probability, "The term spread (10y - 3m)"]
+    summary_template: >
+      Hand a central banker their own toolkit and run it against the data, and a gap opens between
+      what the rules prescribe and where policy actually sits. The 1993 Taylor rule now calls for
+      {reaction_function.taylor_1993}% while the funds rate is {reaction_function.policy}% — the Fed
+      swung from roughly nine points behind the rule at the 2022 inflation peak to about neutral by
+      2024, and is drifting behind again as core PCE re-firms to {reaction_function.cpi}%. Strip out
+      expected inflation and the ex-ante real policy rate is {policy_stance.real_rate_exante_pct}%, a
+      stance of {policy_stance.stance_pct}pp against a ~0.7% neutral rate. The yield curve, read
+      through the Estrella-Mishkin probit, puts the twelve-month recession probability at
+      {recession_probability.prob_12m} on a 0-to-1 scale. Three published models, one reading: policy
+      is easing back toward the rule even as the curve stops flashing alarm.

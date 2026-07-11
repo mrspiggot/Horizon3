@@ -1,0 +1,67 @@
+model_id: policy_stance
+name: "Policy stance — real rate vs r*"
+family: rates
+persona: central_bank_policymaker
+grounded_in: [hlw-natural-rate, taylor-1993-rule]
+spec:
+  equations: "real_exante = nominal - E[pi]; real_expost = nominal - pi; stance = real_exante - r*"
+  params: {r_star_pct: 0.7}
+history: {start: "2021-01", end: "2026-05"}
+inputs:
+  - {id: policy, series_id: FEDFUNDS, db_source: fred, state: level}
+  - {id: cpi, series_id: PCEPILFE, db_source: fred, transform: yoy, state: level, context_window: 36}
+  - {id: breakeven, series_id: T10YIE, db_source: fred, state: level, context_window: 60}
+execution:
+  implemented_by: unified_market_data.analysis.macro_signals.policy_stance
+  args: {nominal_rate_pct: policy.level, inflation_pct: cpi.level, expected_inflation_pct: breakeven.level, r_star_pct: 0.7}
+outputs:
+  - {name: real_rate_exante_pct, unit: "%", meaning: "ex-ante real policy rate (nominal - expected inflation)"}
+  - {name: real_rate_expost_pct, unit: "%", meaning: "ex-post real policy rate (nominal - realized inflation)"}
+  - {name: stance_pct, unit: "pp", meaning: "ex-ante real rate minus r* (>0 restrictive)"}
+interpretations:
+  - id: restrictive
+    when: "stance_pct > 0.25"
+    says: "The ex-ante real policy rate sits above r* — policy is genuinely restrictive."
+charts:
+  - id: "Ex-ante vs ex-post real policy rate"
+    chart_type: series
+    color_job: categorical
+    insight: "the two real rates and the inflation-surprise wedge between them"
+    data_contract:
+      kind: series
+      ylabel: "real policy rate (%)"
+      zero_line: true
+      series:
+        - {label: "ex-ante (vs breakevens)", from: "output:real_rate_exante_pct"}
+        - {label: "ex-post (vs realized)", from: "output:real_rate_expost_pct"}
+  - id: "Policy stance vs r* (restrictive above 0)"
+    chart_type: gap_series
+    color_job: diverging
+    interpretation: restrictive
+    insight: "how far above/below neutral the real policy rate sits, through time"
+    data_contract:
+      kind: gap_series
+      ylabel: "percentage points"
+      label: "ex-ante real rate - r*"
+      minuend: "output:real_rate_exante_pct"
+      subtrahend: 0.7
+  - id: "The stance inputs, as states"
+    chart_type: series
+    color_job: categorical
+    insight: "nominal policy, realized and expected inflation together"
+    data_contract:
+      kind: series
+      ylabel: "%"
+      series:
+        - {label: "fed funds", from: "input:policy.level"}
+        - {label: "core PCE YoY", from: "input:cpi.level"}
+        - {label: "10y breakeven", from: "input:breakeven.level"}
+  - id: "Real rate vs r* (latest)"
+    chart_type: bar
+    color_job: diverging
+    insight: "the current ex-ante real rate against the neutral anchor"
+    data_contract:
+      kind: named_values
+      ylabel: "%"
+      labels: ["ex-ante real", "ex-post real", "r* (neutral)", "stance"]
+      values: ["output:real_rate_exante_pct", "output:real_rate_expost_pct", 0.7, "output:stance_pct"]

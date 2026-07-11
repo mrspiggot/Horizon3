@@ -1,0 +1,62 @@
+model_id: recession_probability
+name: "Recession probability (Estrella-Mishkin probit)"
+family: macro
+persona: central_bank_policymaker
+grounded_in: [estrella-mishkin-recession]
+low_dimensional_exception: true   # canonical single-input model (the owner-agreed exception to >=3 inputs)
+spec:
+  equations: "P(recession in 12m) = Phi(a + b * spread), spread = 10y - 3m ; a=-0.5333, b=-0.6330 (NY Fed)"
+  params: {a: -0.5333, b: -0.6330}
+history: {start: "2021-01", end: "2026-05"}
+inputs:
+  - {id: spread, series_id: T10Y3M, db_source: fred, state: level, context_window: 60}
+execution:
+  implemented_by: unified_market_data.analysis.macro_signals.recession_probability
+  args: {term_spread_pp: spread.level}
+outputs:
+  - {name: prob_12m, unit: "0..1", meaning: "probability of recession within 12 months"}
+  - {name: term_spread_pp, unit: "pp", meaning: "the 10y-3m term spread the probit reads"}
+interpretations:
+  - id: elevated
+    when: "prob_12m > 0.30"
+    says: "The term-spread probit puts recession odds above 30% — the curve is pricing a downturn."
+charts:
+  - id: "Recession probability, 12m ahead"
+    chart_type: series
+    color_job: sequential
+    interpretation: elevated
+    insight: "the probit's recession odds through the cycle"
+    data_contract:
+      kind: series
+      ylabel: "P(recession in 12m)"
+      series:
+        - {label: "recession probability", from: "output:prob_12m"}
+  - id: "The term spread (10y - 3m)"
+    chart_type: series
+    color_job: diverging
+    insight: "the yield-curve slope the model reads; inversion (below 0) is the signal"
+    data_contract:
+      kind: series
+      ylabel: "percentage points"
+      zero_line: true
+      series:
+        - {label: "10y - 3m spread", from: "input:spread.level"}
+  - id: "Spread vs its recent range"
+    chart_type: series
+    color_job: sequential
+    insight: "the spread's level against where it has traded (its z-score context)"
+    data_contract:
+      kind: series
+      ylabel: "z-score"
+      zero_line: true
+      series:
+        - {label: "spread z-score", from: "input:spread.zscore"}
+  - id: "Recession odds now"
+    chart_type: bar
+    color_job: sequential
+    insight: "the current probit reading and the spread that drives it"
+    data_contract:
+      kind: named_values
+      ylabel: "value"
+      labels: ["P(recession) %", "term spread (pp)"]
+      values: ["output:prob_12m", "output:term_spread_pp"]

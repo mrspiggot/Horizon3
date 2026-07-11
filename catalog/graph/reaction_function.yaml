@@ -1,0 +1,76 @@
+model_id: reaction_function
+name: "Taylor-rule reaction function"
+family: rates
+persona: central_bank_policymaker
+grounded_in: [taylor-1993-rule, hlw-natural-rate]
+spec:
+  equations: "i* = r* + pi + 0.5(pi - pi*) + 0.5*gap ; inertial i_t = rho*i_{t-1} + (1-rho)*i*"
+  params: {r_star_pct: 0.7, inflation_target_pct: 2.0}
+history: {start: "2021-01", end: "2026-05"}
+inputs:
+  - {id: cpi, series_id: PCEPILFE, db_source: fred, transform: yoy, state: level, context_window: 36}
+  - {id: real_gdp, series_id: GDPC1, db_source: fred, state: level}
+  - {id: potential_gdp, series_id: GDPPOT, db_source: fred, state: level, as_of_from: real_gdp}
+  - {id: policy, series_id: FEDFUNDS, db_source: fred, state: level}
+  - id: gap
+    source: derived
+    compute:
+      fn: unified_market_data.analysis.reaction_function.output_gap_pct
+      args: {gdp: real_gdp.level, potential_gdp: potential_gdp.level}
+execution:
+  implemented_by: unified_market_data.analysis.reaction_function.taylor_variants
+  args: {inflation_pct: cpi.level, output_gap_pct_: gap, prev_rate: policy.level}
+outputs:
+  - {name: taylor_1993, unit: "%", meaning: "1993-rule prescribed policy rate"}
+  - {name: balanced_approach, unit: "%", meaning: "balanced-approach rule (2x gap weight)"}
+  - {name: inertial, unit: "%", meaning: "inertial (smoothed) rule"}
+interpretations:
+  - id: behind_the_curve
+    when: "taylor_1993 - policy.level > 1.0"
+    says: "Policy sits more than 100bp below the 1993 rule — the Fed is running easier than the rule prescribes."
+charts:
+  - id: "Taylor-rule fan vs the funds rate"
+    chart_type: series
+    color_job: categorical
+    interpretation: behind_the_curve
+    insight: "where the actual funds rate sits inside the fan of rule prescriptions, through the cycle"
+    data_contract:
+      kind: series
+      ylabel: "policy rate (%)"
+      series:
+        - {label: "Taylor '93", from: "output:taylor_1993"}
+        - {label: "Balanced-approach", from: "output:balanced_approach"}
+        - {label: "Inertial rule", from: "output:inertial"}
+        - {label: "Fed funds (actual)", from: "input:policy.level", style: dashed}
+  - id: "The rule's two inputs, as states"
+    chart_type: series
+    color_job: categorical
+    insight: "the inflation and output-gap states that drive the prescription"
+    data_contract:
+      kind: series
+      ylabel: "%"
+      zero_line: true
+      series:
+        - {label: "core PCE YoY", from: "input:cpi.level"}
+        - {label: "output gap", from: "input:gap"}
+  - id: "Where policy sits vs the rule fan (latest)"
+    chart_type: bar
+    color_job: sequential
+    insight: "the current gap between actual policy and each rule variant"
+    data_contract:
+      kind: named_values
+      ylabel: "policy rate (%)"
+      labels: ["Taylor '93", "Balanced", "Inertial", "Fed funds"]
+      values: ["output:taylor_1993", "output:balanced_approach", "output:inertial", "input:policy.level"]
+      ref: "input:policy.level"
+  - id: "The policy gap: Taylor '93 minus funds"
+    chart_type: gap_series
+    color_job: diverging
+    interpretation: behind_the_curve
+    insight: "how far ahead of / behind the rule the Fed has run, through the cycle"
+    data_contract:
+      kind: gap_series
+      ylabel: "percentage points"
+      label: "Taylor '93 - funds"
+      minuend: "output:taylor_1993"
+      subtrahend: "input:policy.level"
