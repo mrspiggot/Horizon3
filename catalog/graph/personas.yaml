@@ -29,11 +29,11 @@ personas:
     name: "Macro rates trader"
     decision: "Position the duration / swap book ahead of events."
     title: "What is really in the 10-year: expectations, or risk premium?"
-    models: [term_premium_decomposition, term_premium_curve, expectations_path]
+    models: [term_premium_surface, term_premium_decomposition, term_premium_curve, expectations_path]
     stub_charts:
+      - [term_premium_surface, "Term-premium surface (tenor x time)"]
+      - [term_premium_surface, "The term-premium curve: now vs 3 months ago"]
       - [term_premium_decomposition, "The 10Y, split: expectations + term premium"]
-      - [term_premium_decomposition, "The term premium alone"]
-      - [term_premium_curve, "TP-curve slope (10Y - 2Y)"]
       - [expectations_path, "Expectations-curve slope (10Y - 2Y)"]
     summary_template: >
       A 10-year Treasury yield is two things at once, and a rates trader has to know which is moving.
@@ -52,9 +52,9 @@ personas:
     title: "Getting paid to sell fear: is the vol premium worth the tail?"
     models: [variance_risk_premium, vol_term_structure, vol_regime]
     stub_charts:
-      - [variance_risk_premium, "Implied (VIX) vs realized vol"]
+      - [vol_term_structure, "The implied-vol surface (tenor x time)"]
+      - [vol_term_structure, "The vol curve: now vs 3 months ago"]
       - [variance_risk_premium, "The variance risk premium"]
-      - [vol_term_structure, "Term-structure slope (6m - 1m)"]
       - [vol_regime, "VIX level"]
     summary_template: >
       Volatility is the rare asset that usually sells for more than it costs to cover, and the
@@ -73,15 +73,15 @@ personas:
     title: "Down the quality ladder: what is the market paying you to take default risk?"
     models: [credit_quality_ladder, oas_implied_default, credit_spread_regime]
     stub_charts:
-      - [credit_quality_ladder, "The quality ladder (IG / HY / EM OAS)"]
-      - [credit_quality_ladder, "The down-in-quality premium (HY - IG)"]
+      - [credit_quality_ladder, "The credit spread ladder (quality x time)"]
+      - [credit_quality_ladder, "The spread curve: now vs 3 months ago"]
       - [oas_implied_default, "HY implied annual default rate"]
       - [credit_spread_regime, "HY spread vs its own range (z-score)"]
     summary_template: >
       Credit is a bet that the spread you are paid exceeds the losses you will take. Today the ladder
       runs IG at {credit_quality_ladder.ig}%, high-yield at {credit_quality_ladder.hy}% and emerging
       markets at {credit_quality_ladder.em}% option-adjusted spread — so going down from investment
-      grade to high-yield pays an extra {credit_quality_ladder.slope} points. Invert that HY spread
+      grade to high-yield pays an extra {credit_quality_ladder.hy_ig} points. Invert that HY spread
       through the credit triangle and the market is pricing a {oas_implied_default.annual_pd_pct}%
       annual default rate, {oas_implied_default.cumulative_pd_pct}% cumulative over five years, at a
       40% recovery. And the regime: HY sits {credit_spread_regime.zscore} sigma versus its own recent
