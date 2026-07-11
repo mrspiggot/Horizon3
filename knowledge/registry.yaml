@@ -372,3 +372,14 @@ papers:
     added: "2026-07-11"
     why: "The Fisher relation: real rate = nominal rate - expected inflation. The published identity behind the real cost of debt (real_funding), distinguishing a nominal-rate squeeze from a real one."
     superseded_by: null
+  - id: phillips-friedman-1968
+    title: "The Phillips Curve and the Role of Monetary Policy (Phillips 1958; Friedman 1968)"
+    authors: ["A. W. Phillips", "Milton Friedman", "Edmund Phelps"]
+    url: "https://www.aeaweb.org/aer/top20/58.1.1-17.pdf"
+    arxiv_id: null
+    local_path: sources/friedman_1968_monetary_policy.pdf
+    topics: [phillips-curve, inflation, unemployment, expectations, monetary-policy]
+    tier: canonical
+    added: "2026-07-11"
+    why: "The inflation-unemployment trade-off (Phillips 1958) and its expectations-augmented rethink (Friedman 1968 / Phelps): the foundational macro relationship a central bank manages. Canonical — taught throughout economics."
+    superseded_by: null

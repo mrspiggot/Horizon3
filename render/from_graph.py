@@ -113,6 +113,17 @@ def render_chart(ax, chart: dict, history: list, *, fig=None) -> None:
                             ylabel=dc.get("ylabel", "%"),
                             total_label=dc.get("total_label"))
 
+    elif kind == "scatter":
+        # a two-variable RELATIONSHIP across history (Phillips, Okun, CAPM SML, Beveridge) — the
+        # message is the fit, not the time axis; points shade early->late, path draws the loops.
+        xs = _hist(history, dc["x"])
+        ys = _hist(history, dc["y"])
+        charts.scatter_fit(ax, xs, ys, title=title,
+                           xlabel=dc.get("xlabel", "x"), ylabel=dc.get("ylabel", "y"),
+                           fit=dc.get("fit", True), path=dc.get("path", False),
+                           time_colour=dc.get("time_colour", True),
+                           cbar_label=dc.get("cbar_label", "time"), fig=fig)
+
     else:
         raise ValueError(f"unknown data_contract kind {kind!r}")
 

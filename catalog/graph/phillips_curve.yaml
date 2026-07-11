@@ -1,0 +1,90 @@
+model_id: phillips_curve
+name: "The Phillips curve (inflation vs unemployment)"
+family: macro
+persona: central_bank_policymaker
+grounded_in: [phillips-friedman-1968]
+method: published
+# CANONICAL: the inflation-unemployment trade-off is a two-variable relationship taught throughout
+# economics. Its two inputs ARE the model — the >=3-input floor does not apply.
+canonical: true
+method_note: >
+  The Phillips curve (Phillips 1958): inflation and unemployment trade off. Friedman (1968) and Phelps
+  augmented it with expectations — the trade-off is only short-run; in the long run the curve is
+  vertical at the natural rate. The insight is the SHAPE of the (unemployment, inflation) cloud and how
+  it SHIFTS across regimes, read as a time-coloured scatter with an OLS fit — not a single number.
+spec:
+  equations: "Phillips: pi = f(u), downward-sloping short-run. Augmented (Friedman-Phelps): pi = pi^e - b(u - u*)."
+history: {start: "1962-01", end: "2026-05", cadence: monthly}
+inputs:
+  - {id: u,  series_id: UNRATE,    db_source: fred, state: level, context_window: 120}
+  - {id: pi, series_id: CPIAUCSL,  db_source: fred, transform: yoy, state: level, context_window: 120}
+execution:
+  implemented_by: unified_market_data.analysis.macro_signals.phillips_curve
+  args: {unemployment_pct: u.level, inflation_pct: pi.level}
+outputs:
+  - {name: unemployment_pct, unit: "%", meaning: "civilian unemployment rate (the slack variable)"}
+  - {name: inflation_pct,    unit: "%", meaning: "headline CPI inflation, YoY"}
+  - {name: misery_index,     unit: "%", meaning: "unemployment + inflation (Okun's misery index)"}
+interpretations:
+  - id: trade_off
+    when: "unemployment_pct < 4.5 and inflation_pct > 3"
+    says: >
+      The economy sits in the hot corner of the Phillips curve — low unemployment with elevated
+      inflation. This is the short-run trade-off a central bank cannot ignore: pushing unemployment
+      below the natural rate is buying inflation, exactly the 2022 configuration.
+  - id: stagflation
+    when: "unemployment_pct > 6 and inflation_pct > 5"
+    says: >
+      High unemployment AND high inflation together — stagflation, the top-right of the scatter that
+      broke the naive Phillips curve in the 1970s and forced the expectations-augmented rethink.
+charts:
+  - id: "The Phillips curve (unemployment vs inflation)"
+    role: outcome
+    chart_type: scatter
+    color_job: sequential
+    interpretation: trade_off
+    insight: "the foundational trade-off, and its most important lesson: pooled across 60 years the fit is FLAT (R² ~0) — there is no stable long-run curve. The colour shows why: the cloud shifted up-and-out in the 1970s (light points, stagflation) then back down-left recently, exactly Friedman-Phelps's expectations-augmented, vertical long-run curve"
+    data_contract:
+      kind: scatter
+      xlabel: "unemployment (%)"
+      ylabel: "CPI inflation, YoY (%)"
+      cbar_label: "1962 → 2026"
+      x: "output:unemployment_pct"
+      y: "output:inflation_pct"
+      fit: true
+      time_colour: true
+  - id: "Inflation and unemployment over time"
+    role: input
+    chart_type: series
+    color_job: categorical
+    insight: "the two series the curve relates — you can see them move opposite in normal times and TOGETHER in the 1970s and 2022, the breakdown of the simple trade-off"
+    data_contract:
+      kind: series
+      ylabel: "%"
+      zero_line: true
+      series:
+        - {label: "unemployment", from: "output:unemployment_pct"}
+        - {label: "CPI inflation (YoY)", from: "output:inflation_pct"}
+  - id: "The misery index (unemployment + inflation)"
+    role: consequence
+    chart_type: gap_series
+    color_job: diverging
+    interpretation: stagflation
+    pos_label: "misery"
+    neg_label: ""
+    insight: "Okun's misery index — the human cost of the two variables together; the 1975 and 1980 peaks near 20%, the benign 2015-19 trough, and the 2022 spike"
+    data_contract:
+      kind: gap_series
+      ylabel: "unemployment + inflation (%)"
+      label: "misery index"
+      minuend: "output:misery_index"
+  - id: "Where the economy sits today"
+    role: outcome
+    chart_type: bar
+    color_job: sequential
+    insight: "the current reading of each variable and the misery index"
+    data_contract:
+      kind: named_values
+      ylabel: "%"
+      labels: ["unemployment", "inflation (YoY)", "misery"]
+      values: ["output:unemployment_pct", "output:inflation_pct", "output:misery_index"]

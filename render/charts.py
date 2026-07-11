@@ -230,6 +230,54 @@ def vol_smile(ax, smiles, *, title=None, xlabel="moneyness", ylabel="implied vol
     ax.legend(fontsize=6.5, ncol=2, framealpha=0.9)
 
 
+def scatter_fit(ax, x, y, *, title=None, xlabel="x", ylabel="y", fit=True, path=False,
+                time_colour=True, cbar_label="time", fig=None, annotate_fit=True):
+    """The canonical two-variable relationship chart: a cloud of (x, y) with an OLS fit line.
+
+    The form that serves the whole classic-econometrics canon whose message is a RELATIONSHIP, not a
+    time series — the Phillips curve (unemployment vs inflation), Okun's law, the CAPM security-market
+    line, the Beveridge curve. `time_colour` shades points early→late so a shifting relationship reads
+    at a glance; `path` connects them chronologically to show the loops (stagflation, the Beveridge
+    outward shift); `fit` draws the OLS line and reports slope + R^2 — the thing the reader takes away.
+    """
+    theme.use_theme()
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    ok = np.isfinite(x) & np.isfinite(y)
+    x, y = x[ok], y[ok]
+    n = len(x)
+    if path and n > 1:
+        ax.plot(x, y, color=theme.MUTED, lw=0.8, alpha=0.5, zorder=2)
+    if time_colour and n > 1:
+        cmap = theme.seq_cmap()
+        cols = [cmap(0.12 + 0.83 * i / (n - 1)) for i in range(n)]
+        sc = ax.scatter(x, y, c=range(n), cmap=cmap, s=46, zorder=3,
+                        edgecolors="white", linewidths=0.5)
+        if fig is not None:
+            cb = fig.colorbar(sc, ax=ax, fraction=0.045, pad=0.02)
+            cb.set_label(cbar_label, fontsize=8); cb.ax.tick_params(labelsize=7)
+            cb.set_ticks([0, n - 1])
+    else:
+        ax.scatter(x, y, color=theme.cat(0), s=46, zorder=3, edgecolors="white", linewidths=0.5)
+    if fit and n >= 3:
+        b, a = np.polyfit(x, y, 1)                      # y = a + b x
+        xs = np.array([x.min(), x.max()])
+        ax.plot(xs, a + b * xs, color=theme.FORWARD, lw=2, zorder=4, ls="--")
+        if annotate_fit:
+            yhat = a + b * x
+            ss_res = float(np.sum((y - yhat) ** 2))
+            ss_tot = float(np.sum((y - y.mean()) ** 2)) or 1.0
+            r2 = 1 - ss_res / ss_tot
+            ax.text(0.03, 0.97, f"slope {b:+.2f}   R² {r2:.2f}", transform=ax.transAxes,
+                    va="top", ha="left", fontsize=9, color=theme.INK,
+                    bbox=dict(boxstyle="round,pad=0.3", fc="white", ec=theme.GRID, alpha=0.85))
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    if title:
+        ax.set_title(title)
+    theme.style_axes(ax, grid_axis="both")
+
+
 def scatter(ax, x, y, labels=None, *, ref_line=False, ref_label="fair (45°)",
             title=None, xlabel="x", ylabel="y", color_job="categorical"):
     """Scatter with optional 45° reference line + direct point labels. The DISTANCE from the ref line

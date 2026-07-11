@@ -7,9 +7,9 @@ personas:
     name: "Central-bank policymaker"
     decision: "Set the policy rate."
     title: "The Fed versus its own rulebook: how far behind the curve?"
-    models: [reaction_function, policy_stance, recession_probability]
+    models: [reaction_function, policy_stance, recession_probability, phillips_curve]
     stub_charts:
-      - [reaction_function, "The model's inputs — inflation & the output gap"]
+      - [phillips_curve, "The Phillips curve (unemployment vs inflation)"]
       - [reaction_function, "The rule's outcome — the prescription fan"]
       - [reaction_function, "The consequence — how far the Fed is from its own rule"]
       - [recession_probability, "Recession probability, 12m ahead"]
@@ -22,8 +22,11 @@ personas:
       expected inflation and the ex-ante real policy rate is {policy_stance.real_rate_exante_pct}%, a
       stance of {policy_stance.stance_pct}pp against a ~0.7% neutral rate. The yield curve, read
       through the Estrella-Mishkin probit, puts the twelve-month recession probability at
-      {recession_probability.prob_12m} on a 0-to-1 scale. Three published models, one reading: policy
-      is easing back toward the rule even as the curve stops flashing alarm.
+      {recession_probability.prob_12m} on a 0-to-1 scale. Behind all of it sits the Phillips curve: at
+      {phillips_curve.unemployment_pct}% unemployment and {phillips_curve.inflation_pct}% inflation the
+      economy is a warm point on a trade-off whose sixty-year scatter is, tellingly, flat — Friedman's
+      vertical long-run curve — so the misery index reads {phillips_curve.misery_index}%. Four published
+      models, one reading: policy is easing back toward the rule even as the curve stops flashing alarm.
 
   macro_rates_trader:
     name: "Macro rates trader"

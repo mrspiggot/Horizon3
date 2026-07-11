@@ -104,7 +104,7 @@ def render_selected(items: list, out_path: str, *, suptitle: str | None = None) 
     fig = plt.figure(figsize=(8.2 * ncol, 5.0 * nrow))
     for i, (chart, history) in enumerate(items):
         ax = fig.add_subplot(nrow, ncol, i + 1)
-        from_graph.render_chart(ax, chart, history)
+        from_graph.render_chart(ax, chart, history, fig=fig)
     if suptitle:
         fig.suptitle(suptitle, fontsize=13, y=1.0, fontweight="bold")
     fig.savefig(out_path, dpi=140, bbox_inches="tight", facecolor="white")

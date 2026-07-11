@@ -53,7 +53,10 @@ def main() -> int:
         errs = []
         series_inputs = {i.get("series_id") for i in (d.get("inputs") or []) if i.get("source", "series") == "series" and i.get("series_id")}
         n_var = len(series_inputs)
-        if n_var < 3 and not d.get("low_dimensional_exception"):
+        # `canonical: true` — a textbook relationship taught throughout economics (Phillips, Okun,
+        # CAPM, Beveridge). Its two variables ARE the model; the >=3-input floor does not apply.
+        waived = d.get("low_dimensional_exception") or d.get("canonical")
+        if n_var < 3 and not waived:
             errs.append(f"only {n_var} input variables (<3, no exception)")
         charts = d.get("charts") or []
         if len(charts) < 4:
