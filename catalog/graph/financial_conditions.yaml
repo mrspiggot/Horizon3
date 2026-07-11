@@ -1,72 +1,73 @@
 model_id: financial_conditions
-name: "Financial conditions index (cross-asset)"
+name: "Financial conditions (published Chicago Fed NFCI)"
 family: equity
 persona: equity_multiasset_pm
 grounded_in: [hatzius-fci]
 spec:
-  equations: "FCI = mean of standardized z-scores: vol + credit + dollar - equity; >0 = tighter than average"
-history: {start: "2025-08-01", end: "2026-07-02", cadence: weekly}
+  equations: "the PUBLISHED NFCI (Brave-Butters/Hatzius: first factor of a 105-indicator panel via Kalman filter) and its risk/credit/leverage subindices; >0 = tighter than average"
+history: {start: "2023-01-06", end: "2026-07-03", cadence: weekly}
 inputs:
-  - {id: vix, series_id: "^VIX", db_source: yahoo, state: zscore, context_window: 250}
-  - {id: credit, series_id: BAMLH0A0HYM2, db_source: fred, state: zscore, context_window: 250}
-  - {id: dollar, series_id: DTWEXBGS, db_source: fred, state: zscore, context_window: 250}
-  - {id: equity, series_id: "^GSPC", db_source: yahoo, state: zscore, context_window: 250}
-  - {id: nfci, series_id: NFCI, db_source: fred, state: level, context_window: 120}
+  - {id: risk, series_id: NFCIRISK, db_source: fred, state: level, context_window: 200}
+  - {id: credit, series_id: NFCICREDIT, db_source: fred, state: level, context_window: 200}
+  - {id: leverage, series_id: NFCILEVERAGE, db_source: fred, state: level, context_window: 200}
+  - {id: nfci, series_id: NFCI, db_source: fred, state: level, context_window: 200}
 execution:
-  implemented_by: unified_market_data.analysis.cross_asset.financial_conditions_index
-  args: {vol_z: vix.zscore, credit_z: credit.zscore, dollar_z: dollar.zscore, equity_z: equity.zscore}
+  implemented_by: unified_market_data.analysis.cross_asset.nfci_reading
+  args: {nfci: nfci.level, risk: risk.level, credit: credit.level, leverage: leverage.level}
 outputs:
-  - {name: fci, unit: "sigma", meaning: "financial conditions index; >0 tighter than average"}
-  - {name: vol_z, unit: "sigma", meaning: "vol contribution"}
-  - {name: credit_z, unit: "sigma", meaning: "credit contribution"}
-  - {name: dollar_z, unit: "sigma", meaning: "dollar contribution"}
-  - {name: equity_z, unit: "sigma", meaning: "equity level (loosening) contribution"}
+  - {name: nfci, unit: "sigma", meaning: "National Financial Conditions Index; >0 tighter than average"}
+  - {name: risk, unit: "sigma", meaning: "risk subindex (volatility/funding stress)"}
+  - {name: credit, unit: "sigma", meaning: "credit subindex (spreads/lending)"}
+  - {name: leverage, unit: "sigma", meaning: "leverage subindex (debt/equity)"}
 interpretations:
   - id: tight
-    when: "fci > 0.5"
+    when: "nfci > 0.2"
     says: "Financial conditions are tighter than average — the cross-asset complex is applying the brakes even before the Fed does."
 charts:
-  - id: "The financial conditions index"
+  - id: "The NFCI's published subindices — risk / credit / leverage"
+    role: input
+    chart_type: series
+    color_job: categorical
+    insight: "the three components the Chicago Fed decomposes conditions into — the model's inputs"
+    data_contract:
+      kind: series
+      ylabel: "subindex (sigma)"
+      zero_line: true
+      series:
+        - {label: "risk", from: "output:risk"}
+        - {label: "credit", from: "output:credit"}
+        - {label: "leverage", from: "output:leverage"}
+  - id: "The subindices as a heatmap (component x time)"
+    role: input
+    chart_type: heatmap
+    color_job: diverging
+    insight: "where and when each component tightened (blue) or loosened (red) — the whole decomposition at once"
+    data_contract:
+      kind: heatmap
+      cbar_label: "subindex (sigma; >0 tight)"
+      rows:
+        - {label: "risk", from: "output:risk"}
+        - {label: "credit", from: "output:credit"}
+        - {label: "leverage", from: "output:leverage"}
+  - id: "The National Financial Conditions Index (Chicago Fed)"
+    role: outcome
     chart_type: series
     color_job: diverging
     interpretation: tight
-    insight: "the whole cross-section collapsed to one tightness reading, through time"
+    insight: "the published index the model outputs — one number for the whole financial system, positive = tight"
     data_contract:
       kind: series
-      ylabel: "FCI (sigma; >0 tight)"
+      ylabel: "NFCI (sigma; >0 tight)"
       zero_line: true
       series:
-        - {label: "FCI (built)", from: "output:fci"}
-  - id: "Built FCI vs the published NFCI (reality check)"
-    chart_type: series
-    color_job: categorical
-    insight: "a crude 4-factor proxy vs the Fed's Kalman-filtered NFCI — it catches the big swings but is FAR noisier; a real index needs the full panel"
-    data_contract:
-      kind: series
-      ylabel: "index (differing scales)"
-      zero_line: true
-      series:
-        - {label: "FCI (built)", from: "output:fci"}
-        - {label: "NFCI (Chicago Fed)", from: "input:nfci.level"}
-  - id: "What is driving conditions (component z-scores)"
-    chart_type: series
-    color_job: categorical
-    insight: "which asset class is tightening or loosening conditions right now"
-    data_contract:
-      kind: series
-      ylabel: "z-score"
-      zero_line: true
-      series:
-        - {label: "vol", from: "output:vol_z"}
-        - {label: "credit", from: "output:credit_z"}
-        - {label: "dollar", from: "output:dollar_z"}
-        - {label: "equity (loosening)", from: "output:equity_z"}
-  - id: "The conditions mix today"
+        - {label: "NFCI", from: "output:nfci"}
+  - id: "What is driving conditions today"
+    role: consequence
     chart_type: bar
     color_job: diverging
-    insight: "the current contribution of each asset class to the conditions reading"
+    insight: "the current contribution of each subindex to the headline reading — the consequence for positioning"
     data_contract:
       kind: named_values
-      ylabel: "z-score"
-      labels: ["vol", "credit", "dollar", "equity"]
-      values: ["output:vol_z", "output:credit_z", "output:dollar_z", "output:equity_z"]
+      ylabel: "sigma"
+      labels: ["risk", "credit", "leverage", "NFCI"]
+      values: ["output:risk", "output:credit", "output:leverage", "output:nfci"]
