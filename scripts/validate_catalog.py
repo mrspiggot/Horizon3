@@ -57,6 +57,7 @@ EVENTS_FILE = REPO / "catalog" / "events.yaml"
 COMMODITIES_FILE = REPO / "catalog" / "commodities.yaml"
 PAIRS_FILE = REPO / "catalog" / "pairs.yaml"
 ISSUERS_FILE = REPO / "catalog" / "issuers.yaml"
+EQUITIES_FILE = REPO / "catalog" / "equities.yaml"
 
 # Generalization axes: which binding file + list key + model "claimed instances" field each uses.
 AXES = {
@@ -66,6 +67,7 @@ AXES = {
     "commodity":  {"file": COMMODITIES_FILE,   "list_key": "commodities",   "claim_field": "instances"},
     "pair":       {"file": PAIRS_FILE,         "list_key": "pairs",         "claim_field": "instances"},
     "issuer":     {"file": ISSUERS_FILE,       "list_key": "issuers",       "claim_field": "instances"},
+    "equity":     {"file": EQUITIES_FILE,      "list_key": "equities",      "claim_field": "instances"},
 }
 
 FAMILIES = {"rates", "vol", "credit", "fx", "commodity", "equity", "macro", "event"}
@@ -192,6 +194,7 @@ def main() -> int:
         _go = doc.get("generic_over") or []
         axis_name = ("event" if "event" in _go else "commodity" if "commodity" in _go
                      else "pair" if "pair" in _go else "issuer" if "issuer" in _go
+                     else "equity" if "equity" in _go
                      else "underlying" if "underlying" in _go else "currency")
         ax = axes[axis_name]
         role_vocab, insts, order = ax["roles"], ax["insts"], ax["order"]

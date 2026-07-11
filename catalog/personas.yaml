@@ -54,8 +54,7 @@ personas:
   - persona_id: equity_multiasset_pm
     name: "Equity / multi-asset PM"
     decision: "Allocation / valuation."
-    uses: []                   # TODO: equity_risk_premium, fed_model, factor_sector, ddm
-    status: pending_authoring
+    uses: [fed_model, equity_risk_premium, dividend_discount]  # generic over equity INSTRUMENT (large-cap basket)
 
   - persona_id: volatility_trader
     name: "Volatility / derivatives trader"

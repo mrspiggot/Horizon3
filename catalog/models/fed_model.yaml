@@ -1,0 +1,70 @@
+model_id: fed_model
+name: "Fed model (earnings yield vs bond yield)"
+family: equity
+summary: >
+  The classic cross-asset valuation gauge: an equity's earnings yield (= 1/PE) vs the nominal 10Y
+  Treasury yield. When the earnings yield exceeds the bond yield, equities look cheap vs bonds; when
+  it is below, rich. A relative — not absolute — read. GENERIC over equity INSTRUMENT.
+
+generic_over: [equity]
+instances: [AAPL, MSFT, JPM, XOM, JNJ, PG, HD, CAT]
+implementation_coverage:
+  covers: [AAPL, MSFT, JPM, XOM, JNJ, PG, HD, CAT]
+  gap: >
+    equity_analytics.fed_model — live for the ingested large-cap basket (AlphaVantage OVERVIEW
+    fundamentals, 2026-07-11). Single names, not the S&P index (AV OVERVIEW is empty for ETFs);
+    an index-level Fed model waits on Shiller CAPE / S&P aggregate earnings (acquisition backlog).
+
+spec:
+  form: >
+    gap = earnings_yield − bond_yield (%). gap > +band ⇒ equities cheap vs bonds; gap < −band ⇒ rich.
+    earnings_yield = 100/PE. bond_yield = nominal 10Y Treasury (DGS10). §11 equity block. §10: the
+    gap is a LEVEL whose CHANGE (widening = equities cheapening vs bonds) is the signal.
+  assumptions:
+    - "Trailing earnings yield; nominal 10Y as the bond leg (a relative gauge, not a timing signal)."
+  references:
+    - "docs/assessment/11-model-reference.md"
+    - "UMD analysis/equity_analytics.py (fed_model)"
+
+inputs:
+  - role: earnings_yield
+    order: level
+    window: "1d"
+    horizon: trailing
+    required: true
+    note: "Trailing earnings yield = 100/PE (%)."
+  - role: bond_yield
+    order: level
+    window: "1d"
+    horizon: 10y
+    required: true
+    note: "Nominal 10Y Treasury yield (DGS10) — the bond leg."
+
+outputs:
+  - name: "gap_pct"
+    unit: "%"
+    note: "Earnings yield minus bond yield."
+  - name: "signal"
+    unit: "label"
+    note: "equities cheap | rich | neutral vs bonds."
+
+interpretation: >
+  "Do equities pay more than bonds? JPM at a 6.3% earnings yield vs a 4.7% 10Y is a positive Fed-model
+  gap (cheap vs bonds); a mega-cap growth name at a 2% earnings yield is rich on this gauge. The
+  cross-sectional gap ranks the basket."
+
+visualizations:
+  - id: fed_model_gap
+    form: "Fed-model gap (earnings yield − bond yield) by name (diverging bar around 0)"
+    encodes: "gap_pct per instrument"
+    insight: "which names are cheap vs rich relative to bonds"
+    color_job: diverging
+    dim: 2D
+  - id: ey_vs_bond
+    form: "earnings yield vs 10Y bond yield scatter (45° line = fair)"
+    encodes: "earnings_yield vs bond_yield per name"
+    insight: "distance from the bond line = the Fed-model signal"
+    color_job: categorical
+    dim: 2D
+
+implemented_by: "unified_market_data.analysis.equity_analytics.fed_model"

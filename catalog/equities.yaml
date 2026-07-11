@@ -1,0 +1,84 @@
+# Equity-INSTRUMENT bindings — the generalization axis for the EQUITY / MULTI-ASSET PM (parallel to
+# jurisdictions/underlyings/events/commodities/pairs/issuers). An equity valuation model (Fed model,
+# ERP) is generic over the INSTRUMENT; instances are large-cap single names, each bound to its
+# fundamentals (earnings yield = 1/PE, dividend yield) plus the shared US bond legs.
+#
+# ACQUISITION (2026-07-11, directive #1): the estate had ZERO equity fundamentals (only index levels +
+# VIX), so a large-cap basket was ingested from AlphaVantage OVERVIEW (yfinance fallback) via
+# scripts/ingest_equity_fundamentals.py → <SYM>_EARNINGS_YIELD / _PE / _DIV_YIELD / _EPS. AV OVERVIEW
+# returns empty for ETFs/indices, so the axis is single names (a bottom-up basket), not the S&P index.
+#
+# The bond legs are SHARED US context (like FX pairs referencing jurisdictions): DGS10 (nominal 10Y,
+# the Fed-model leg) and DFII10 (10Y TIPS real yield, the ERP leg).
+#
+# Acquisition backlog: index-level earnings yield (Shiller CAPE / S&P aggregate) for a true index Fed
+# model; forward EPS + payout/growth for dividend_discount; more names / sector ETFs to widen the axis.
+
+roles:
+  earnings_yield: {kind: observations, desc: "Trailing earnings yield = 100/PE (%)."}
+  dividend_yield: {kind: observations, desc: "Trailing dividend yield (%)."}
+  pe:             {kind: observations, desc: "Trailing price/earnings ratio."}
+  bond_yield:     {kind: observations, desc: "Nominal 10Y Treasury yield (Fed-model leg) — shared US context (DGS10)."}
+  real_yield:     {kind: observations, desc: "Real 10Y yield / 10Y TIPS (ERP leg) — shared US context (DFII10)."}
+
+_us_legs: &us_legs
+  bond_yield: {ref: "DGS10", source: observations, note: "Nominal 10Y Treasury."}
+  real_yield: {ref: "DFII10", source: observations, note: "10Y TIPS real yield."}
+
+equities:
+  - id: AAPL
+    sector: Information Technology
+    bindings:
+      <<: *us_legs
+      earnings_yield: {ref: "AAPL_EARNINGS_YIELD", source: observations}
+      dividend_yield: {ref: "AAPL_DIV_YIELD", source: observations}
+      pe:             {ref: "AAPL_PE", source: observations}
+  - id: MSFT
+    sector: Information Technology
+    bindings:
+      <<: *us_legs
+      earnings_yield: {ref: "MSFT_EARNINGS_YIELD", source: observations}
+      dividend_yield: {ref: "MSFT_DIV_YIELD", source: observations}
+      pe:             {ref: "MSFT_PE", source: observations}
+  - id: JPM
+    sector: Financials
+    bindings:
+      <<: *us_legs
+      earnings_yield: {ref: "JPM_EARNINGS_YIELD", source: observations}
+      dividend_yield: {ref: "JPM_DIV_YIELD", source: observations}
+      pe:             {ref: "JPM_PE", source: observations}
+  - id: XOM
+    sector: Energy
+    bindings:
+      <<: *us_legs
+      earnings_yield: {ref: "XOM_EARNINGS_YIELD", source: observations}
+      dividend_yield: {ref: "XOM_DIV_YIELD", source: observations}
+      pe:             {ref: "XOM_PE", source: observations}
+  - id: JNJ
+    sector: Health Care
+    bindings:
+      <<: *us_legs
+      earnings_yield: {ref: "JNJ_EARNINGS_YIELD", source: observations}
+      dividend_yield: {ref: "JNJ_DIV_YIELD", source: observations}
+      pe:             {ref: "JNJ_PE", source: observations}
+  - id: PG
+    sector: Consumer Staples
+    bindings:
+      <<: *us_legs
+      earnings_yield: {ref: "PG_EARNINGS_YIELD", source: observations}
+      dividend_yield: {ref: "PG_DIV_YIELD", source: observations}
+      pe:             {ref: "PG_PE", source: observations}
+  - id: HD
+    sector: Consumer Discretionary
+    bindings:
+      <<: *us_legs
+      earnings_yield: {ref: "HD_EARNINGS_YIELD", source: observations}
+      dividend_yield: {ref: "HD_DIV_YIELD", source: observations}
+      pe:             {ref: "HD_PE", source: observations}
+  - id: CAT
+    sector: Industrials
+    bindings:
+      <<: *us_legs
+      earnings_yield: {ref: "CAT_EARNINGS_YIELD", source: observations}
+      dividend_yield: {ref: "CAT_DIV_YIELD", source: observations}
+      pe:             {ref: "CAT_PE", source: observations}

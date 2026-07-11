@@ -1,0 +1,62 @@
+model_id: dividend_discount
+name: "Dividend discount model (Gordon growth)"
+family: equity
+summary: >
+  The intrinsic-value anchor: fair price = next dividend / (required return − growth). Compares the
+  DDM fair value to the market price to flag over/under-valuation, and inverts to the market-implied
+  growth. GENERIC over equity INSTRUMENT.
+
+generic_over: [equity]
+instances: []
+implementation_coverage:
+  covers: []
+  gap: >
+    To BUILD (Deliverable 5): Gordon P = D1/(r − g); or invert for implied growth g = r − D1/P. The
+    dividend yield is ingested (from AV OVERVIEW), but a forward dividend D1, a required return r
+    (CAPM: real_yield + β·ERP — β is in the AV OVERVIEW payload, not yet ingested), and a growth
+    estimate g are still to assemble. Claims zero instances until those land. Honest empty row.
+
+spec:
+  form: >
+    P_fair = D1 / (r − g); implied_growth = r − dividend_yield. r via CAPM = real_yield + β·ERP.
+    §11 equity block (Gordon 1959). §10: implied growth is a LEVEL whose change is the re-rating read.
+  assumptions:
+    - "Constant-growth Gordon approximation; r from CAPM; β from the fundamentals payload."
+  references:
+    - "docs/assessment/11-model-reference.md"
+
+inputs:
+  - role: dividend_yield
+    order: level
+    window: "1d"
+    horizon: trailing
+    required: true
+    note: "Trailing dividend yield (D/P)."
+  - role: real_yield
+    order: level
+    window: "1d"
+    horizon: 10y
+    required: true
+    note: "Real risk-free leg for the required return r."
+
+outputs:
+  - name: "fair_value"
+    unit: "price"
+    note: "Gordon-growth fair price."
+  - name: "implied_growth_pct"
+    unit: "%"
+    note: "Market-implied dividend growth."
+
+interpretation: >
+  "What growth is the price assuming — and is it plausible? A market-implied growth well above the
+  economy's is the over-valuation flag; below, the margin of safety."
+
+visualizations:
+  - id: implied_growth
+    form: "market-implied dividend growth by name (bar) vs a plausibility band"
+    encodes: "implied_growth_pct per instrument"
+    insight: "which names price in heroic growth"
+    color_job: diverging
+    dim: 2D
+
+build_stub: true

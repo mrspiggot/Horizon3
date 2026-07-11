@@ -1,0 +1,60 @@
+model_id: equity_risk_premium
+name: "Equity risk premium (earnings yield vs real yield)"
+family: equity
+summary: >
+  The compensation for holding equity over a real risk-free asset: earnings yield minus the real
+  (TIPS) yield. A low ERP means equities are expensive relative to safe real assets; a high ERP means
+  they are cheap. The absolute-valuation companion to the Fed model. GENERIC over equity INSTRUMENT.
+
+generic_over: [equity]
+instances: [AAPL, MSFT, JPM, XOM, JNJ, PG, HD, CAT]
+implementation_coverage:
+  covers: [AAPL, MSFT, JPM, XOM, JNJ, PG, HD, CAT]
+  gap: >
+    equity_analytics.equity_risk_premium — live for the ingested basket (AV OVERVIEW earnings yield +
+    DFII10 real yield). Trailing earnings yield; a forward-earnings ERP + an index-level ERP are the
+    acquisition backlog.
+
+spec:
+  form: >
+    ERP = earnings_yield − real_yield (%). real_yield = 10Y TIPS (DFII10). §11 equity block. §10: the
+    ERP is a LEVEL whose position vs its own history (compressed = expensive) is the read.
+  assumptions:
+    - "Trailing earnings yield; 10Y real yield as the risk-free real leg."
+  references:
+    - "docs/assessment/11-model-reference.md"
+    - "UMD analysis/equity_analytics.py (equity_risk_premium)"
+
+inputs:
+  - role: earnings_yield
+    order: level
+    window: "1d"
+    horizon: trailing
+    required: true
+    note: "Trailing earnings yield = 100/PE (%)."
+  - role: real_yield
+    order: level
+    window: "1d"
+    horizon: 10y
+    required: true
+    note: "10Y TIPS real yield (DFII10)."
+
+outputs:
+  - name: "erp_pct"
+    unit: "%"
+    note: "Earnings yield minus real yield — the equity risk premium."
+
+interpretation: >
+  "How much extra do I earn for taking equity risk over a real risk-free asset? A compressed ERP (a
+  richly-valued name at a 2% earnings yield vs a 2.3% real yield → NEGATIVE ERP) flags equities priced
+  for perfection; a wide ERP is the cushion."
+
+visualizations:
+  - id: erp_ranking
+    form: "equity risk premium by name (diverging bar around 0)"
+    encodes: "erp_pct per instrument"
+    insight: "which names still pay a premium vs real yields, and which don't"
+    color_job: diverging
+    dim: 2D
+
+implemented_by: "unified_market_data.analysis.equity_analytics.equity_risk_premium"
