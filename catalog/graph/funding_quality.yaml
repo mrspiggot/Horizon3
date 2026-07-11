@@ -2,16 +2,21 @@ model_id: funding_quality
 name: "Funding by credit quality (IG vs HY)"
 family: credit
 persona: corporate_treasurer
-grounded_in: [longstaff-credit-spreads, hatzius-fci]
-method: arithmetic
-method_note: "SLOP-ADJACENT: IG/HY all-in + premium (arithmetic)"
+grounded_in: [longstaff-credit-spreads]
+method: data-direct
+method_note: >
+  The all-in funding at each credit quality (risk-free + that rating's OAS) and the premium a sub-IG
+  issuer pays over investment grade (Longstaff et al.: the OAS is the market price of default risk).
+  A definitional decomposition of observed rates — the same construction as the credit quality ladder.
+  Window: the ICE BofA IG/HY OAS series are licensed on FRED to a ~3-year API window, so this model
+  runs 2023-present (the post-repricing credit cycle) rather than back to the GFC.
 spec:
-  equations: "ig_all_in = rf + IG OAS; hy_all_in = rf + HY OAS; quality premium = hy - ig"
-history: {start: "2025-08-01", end: "2026-07-09", cadence: weekly}
+  equations: "ig_all_in = DGS5 + BAMLC0A0CM; hy_all_in = DGS5 + BAMLH0A0HYM2; quality premium = hy - ig."
+history: {start: "2023-08", end: "2026-07", cadence: monthly}
 inputs:
-  - {id: rf, series_id: DGS5, db_source: fred, state: level, context_window: 250}
-  - {id: ig, series_id: BAMLC0A0CM, db_source: fred, state: level, context_window: 250}
-  - {id: hy, series_id: BAMLH0A0HYM2, db_source: fred, state: level, context_window: 250}
+  - {id: rf, series_id: DGS5, db_source: fred, state: level, context_window: 60}
+  - {id: ig, series_id: BAMLC0A0CM, db_source: fred, state: level, context_window: 60}
+  - {id: hy, series_id: BAMLH0A0HYM2, db_source: fred, state: level, context_window: 60}
 execution:
   implemented_by: unified_market_data.analysis.treasury_analytics.funding_quality
   args: {risk_free_pct: rf.level, ig_oas_pct: ig.level, hy_oas_pct: hy.level}
@@ -21,13 +26,22 @@ outputs:
   - {name: quality_premium_pct, unit: "%", meaning: "extra funding cost of sub-IG credit (HY - IG)"}
 interpretations:
   - id: quality_cheap
-    when: "quality_premium_pct < 2.0"
-    says: "The premium for sub-IG funding is thin — the market is barely penalising weaker credit; a window for HY issuers."
+    when: "quality_premium_pct < 2.5"
+    says: >
+      The premium for sub-IG funding is thin — the market is barely penalising weaker credit. A window
+      for high-yield issuers to term out debt; the compressed premium of 2024-25 is the kind of regime
+      that precedes a widening, so the window is to be used, not trusted.
+  - id: quality_dear
+    when: "quality_premium_pct > 4.0"
+    says: >
+      The quality premium is wide — sub-IG issuers are heavily penalised, as in the 2023 regional-bank
+      stress. Down-in-quality funding is expensive; the market is discriminating sharply on credit.
 charts:
-  - id: "All-in funding: IG vs HY"
+  - id: "All-in funding: IG vs HY over time"
+    role: input
     chart_type: series
     color_job: categorical
-    insight: "what each credit quality pays to fund, through time"
+    insight: "what each credit quality pays to fund through the cycle — the gap between the lines is the cost of a weaker balance sheet"
     data_contract:
       kind: series
       ylabel: "all-in funding (%)"
@@ -35,29 +49,34 @@ charts:
         - {label: "IG all-in", from: "output:ig_all_in_pct"}
         - {label: "HY all-in", from: "output:hy_all_in_pct"}
   - id: "The credit-quality funding premium (HY - IG)"
+    role: outcome
     chart_type: gap_series
     color_job: diverging
     interpretation: quality_cheap
-    insight: "the extra cost of being a weaker credit — the window for sub-IG issuance"
+    pos_label: "quality penalised (wide)"
+    neg_label: ""
+    insight: "the extra cost of being a weaker credit — it widened in the 2023 bank stress and has compressed steadily since, a thin window for sub-IG issuers"
     data_contract:
       kind: gap_series
       ylabel: "percentage points"
       label: "HY - IG all-in"
       minuend: "output:hy_all_in_pct"
       subtrahend: "output:ig_all_in_pct"
-  - id: "The risk-free anchor"
+  - id: "The risk-free anchor under both"
+    role: consequence
     chart_type: series
     color_job: sequential
-    insight: "the common 5Y risk-free rate under both funding costs"
+    insight: "the common 5Y risk-free rate both funding costs sit on — elevated since 2022, it lifts every issuer regardless of quality"
     data_contract:
       kind: series
       ylabel: "%"
       series:
         - {label: "5Y risk-free", from: "input:rf.level"}
   - id: "Funding by quality today"
+    role: outcome
     chart_type: bar
     color_job: sequential
-    insight: "the current all-in cost at each credit quality"
+    insight: "the current all-in cost at each credit quality and the premium between them"
     data_contract:
       kind: named_values
       ylabel: "all-in funding (%)"

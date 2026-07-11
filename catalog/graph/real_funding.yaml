@@ -1,61 +1,80 @@
 model_id: real_funding
-name: "Real cost of debt (funding vs inflation)"
+name: "Real cost of debt (the Fisher equation)"
 family: credit
 persona: corporate_treasurer
-grounded_in: [hatzius-fci]
-method: arithmetic
-method_note: "SLOP-ADJACENT: all-in - breakeven (arithmetic)"
+grounded_in: [fisher-1930-interest]
+method: published
+method_note: >
+  The Fisher (1930) relation: real rate = nominal rate - expected inflation. Applied to corporate
+  funding, the real all-in cost = (risk-free + credit OAS) - 10y breakeven inflation. It separates a
+  nominal-rate squeeze from a real one — high nominal funding amid high inflation can be cheap in real
+  terms. Observed inputs, published identity.
 spec:
-  equations: "real funding = (risk-free + IG OAS) - expected inflation (10y breakeven)"
-history: {start: "2025-08-01", end: "2026-07-09", cadence: weekly}
+  equations: "real_funding = (DGS5 + BAA10Y) - T10YIE  (Fisher: real = nominal - expected inflation)"
+history: {start: "2007-01", end: "2026-07", cadence: monthly}
 inputs:
-  - {id: rf, series_id: DGS5, db_source: fred, state: level, context_window: 250}
-  - {id: ig, series_id: BAMLC0A0CM, db_source: fred, state: level, context_window: 250}
-  - {id: breakeven, series_id: T10YIE, db_source: fred, state: level, context_window: 250}
+  - {id: rf, series_id: DGS5, db_source: fred, state: level, context_window: 60}
+  - {id: ig, series_id: BAA10Y, db_source: fred, state: level, context_window: 60}
+  - {id: breakeven, series_id: T10YIE, db_source: fred, state: level, context_window: 60}
 execution:
   implemented_by: unified_market_data.analysis.treasury_analytics.real_funding_cost
   args: {risk_free_pct: rf.level, credit_oas_pct: ig.level, breakeven_pct: breakeven.level}
 outputs:
-  - {name: real_funding, unit: "%", meaning: "real all-in funding cost (nominal - expected inflation)"}
+  - {name: real_funding, unit: "%", meaning: "real all-in funding cost (Fisher: nominal - expected inflation)"}
 interpretations:
   - id: real_squeeze
-    when: "real_funding > 2.5"
-    says: "The real cost of debt is high — even after inflation, funding is expensive; a case to wait or shorten."
+    when: "real_funding > 2.0"
+    says: >
+      The real cost of debt is high — even after inflation, funding is genuinely expensive. This is the
+      post-2022 regime: nominal rates rose faster than breakevens, so the Fisher-real burden on issuers
+      is the heaviest since before the GFC — a case to wait, shorten, or fund floating.
+  - id: cheap_funding
+    when: "real_funding < 1.0"
+    says: >
+      Real funding is near zero — after expected inflation, the all-in cost of debt is close to free.
+      The 2021 issuer's paradise: even including the credit spread, the Fisher-real burden was the
+      lowest on record, the moment to borrow long and lock it in.
 charts:
-  - id: "Real cost of debt"
-    chart_type: series
-    color_job: diverging
-    interpretation: real_squeeze
-    insight: "the all-in funding cost after inflation — the true cost of borrowing"
-    data_contract:
-      kind: series
-      ylabel: "real funding (%)"
-      zero_line: true
-      series:
-        - {label: "real all-in funding", from: "output:real_funding"}
   - id: "Nominal funding vs expected inflation"
+    role: input
     chart_type: series
     color_job: categorical
-    insight: "the wedge between nominal funding and breakevens is the real cost"
+    insight: "the two Fisher components — the nominal risk-free cost against 10y breakeven inflation; their wedge is the real cost"
     data_contract:
       kind: series
       ylabel: "%"
       series:
         - {label: "risk-free (5Y)", from: "input:rf.level"}
         - {label: "10y breakeven", from: "input:breakeven.level"}
-  - id: "Expected inflation (the deflator)"
+  - id: "The real cost of debt over time"
+    role: outcome
     chart_type: series
-    color_job: diverging
-    insight: "the breakeven inflation that turns nominal funding into real"
+    color_job: sequential
+    insight: "the Fisher-real all-in funding cost — the true burden on the balance sheet, through time"
     data_contract:
       kind: series
-      ylabel: "breakeven (%)"
+      ylabel: "real funding (%)"
+      zero_line: true
       series:
-        - {label: "10y breakeven", from: "input:breakeven.level"}
+        - {label: "real all-in funding", from: "output:real_funding"}
+  - id: "The real-funding cycle"
+    role: consequence
+    chart_type: gap_series
+    color_job: diverging
+    interpretation: real_squeeze
+    pos_label: "real cost of debt"
+    neg_label: ""
+    insight: "the real burden through the cycle — a deflation-driven spike in 2008, a slide to near-zero (cheapest real funding on record) by 2021, then the post-2022 climb back to the heaviest since the GFC"
+    data_contract:
+      kind: gap_series
+      ylabel: "real funding (%)"
+      label: "real all-in funding"
+      minuend: "output:real_funding"
   - id: "The real-cost build today"
+    role: outcome
     chart_type: bar
     color_job: diverging
-    insight: "risk-free + credit minus inflation = the real cost"
+    insight: "risk-free + credit spread minus expected inflation = the real cost, decomposed"
     data_contract:
       kind: named_values
       ylabel: "%"

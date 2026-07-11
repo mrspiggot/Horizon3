@@ -1,34 +1,77 @@
 model_id: policy_stance
-name: "Policy stance — real rate vs r*"
+name: "Policy stance — real rate vs r* (HLW)"
 family: rates
 persona: central_bank_policymaker
 grounded_in: [hlw-natural-rate, taylor-1993-rule]
-method: arithmetic
-method_note: "SLOP-ADJACENT: real rate minus a CONSTANT r*; HLW-grounded but NOT the HLW Kalman estimate"
+method: published
+method_note: >
+  The policy stance is the ex-ante real policy rate (fed funds - expected inflation) minus the
+  natural rate r*. r* is the ACTUAL Holston-Laubach-Williams estimate (NY Fed, sourced into UMD via
+  the nyfed_hlw provider), not a constant. Restrictive when the real rate sits above r*, accommodative
+  below (Laubach-Williams 2003; Holston-Laubach-Williams 2017).
 spec:
-  equations: "real_exante = nominal - E[pi]; real_expost = nominal - pi; stance = real_exante - r*"
-  params: {r_star_pct: 0.7}
-history: {start: "2021-01", end: "2026-05"}
+  equations: "real_exante = fed_funds - E[pi]; stance = real_exante - r*(HLW). >0 restrictive, <0 accommodative."
+history: {start: "2010-01", end: "2026-05", cadence: monthly}
 inputs:
   - {id: policy, series_id: FEDFUNDS, db_source: fred, state: level}
   - {id: cpi, series_id: PCEPILFE, db_source: fred, transform: yoy, state: level, context_window: 36}
   - {id: breakeven, series_id: T10YIE, db_source: fred, state: level, context_window: 60}
+  - {id: rstar, series_id: RSTAR_US, db_source: nyfed_hlw, state: level, context_window: 40}
 execution:
   implemented_by: unified_market_data.analysis.macro_signals.policy_stance
-  args: {nominal_rate_pct: policy.level, inflation_pct: cpi.level, expected_inflation_pct: breakeven.level, r_star_pct: 0.7}
+  args:
+    nominal_rate_pct: policy.level
+    inflation_pct: cpi.level
+    expected_inflation_pct: breakeven.level
+    r_star_pct: rstar.level
 outputs:
   - {name: real_rate_exante_pct, unit: "%", meaning: "ex-ante real policy rate (nominal - expected inflation)"}
   - {name: real_rate_expost_pct, unit: "%", meaning: "ex-post real policy rate (nominal - realized inflation)"}
+  - {name: r_star_pct, unit: "%", meaning: "the HLW natural rate of interest r*"}
   - {name: stance_pct, unit: "pp", meaning: "ex-ante real rate minus r* (>0 restrictive)"}
 interpretations:
   - id: restrictive
     when: "stance_pct > 0.25"
-    says: "The ex-ante real policy rate sits above r* — policy is genuinely restrictive."
+    says: >
+      The ex-ante real policy rate sits above the HLW natural rate — policy is genuinely restrictive.
+      Because r* is low (~1%), even a modest positive real rate is tight; the post-2023 stance is the
+      most restrictive relative to r* since before the GFC.
+  - id: accommodative
+    when: "stance_pct < -0.25"
+    says: >
+      The real policy rate is below r* — policy is accommodative, adding stimulus. The 2010-2021
+      regime, when the real rate sat far under an already-depressed natural rate.
 charts:
-  - id: "Ex-ante vs ex-post real policy rate"
+  - id: "The real policy rate against the natural rate r*"
+    role: input
     chart_type: series
     color_job: categorical
-    insight: "the two real rates and the inflation-surprise wedge between them"
+    insight: "the ex-ante real policy rate tracked against the HLW natural rate — where the real rate crosses r* is where policy turns from easy to tight"
+    data_contract:
+      kind: series
+      ylabel: "%"
+      zero_line: true
+      series:
+        - {label: "ex-ante real rate", from: "output:real_rate_exante_pct"}
+        - {label: "r* (HLW natural rate)", from: "output:r_star_pct"}
+  - id: "Policy stance vs r* (restrictive above 0)"
+    role: outcome
+    chart_type: gap_series
+    color_job: diverging
+    interpretation: restrictive
+    pos_label: "restrictive (real rate > r*)"
+    neg_label: "accommodative (real rate < r*)"
+    insight: "the stance itself — accommodative through the 2010s, then the sharp swing to the most restrictive setting relative to r* since the GFC"
+    data_contract:
+      kind: gap_series
+      ylabel: "percentage points"
+      label: "real rate - r*"
+      minuend: "output:stance_pct"
+  - id: "Ex-ante vs ex-post real policy rate"
+    role: consequence
+    chart_type: series
+    color_job: categorical
+    insight: "the two real rates and the inflation-surprise wedge between them — the ex-post rate was deeply negative through 2021-22 as realized inflation outran the funds rate"
     data_contract:
       kind: series
       ylabel: "real policy rate (%)"
@@ -36,34 +79,13 @@ charts:
       series:
         - {label: "ex-ante (vs breakevens)", from: "output:real_rate_exante_pct"}
         - {label: "ex-post (vs realized)", from: "output:real_rate_expost_pct"}
-  - id: "Policy stance vs r* (restrictive above 0)"
-    chart_type: gap_series
-    color_job: diverging
-    interpretation: restrictive
-    insight: "how far above/below neutral the real policy rate sits, through time"
-    data_contract:
-      kind: gap_series
-      ylabel: "percentage points"
-      label: "ex-ante real rate - r*"
-      minuend: "output:real_rate_exante_pct"
-      subtrahend: 0.7
-  - id: "The stance inputs, as states"
-    chart_type: series
-    color_job: categorical
-    insight: "nominal policy, realized and expected inflation together"
-    data_contract:
-      kind: series
-      ylabel: "%"
-      series:
-        - {label: "fed funds", from: "input:policy.level"}
-        - {label: "core PCE YoY", from: "input:cpi.level"}
-        - {label: "10y breakeven", from: "input:breakeven.level"}
   - id: "Real rate vs r* (latest)"
+    role: outcome
     chart_type: bar
     color_job: diverging
-    insight: "the current ex-ante real rate against the neutral anchor"
+    insight: "the current ex-ante real rate against the HLW natural anchor, and the resulting stance"
     data_contract:
       kind: named_values
       ylabel: "%"
-      labels: ["ex-ante real", "ex-post real", "r* (neutral)", "stance"]
-      values: ["output:real_rate_exante_pct", "output:real_rate_expost_pct", 0.7, "output:stance_pct"]
+      labels: ["ex-ante real", "ex-post real", "r* (HLW)", "stance"]
+      values: ["output:real_rate_exante_pct", "output:real_rate_expost_pct", "output:r_star_pct", "output:stance_pct"]

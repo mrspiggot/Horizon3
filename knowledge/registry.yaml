@@ -361,3 +361,14 @@ papers:
     added: "2026-07-11"
     why: "Decomposes the corporate credit spread into expected default + the EXCESS BOND PREMIUM (risk-appetite residual), a leading indicator of activity. The Fed publishes the series; replaces the homemade credit_spread_regime z-state."
     superseded_by: null
+  - id: fisher-1930-interest
+    title: "The Theory of Interest (the Fisher equation)"
+    authors: ["Irving Fisher"]
+    url: "https://fraser.stlouisfed.org/title/theory-interest-1129"
+    arxiv_id: null
+    local_path: null
+    topics: [real-rates, inflation, fisher-equation, funding]
+    tier: reference
+    added: "2026-07-11"
+    why: "The Fisher relation: real rate = nominal rate - expected inflation. The published identity behind the real cost of debt (real_funding), distinguishing a nominal-rate squeeze from a real one."
+    superseded_by: null
