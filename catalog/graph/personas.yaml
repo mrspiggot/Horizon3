@@ -50,22 +50,25 @@ personas:
     name: "Volatility / derivatives trader"
     decision: "Position the vol book (sell premium, own tails, trade the curve)."
     title: "Getting paid to sell fear: is the vol premium worth the tail?"
-    models: [variance_risk_premium, vol_term_structure, vol_regime]
+    models: [variance_risk_premium, vol_term_structure, garch_volatility]
     stub_charts:
       - [vol_term_structure, "The implied-vol surface (tenor x time)"]
-      - [vol_term_structure, "The vol curve: now vs 3 months ago"]
+      - [garch_volatility, "GARCH(1,1) forecast vs the market's implied"]
+      - [garch_volatility, "The vol risk premium over the model (implied - GARCH)"]
       - [variance_risk_premium, "The variance risk premium"]
-      - [vol_regime, "VIX level"]
     summary_template: >
       Volatility is the rare asset that usually sells for more than it costs to cover, and the
       variance risk premium is the fee. Right now implied vol (VIX) is {variance_risk_premium.implied_vol_pct}
       against realized SPX vol of {variance_risk_premium.realized_vol_pct} — a premium of
-      {variance_risk_premium.vrp_vol_pts} vol points to whoever sells it. The term structure sets the
-      backdrop: the six-month-minus-one-month slope is {vol_term_structure.slope} points, so the curve
-      is in contango when positive (calm, carry-friendly) and backwardation when negative (stress).
-      And the regime itself — VIX at {vol_regime.level_pct}, {vol_regime.zscore} sigma versus its own
-      three-month range — says whether that premium is cheap insurance or a trap. Three reads, one
-      trade: harvest the premium while the curve is calm, and respect the tail when it isn't.
+      {variance_risk_premium.vrp_vol_pts} vol points to whoever sells it. But realized is backward-looking;
+      the sharper test is a fitted forecast. A GARCH(1,1) model (Bollerslev 1986) estimated on the S&P's
+      own return history puts conditional vol at {garch_volatility.garch_vol_pct}, so the market is charging
+      {garch_volatility.model_premium_pts} vol points ABOVE the model — the premium measured over a real
+      forecast, not just trailing realized. The term structure sets the backdrop: the six-month-minus-one-month
+      slope is {vol_term_structure.slope} points, contango when positive (calm, carry-friendly) and
+      backwardation when negative (stress). Three reads, one trade: harvest the premium while the model
+      says options are rich and the curve is calm, and respect the tail when GARCH overshoots implied —
+      the signature, at COVID and 2022, that realized is about to outrun the price of vol.
 
   credit_investor:
     name: "Credit investor"

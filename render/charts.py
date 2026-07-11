@@ -177,6 +177,35 @@ def overlay_lines(ax, x, series, *, band=None, xticklabels=None, title=None, yla
     ax.legend(loc="best", fontsize=8, framealpha=0.9)
 
 
+def diverging_area(ax, x, y, *, label="gap", xticklabels=None, title=None, ylabel="value",
+                   pos_label="above", neg_label="below"):
+    """A signed series filled around zero: cool where positive, warm where negative (polarity).
+
+    The right form for a gap/premium/spread whose SIGN is the message (implied-model vol premium,
+    carry, over/undervaluation): the two regimes read at a glance instead of a line crossing an axis.
+    Uses the theme's diverging poles (warm = negative, cool = positive) — see dataviz color-formula.
+    """
+    theme.use_theme()
+    yv = np.asarray(y, dtype=float)
+    xv = np.asarray(x, dtype=float)
+    cool, warm = theme.DIVERGING[3], theme.DIVERGING[1]
+    ax.fill_between(xv, 0, yv, where=yv >= 0, interpolate=True, color=cool, alpha=0.55,
+                    linewidth=0, zorder=2, label=pos_label)
+    ax.fill_between(xv, 0, yv, where=yv < 0, interpolate=True, color=warm, alpha=0.6,
+                    linewidth=0, zorder=2, label=neg_label)
+    ax.plot(xv, yv, color=theme.INK, lw=1.1, zorder=4, label=label)
+    ax.axhline(0, color=theme.MUTED, lw=1)
+    if xticklabels is not None:
+        step = max(1, len(xticklabels) // 12)
+        ax.set_xticks(list(range(0, len(xticklabels), step)))
+        ax.set_xticklabels(xticklabels[::step], rotation=45, ha="right", fontsize=8)
+    ax.set_ylabel(ylabel)
+    if title:
+        ax.set_title(title)
+    theme.style_axes(ax, grid_axis="y")
+    ax.legend(loc="best", fontsize=8, framealpha=0.9)
+
+
 def vol_smile(ax, smiles, *, title=None, xlabel="moneyness", ylabel="implied vol (%)"):
     """Vol smiles by expiry (categorical by tenor, sequential-ordered). `smiles` = list of
     (label, moneyness_array, vol_array)."""

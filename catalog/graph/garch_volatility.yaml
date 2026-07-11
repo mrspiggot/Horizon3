@@ -1,0 +1,96 @@
+model_id: garch_volatility
+name: "GARCH(1,1) conditional-volatility forecast"
+family: vol
+persona: volatility_trader
+grounded_in: [garch-bollerslev]
+method: published
+method_note: >
+  Bollerslev (1986) GARCH(1,1): sigma_t^2 = omega + alpha*eps_{t-1}^2 + beta*sigma_{t-1}^2.
+  Fit by MLE on S&P 500 daily log returns; the conditional volatility is annualized (x sqrt(252)).
+  The forecast is compared against the market's implied (VIX) and against subsequently-realized vol.
+# GARCH is inherently a single-asset volatility model: the vol of ONE return series (SPX),
+# judged against its own implied (VIX). Two distinct series is its true dimensionality — a
+# documented low-dimensional canonical model, not a padded one.
+low_dimensional_exception: true
+spec:
+  equations: >
+    Returns r_t = 100 * dlog(P_t). Zero-mean GARCH(1,1): sigma_t^2 = omega + alpha*r_{t-1}^2
+    + beta*sigma_{t-1}^2, fit by MLE. Annualized conditional vol = sigma_t * sqrt(252).
+    Model premium = implied(VIX) - GARCH forecast; forecast error = GARCH - trailing realized.
+history: {start: "2010-01", end: "2026-07", cadence: monthly}
+inputs:
+  - {id: garch, series_id: "^GSPC", db_source: yahoo, transform: garch_vol, state: level, context_window: 252}
+  - {id: implied, series_id: "^VIX", db_source: yahoo, state: level, context_window: 252}
+  - {id: realized, series_id: "^GSPC", db_source: yahoo, transform: realized_vol, state: level, context_window: 252}
+execution:
+  implemented_by: unified_market_data.analysis.vol_analytics.vol_forecast
+  args:
+    garch_vol_pct: garch.level
+    implied_vol_pct: implied.level
+    realized_vol_pct: realized.level
+outputs:
+  - {name: garch_vol_pct, unit: "%", meaning: "GARCH(1,1) conditional-vol forecast, annualized"}
+  - {name: implied_vol_pct, unit: "%", meaning: "market-implied vol (VIX)"}
+  - {name: realized_vol_pct, unit: "%", meaning: "trailing 21d realized vol of the S&P 500"}
+  - {name: model_premium_pts, unit: "vol pts", meaning: "implied - GARCH; the vol risk premium OVER the fitted model"}
+  - {name: forecast_error_pts, unit: "vol pts", meaning: "GARCH - realized; how well the model tracks what happened"}
+interpretations:
+  - id: rich_vol
+    when: "model_premium_pts > 0"
+    says: >
+      Options are pricing volatility ABOVE the GARCH forecast — implied exceeds the model's
+      conditional-vol estimate. This is the variance risk premium measured over a fitted model
+      (not a naive trailing realized): the structural edge that pays the systematic vol seller.
+  - id: cheap_protection
+    when: "model_premium_pts < 0"
+    says: >
+      Implied has fallen below the GARCH forecast — the market is charging less for volatility
+      than the model expects. Protection is cheap relative to the conditional-vol estimate.
+charts:
+  - id: "The two vol observables: realized vs implied"
+    role: input
+    chart_type: series
+    color_job: categorical
+    insight: "what the S&P actually did (realized) vs what options charged for it (implied VIX) — the persistent wedge is the premium the model quantifies"
+    data_contract:
+      kind: series
+      ylabel: "annualized vol (%)"
+      series:
+        - {label: "realized (21d, SPX)", from: "input:realized.level"}
+        - {label: "implied (VIX)", from: "input:implied.level"}
+  - id: "GARCH(1,1) forecast vs the market's implied"
+    role: outcome
+    chart_type: series
+    color_job: categorical
+    interpretation: rich_vol
+    insight: "the model's conditional-vol forecast tracks the vol regime; the market's implied sits above it in calm and overshoots it in stress"
+    data_contract:
+      kind: series
+      ylabel: "annualized vol (%)"
+      series:
+        - {label: "GARCH forecast", from: "output:garch_vol_pct"}
+        - {label: "implied (VIX)", from: "output:implied_vol_pct"}
+  - id: "The vol risk premium over the model (implied - GARCH)"
+    role: consequence
+    chart_type: gap_series
+    color_job: diverging
+    interpretation: rich_vol
+    insight: "positive = options priced above GARCH's forecast (the short-vol edge); negative = protection cheap vs the model. The GFC, COVID and 2022 print as sharp negatives when realized outran the price of vol"
+    data_contract:
+      kind: gap_series
+      ylabel: "vol points"
+      label: "implied - GARCH"
+      pos_label: "options rich vs model"
+      neg_label: "model overshoot / stress"
+      minuend: "output:implied_vol_pct"
+      subtrahend: "output:garch_vol_pct"
+  - id: "Where volatility stands today (three lenses)"
+    role: outcome
+    chart_type: bar
+    color_job: sequential
+    insight: "the current reading across the model forecast, the market's implied, and trailing realized"
+    data_contract:
+      kind: named_values
+      ylabel: "annualized vol (%)"
+      labels: ["GARCH forecast", "implied (VIX)", "realized (21d)"]
+      values: ["output:garch_vol_pct", "output:implied_vol_pct", "output:realized_vol_pct"]

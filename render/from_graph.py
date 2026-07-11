@@ -73,9 +73,16 @@ def render_chart(ax, chart: dict, history: list, *, fig=None) -> None:
     elif kind == "gap_series":
         x = list(range(len(history)))
         gap = [(_val(r, dc["minuend"]) - _val(r, dc["subtrahend"])) for r in history]
-        charts.overlay_lines(ax, x, [(dc.get("label", "gap"), gap, "solid")],
-                             xticklabels=_xlabels(history), title=title,
-                             ylabel=dc.get("ylabel", "pp"), zero_line=True)
+        if cj == "diverging":
+            charts.diverging_area(ax, x, gap, label=dc.get("label", "gap"),
+                                  xticklabels=_xlabels(history), title=title,
+                                  ylabel=dc.get("ylabel", "pp"),
+                                  pos_label=dc.get("pos_label", "above"),
+                                  neg_label=dc.get("neg_label", "below"))
+        else:
+            charts.overlay_lines(ax, x, [(dc.get("label", "gap"), gap, "solid")],
+                                 xticklabels=_xlabels(history), title=title,
+                                 ylabel=dc.get("ylabel", "pp"), zero_line=True)
 
     elif kind == "heatmap":
         # rows = a cross-section (tenors, ratings, ...); cols = time. The whole surface at once.

@@ -303,3 +303,15 @@ papers:
     added: "2026-07-11"
     why: "Prices in prediction markets as probability estimates, their calibration and biases. Grounds the event/prediction-market trader's implied-probability and calibration models."
     superseded_by: null
+
+  - id: garch-bollerslev
+    title: "Generalized Autoregressive Conditional Heteroskedasticity (GARCH)"
+    authors: ["Tim Bollerslev"]
+    url: "https://public.econ.duke.edu/~boller/Published_Papers/joe_86.pdf"
+    arxiv_id: null
+    local_path: sources/garch_bollerslev_1986.pdf
+    topics: [volatility, garch, time-series]
+    tier: canonical
+    added: "2026-07-11"
+    why: "GARCH(1,1) conditional-volatility model — a proven published vol forecast; the volatility trader's forecast vs implied (VIX). Replaces the homemade vol_regime composite."
+    superseded_by: null
