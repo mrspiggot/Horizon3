@@ -1,0 +1,91 @@
+model_id: credit_excess_bond_premium
+name: "Excess bond premium (Gilchrist-Zakrajšek)"
+family: credit
+persona: credit_investor
+grounded_in: [gz-2012-credit-spreads]
+method: published
+method_note: >
+  Gilchrist-Zakrajšek (2012): the corporate credit spread splits additively into compensation for
+  EXPECTED DEFAULT and the EXCESS BOND PREMIUM (EBP) — the residual reflecting the marginal
+  investor's risk-bearing capacity / risk appetite. The Fed publishes gz_spread, ebp and the model's
+  estimated default probability monthly (1973-present); we consume them directly (no re-estimation).
+spec:
+  equations: >
+    gz_spread = expected_default_component + ebp. expected_default = gz_spread - ebp. EBP > 0 =
+    risk aversion elevated / credit supply tightening (a leading indicator of slowdowns); EBP < 0 =
+    unusually easy risk appetite. def_prob = the GZ model's estimated 1y default probability.
+history: {start: "2005-01", end: "2026-06", cadence: monthly}
+inputs:
+  - {id: gz,      series_id: "GZSPREAD",  db_source: fed_ebp, state: level, context_window: 60}
+  - {id: ebp,     series_id: "EBP",       db_source: fed_ebp, state: level, context_window: 60}
+  - {id: defprob, series_id: "GZDEFPROB", db_source: fed_ebp, state: level, context_window: 60}
+execution:
+  implemented_by: unified_market_data.analysis.credit_analytics.gz_decomposition
+  args:
+    gz_spread: gz.level
+    ebp: ebp.level
+    def_prob: defprob.level
+outputs:
+  - {name: gz_spread,        unit: "%", meaning: "Gilchrist-Zakrajšek credit spread"}
+  - {name: expected_default, unit: "%", meaning: "compensation for expected default = gz_spread - ebp"}
+  - {name: ebp,              unit: "%", meaning: "excess bond premium — the risk-appetite residual"}
+  - {name: def_prob,         unit: "prob", meaning: "GZ model estimated 1y default probability"}
+interpretations:
+  - id: risk_aversion
+    when: "ebp > 0.5"
+    says: >
+      The excess bond premium is elevated — investors demand compensation well above expected
+      default. Per Gilchrist-Zakrajšek this signals a contraction in effective risk-bearing
+      capacity (credit supply tightening) and has historically led declines in activity and equities.
+  - id: complacency
+    when: "ebp < -0.3"
+    says: >
+      The EBP is negative — credit is priced for less than the usual risk premium over expected
+      default. Risk appetite is unusually easy; the late-cycle regime where credit offers thin
+      compensation for the default cycle ahead.
+charts:
+  - id: "The credit spread, decomposed (expected default + EBP)"
+    role: input
+    chart_type: stacked
+    color_job: sequential
+    insight: "the GZ spread split into what compensates for expected default vs the excess bond premium — you can see the EBP, not defaults, drive the 2008 and 2020 spikes"
+    data_contract:
+      kind: stacked
+      ylabel: "credit spread (%)"
+      total_label: "GZ spread"
+      layers:
+        - {label: "expected default", from: "output:expected_default"}
+        - {label: "excess bond premium", from: "output:ebp"}
+  - id: "The excess bond premium (risk appetite)"
+    role: outcome
+    chart_type: gap_series
+    color_job: diverging
+    interpretation: risk_aversion
+    pos_label: "risk aversion elevated (credit tightening)"
+    neg_label: "risk appetite easy (complacent)"
+    insight: "the published leading indicator — EBP spikes into every recession (2008, 2011, 2020) ahead of the real economy, and turns negative in complacent late-cycle credit"
+    data_contract:
+      kind: gap_series
+      ylabel: "EBP (%)"
+      label: "excess bond premium"
+      minuend: "output:ebp"
+  - id: "The model's estimated default probability"
+    role: consequence
+    chart_type: series
+    color_job: sequential
+    insight: "the expected-loss driver — where realized default risk actually sits, distinct from the risk-appetite premium above it"
+    data_contract:
+      kind: series
+      ylabel: "estimated 1y default prob"
+      series:
+        - {label: "GZ default probability", from: "output:def_prob"}
+  - id: "Credit spread decomposition today"
+    role: outcome
+    chart_type: bar
+    color_job: diverging
+    insight: "the current split — how much of today's spread is expected default vs the risk-appetite premium"
+    data_contract:
+      kind: named_values
+      ylabel: "%"
+      labels: ["GZ spread", "expected default", "excess bond premium"]
+      values: ["output:gz_spread", "output:expected_default", "output:ebp"]

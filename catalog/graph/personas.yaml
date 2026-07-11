@@ -74,22 +74,23 @@ personas:
     name: "Credit investor"
     decision: "Allocate across the quality ladder (IG / HY / EM)."
     title: "Down the quality ladder: what is the market paying you to take default risk?"
-    models: [credit_quality_ladder, oas_implied_default, credit_spread_regime]
+    models: [credit_quality_ladder, oas_implied_default, credit_excess_bond_premium]
     stub_charts:
       - [credit_quality_ladder, "The credit spread ladder (quality x time)"]
-      - [credit_quality_ladder, "The spread curve: now vs 3 months ago"]
+      - [credit_excess_bond_premium, "The excess bond premium (risk appetite)"]
+      - [credit_excess_bond_premium, "The credit spread, decomposed (expected default + EBP)"]
       - [oas_implied_default, "HY implied annual default rate"]
-      - [credit_spread_regime, "HY spread vs its own range (z-score)"]
     summary_template: >
       Credit is a bet that the spread you are paid exceeds the losses you will take. Today the ladder
       runs IG at {credit_quality_ladder.ig}%, high-yield at {credit_quality_ladder.hy}% and emerging
       markets at {credit_quality_ladder.em}% option-adjusted spread — so going down from investment
       grade to high-yield pays an extra {credit_quality_ladder.hy_ig} points. Invert that HY spread
       through the credit triangle and the market is pricing a {oas_implied_default.annual_pd_pct}%
-      annual default rate, {oas_implied_default.cumulative_pd_pct}% cumulative over five years, at a
-      40% recovery. And the regime: HY sits {credit_spread_regime.zscore} sigma versus its own recent
-      range — {credit_spread_regime.level_pct}% in absolute terms. One reading: spreads are tight and
-      the down-in-quality premium is being paid grudgingly; the compensation for default risk is thin.
+      annual default rate at 40% recovery. But the sharper question is WHY the spread is where it is:
+      Gilchrist-Zakrajšek split it into compensation for expected default ({credit_excess_bond_premium.expected_default}%)
+      and the excess bond premium ({credit_excess_bond_premium.ebp}%) — the risk-appetite residual that
+      drove the 2008 and 2020 spikes and leads the real economy. One reading: with the EBP where it is,
+      the down-in-quality premium is being paid grudgingly and the compensation for default risk is thin.
 
   equity_multiasset_pm:
     name: "Equity / multi-asset PM"

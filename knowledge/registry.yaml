@@ -350,3 +350,14 @@ papers:
     added: "2026-07-11"
     why: "The default spread (Baa-Treasury) and term spread (long-short) are the published, countercyclical predictors of expected returns — the risk-compensation premia that replace the risk_appetite z-average."
     superseded_by: null
+  - id: gz-2012-credit-spreads
+    title: "Credit Spreads and Business Cycle Fluctuations"
+    authors: ["Simon Gilchrist", "Egon Zakrajšek"]
+    url: "https://www.federalreserve.gov/pubs/feds/2011/201142/201142pap.pdf"
+    arxiv_id: null
+    local_path: sources/gz_2012_credit_spreads.pdf
+    topics: [credit, excess-bond-premium, risk-appetite, business-cycle]
+    tier: canonical
+    added: "2026-07-11"
+    why: "Decomposes the corporate credit spread into expected default + the EXCESS BOND PREMIUM (risk-appetite residual), a leading indicator of activity. The Fed publishes the series; replaces the homemade credit_spread_regime z-state."
+    superseded_by: null
