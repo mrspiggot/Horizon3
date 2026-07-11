@@ -1,0 +1,84 @@
+model_id: return_distribution
+name: "Return distribution shape (the Pearson diagram)"
+family: vol
+persona: volatility_trader
+grounded_in: [pearson-1895-system, cont-2001-stylized-facts]
+method: published
+canonical: true   # the distribution's two shape moments ARE the model; the >=3-input floor is waived
+method_note: >
+  The shape of the S&P return distribution located on the Pearson (β1, β2) plane — β1 = skewness²,
+  β2 = kurtosis (Pearson 1895) — computed on rolling 12-month windows. The stylized facts (Cont 2001):
+  equity returns are fat-tailed (β2 > 3, excess kurtosis) and negatively skewed (crash asymmetry). The
+  moments are NOT constant — the distribution fattens into crises, which is the risk the vol book carries.
+spec:
+  equations: "β1 = skew(r)²; β2 = kurtosis(r) (Normal = 3); excess kurtosis = β2 - 3. r = daily log returns over 252d."
+history: {start: "2007-01", end: "2026-07", cadence: monthly}
+inputs:
+  - {id: skew, series_id: "^GSPC", db_source: yahoo, transform: roll_skew, state: level, context_window: 60}
+  - {id: kurt, series_id: "^GSPC", db_source: yahoo, transform: roll_kurt, state: level, context_window: 60}
+execution:
+  implemented_by: unified_market_data.analysis.vol_analytics.pearson_distribution
+  args: {skewness: skew.level, kurtosis: kurt.level}
+outputs:
+  - {name: skewness,        unit: "σ³", meaning: "skewness of returns (negative = crash asymmetry)"}
+  - {name: kurtosis,        unit: "σ⁴", meaning: "kurtosis β2 (Normal = 3)"}
+  - {name: skew_sq,         unit: "β1", meaning: "skewness² — the Pearson-diagram x-axis"}
+  - {name: excess_kurtosis, unit: "σ⁴", meaning: "kurtosis - 3 — fat-tailedness beyond Normal"}
+interpretations:
+  - id: fat_tailed
+    when: "excess_kurtosis > 2"
+    says: >
+      The return distribution is markedly fat-tailed — kurtosis well above the Normal's 3. Large moves
+      are far more likely than a Gaussian VaR assumes; the short-vol book is most exposed exactly here.
+      These readings cluster around the crises (2008, 2011, 2020, 2022).
+  - id: crash_skew
+    when: "skewness < -0.5"
+    says: >
+      Sharply negative skew — the distribution's left tail is longer, the crash asymmetry of equities
+      (down moves bigger than up). This is what makes selling downside puts a negatively-skewed bet.
+charts:
+  - id: "The Pearson diagram (skewness² vs kurtosis)"
+    role: outcome
+    chart_type: pearson
+    color_job: sequential
+    interpretation: fat_tailed
+    insight: "the return distribution's shape, tracked through time — each point a rolling window shaded 2007→2026. The cloud sits ABOVE the Normal (0,3): equity returns are persistently fat-tailed, drifting up-and-right in crises"
+    data_contract:
+      kind: pearson
+      cbar_label: "2007 → 2026"
+      x: "output:skew_sq"
+      y: "output:kurtosis"
+  - id: "Fat tails over time (excess kurtosis)"
+    role: consequence
+    chart_type: gap_series
+    color_job: diverging
+    interpretation: fat_tailed
+    pos_label: "fatter tails than Normal"
+    neg_label: "thinner than Normal"
+    insight: "kurtosis minus the Normal's 3 — how much fatter the tails are than a Gaussian assumes; it spikes at every stress (2008, 2011, 2020, 2022), exactly when a naive VaR fails"
+    data_contract:
+      kind: gap_series
+      ylabel: "excess kurtosis (β2 - 3)"
+      label: "excess kurtosis"
+      minuend: "output:excess_kurtosis"
+  - id: "Crash asymmetry (skewness) over time"
+    role: input
+    chart_type: series
+    color_job: categorical
+    insight: "the skew of returns — persistently negative for equities (the left tail is longer); the deepest negatives mark the crash windows"
+    data_contract:
+      kind: series
+      ylabel: "skewness"
+      zero_line: true
+      series:
+        - {label: "rolling 12m skewness", from: "output:skewness"}
+  - id: "The distribution today"
+    role: outcome
+    chart_type: bar
+    color_job: diverging
+    insight: "the current skewness and excess kurtosis — where the S&P return distribution sits versus the Normal"
+    data_contract:
+      kind: named_values
+      ylabel: "moment"
+      labels: ["skewness", "excess kurtosis"]
+      values: ["output:skewness", "output:excess_kurtosis"]

@@ -53,12 +53,12 @@ personas:
     name: "Volatility / derivatives trader"
     decision: "Position the vol book (sell premium, own tails, trade the curve)."
     title: "Getting paid to sell fear: is the vol premium worth the tail?"
-    models: [variance_risk_premium, vol_term_structure, garch_volatility]
+    models: [variance_risk_premium, vol_term_structure, garch_volatility, return_distribution]
     stub_charts:
-      - [vol_term_structure, "The implied-vol surface (tenor x time)"]
       - [garch_volatility, "GARCH(1,1) forecast vs the market's implied"]
       - [garch_volatility, "The vol risk premium over the model (implied - GARCH)"]
-      - [variance_risk_premium, "The variance risk premium"]
+      - [return_distribution, "The Pearson diagram (skewness² vs kurtosis)"]
+      - [return_distribution, "Fat tails over time (excess kurtosis)"]
     summary_template: >
       Volatility is the rare asset that usually sells for more than it costs to cover, and the
       variance risk premium is the fee. Right now implied vol (VIX) is {variance_risk_premium.implied_vol_pct}
@@ -69,9 +69,13 @@ personas:
       {garch_volatility.model_premium_pts} vol points ABOVE the model — the premium measured over a real
       forecast, not just trailing realized. The term structure sets the backdrop: the six-month-minus-one-month
       slope is {vol_term_structure.slope} points, contango when positive (calm, carry-friendly) and
-      backwardation when negative (stress). Three reads, one trade: harvest the premium while the model
-      says options are rich and the curve is calm, and respect the tail when GARCH overshoots implied —
-      the signature, at COVID and 2022, that realized is about to outrun the price of vol.
+      backwardation when negative (stress). And the tail the book actually carries: the S&P return
+      distribution sits at kurtosis {return_distribution.kurtosis} against the Normal's 3, with skewness
+      {return_distribution.skewness} — persistently fat-tailed and negatively skewed (the Pearson diagram
+      shows it living well above the Normal), so a Gaussian VaR understates exactly the moves that blow up
+      a short-vol book. Four reads, one trade: harvest the premium while the model says options are rich
+      and the curve is calm, and respect the tail — GARCH overshooting implied and kurtosis climbing are
+      the twin signatures, at COVID and 2022, that realized is about to outrun the price of vol.
 
   credit_investor:
     name: "Credit investor"

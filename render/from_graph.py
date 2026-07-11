@@ -114,6 +114,13 @@ def render_chart(ax, chart: dict, history: list, *, fig=None) -> None:
                             ylabel=dc.get("ylabel", "%"),
                             total_label=dc.get("total_label"))
 
+    elif kind == "pearson":
+        # the Pearson β1-β2 diagram — the return distribution's rolling (skew², kurtosis) over time
+        xs = _hist(history, dc["x"])
+        ys = _hist(history, dc["y"])
+        charts.pearson_diagram(ax, xs, ys, title=title, fig=fig,
+                               cbar_label=dc.get("cbar_label", "time"))
+
     elif kind == "scatter":
         # a two-variable RELATIONSHIP across history (Phillips, Okun, CAPM SML, Beveridge) — the
         # message is the fit, not the time axis; points shade early->late, path draws the loops.

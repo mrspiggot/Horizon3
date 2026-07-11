@@ -233,6 +233,46 @@ def vol_smile(ax, smiles, *, title=None, xlabel="moneyness", ylabel="implied vol
     ax.legend(fontsize=6.5, ncol=2, framealpha=0.9)
 
 
+def pearson_diagram(ax, skew_sq, kurt, *, title=None, fig=None, cbar_label="time"):
+    """The Pearson β₁–β₂ diagram — the distribution's shape on one plane. x = β₁ = skewness²,
+    y = β₂ = kurtosis (normal = 3). Every distribution family occupies a region; the line β₂ = β₁ + 1
+    is a hard lower bound (no distribution exists below it). We plot the asset's ROLLING moments over
+    time (each point a window, shaded early→late): drift up = fatter tails, drift right = more skew.
+    The Normal sits at (0, 3); anything well above it is a fat-tailed, crash-prone regime."""
+    theme.use_theme()
+    x = np.asarray(skew_sq, dtype=float)
+    y = np.asarray(kurt, dtype=float)
+    ok = np.isfinite(x) & np.isfinite(y)
+    x, y = x[ok], y[ok]
+    xmax = max(float(x.max()) * 1.15, 1.0) if len(x) else 1.0
+    ymax = max(float(y.max()) * 1.1, 6.0) if len(y) else 9.0
+    # impossible region: β2 < β1 + 1
+    xs = np.linspace(0, xmax, 100)
+    ax.plot(xs, xs + 1, color=theme.MUTED, lw=1.2, ls="-", zorder=2)
+    ax.fill_between(xs, 0, xs + 1, color=theme.MUTED, alpha=0.12, zorder=1)
+    ax.text(xmax * 0.62, 1.0, "impossible region  (β₂ < β₁ + 1)", fontsize=7.5,
+            color=theme.MUTED, rotation=0, va="bottom")
+    # the Normal reference at (0, 3)
+    ax.axhline(3.0, color=theme.GRID, lw=1, ls=":", zorder=1)
+    ax.scatter([0], [3], marker="*", s=180, color=theme.FORWARD, zorder=6, edgecolors="white", linewidths=0.6)
+    ax.annotate("Normal (0, 3)", (0, 3), textcoords="offset points", xytext=(8, -2),
+                fontsize=8.5, color=theme.INK, fontweight="bold")
+    n = len(x)
+    if n:
+        cmap = theme.seq_cmap()
+        sc = ax.scatter(x, y, c=range(n), cmap=cmap, s=40, zorder=4, edgecolors="white", linewidths=0.4)
+        if fig is not None:
+            cb = fig.colorbar(sc, ax=ax, fraction=0.045, pad=0.02)
+            cb.set_label(cbar_label, fontsize=8); cb.ax.tick_params(labelsize=7); cb.set_ticks([0, n - 1])
+    ax.set_xlim(-xmax * 0.03, xmax)
+    ax.set_ylim(0, ymax)
+    ax.set_xlabel("β₁ = skewness²")
+    ax.set_ylabel("β₂ = kurtosis")
+    if title:
+        ax.set_title(title)
+    theme.style_axes(ax, grid_axis="both")
+
+
 def scatter_fit(ax, x, y, *, title=None, xlabel="x", ylabel="y", fit=True, path=False,
                 time_colour=True, cbar_label="time", fig=None, annotate_fit=True):
     """The canonical two-variable relationship chart: a cloud of (x, y) with an OLS fit line.
