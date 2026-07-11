@@ -117,22 +117,23 @@ personas:
     name: "Commodity analyst"
     decision: "Position across the commodity complex (energy / metals / ags)."
     title: "What the commodity complex is saying about growth and inflation"
-    models: [energy_complex, copper_gold_growth, commodity_reflation]
+    models: [energy_complex, copper_gold_growth, commodity_momentum]
     stub_charts:
+      - [commodity_momentum, "The momentum surface (commodity x time)"]
+      - [commodity_momentum, "Momentum breadth (net share trending up)"]
       - [copper_gold_growth, "Copper/gold ratio (growth signal)"]
-      - [commodity_reflation, "Commodity reflation breadth"]
-      - [energy_complex, "Brent-WTI spread"]
-      - [commodity_reflation, "The three legs (energy / metals / ags)"]
+      - [commodity_momentum, "Momentum across the complex today"]
     summary_template: >
-      Commodities are the economy's cleanest real-time read on growth and inflation, and right now the
-      complex is sending mixed signals. The copper/gold ratio — cyclical demand against safety — sits
-      at {copper_gold_growth.ratio}, its level a gauge of how much growth versus fear the market is
-      pricing. Broad reflation breadth across energy, metals and agriculture reads
-      {commodity_reflation.reflation} sigma — not firming in unison. Within energy the Brent-WTI spread
-      is ${energy_complex.slope} a barrel, a location premium
-      that says as much about seaborne supply as about demand. One reading: the growth signal from
-      copper is doing the talking while the inflation impulse across the broad complex is muted — a
-      complex to trade by leg, not as a bloc.
+      Commodities are the economy's cleanest real-time read on growth and inflation, and the two
+      published fundamentals of futures returns are momentum and the futures basis (Gorton-Hayashi-
+      Rouwenhorst). Time-series momentum (Moskowitz-Ooi-Pedersen 2012) — a commodity's own 12-month
+      trailing return — has the complex at {commodity_momentum.avg_mom}% on average, with breadth of
+      {commodity_momentum.breadth}: that net share of energy, metals, precious and ags trending together
+      is the regime read, positive in reflations and sharply negative through the 2014-16 oil crash and
+      2020 demand shock. Copper leads the cyclical signal at {commodity_momentum.copper_mom}% against
+      gold's {commodity_momentum.gold_mom}%, and the copper/gold ratio — cyclical demand against safety —
+      sits at {copper_gold_growth.ratio}. One reading: trade the complex by the sign of each leg's trend,
+      long the uptrends and short the downtrends, and treat broad breadth as the macro growth-inflation dial.
 
   corporate_treasurer:
     name: "Corporate treasurer"

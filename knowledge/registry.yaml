@@ -315,3 +315,15 @@ papers:
     added: "2026-07-11"
     why: "GARCH(1,1) conditional-volatility model — a proven published vol forecast; the volatility trader's forecast vs implied (VIX). Replaces the homemade vol_regime composite."
     superseded_by: null
+
+  - id: tsmom-mop-2012
+    title: "Time Series Momentum"
+    authors: ["Tobias J. Moskowitz", "Yao Hua Ooi", "Lasse Heje Pedersen"]
+    url: "https://www.aqr.com/-/media/AQR/Documents/Insights/Journal-Article/Time-Series-Momentum.pdf"
+    arxiv_id: null
+    local_path: null
+    topics: [commodity-momentum, time-series-momentum, cross-asset]
+    tier: reference
+    added: "2026-07-11"
+    why: "A security's own 12-month trailing return predicts its next-month return, across 58 futures incl. the commodity complex. The published TSMOM signal that replaces the homemade commodity_reflation z-average."
+    superseded_by: null

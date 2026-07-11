@@ -1,0 +1,102 @@
+model_id: commodity_momentum
+name: "Commodity time-series momentum (the complex)"
+family: commodity
+persona: commodity_analyst
+grounded_in: [tsmom-mop-2012, nber-commodity-futures]
+method: published
+method_note: >
+  Time-series momentum (Moskowitz-Ooi-Pedersen 2012): a commodity's own 12-month trailing
+  return predicts its next-month return. The signal is the SIGN and size of the 12m return per
+  commodity; breadth = net fraction of the complex trending up. Grounded additionally in the
+  theory of storage (Gorton-Hayashi-Rouwenhorst): momentum and the futures basis are the two
+  fundamentals of commodity futures returns.
+spec:
+  equations: >
+    Per commodity, momentum m_t = (P_t / P_{t-252} - 1) * 100  (12-month trailing total return).
+    breadth = (1/N) * sum_i sign(m_i,t) in [-1, +1]; avg_mom = (1/N) * sum_i m_i,t.
+    TSMOM rule: hold long where m>0, short where m<0.
+history: {start: "2010-01", end: "2026-07", cadence: monthly}
+inputs:
+  - {id: crude,  series_id: "CL=F", db_source: yahoo, transform: momentum, state: level, context_window: 36}
+  - {id: copper, series_id: "HG=F", db_source: yahoo, transform: momentum, state: level, context_window: 36}
+  - {id: gold,   series_id: "GC=F", db_source: yahoo, transform: momentum, state: level, context_window: 36}
+  - {id: corn,   series_id: "ZC=F", db_source: yahoo, transform: momentum, state: level, context_window: 36}
+execution:
+  implemented_by: unified_market_data.analysis.commodity_analytics.commodity_momentum
+  args:
+    crude_mom: crude.level
+    copper_mom: copper.level
+    gold_mom: gold.level
+    corn_mom: corn.level
+outputs:
+  - {name: crude_mom,  unit: "%", meaning: "crude oil 12m trailing return (energy)"}
+  - {name: copper_mom, unit: "%", meaning: "copper 12m trailing return (industrial metal)"}
+  - {name: gold_mom,   unit: "%", meaning: "gold 12m trailing return (precious metal)"}
+  - {name: corn_mom,   unit: "%", meaning: "corn 12m trailing return (agriculture)"}
+  - {name: breadth,    unit: "net fraction", meaning: "net fraction of the complex trending up, [-1,+1]"}
+  - {name: avg_mom,    unit: "%", meaning: "equal-weight complex 12m return"}
+interpretations:
+  - id: broad_uptrend
+    when: "breadth > 0.5"
+    says: >
+      Most of the commodity complex is in a positive 12-month trend — the TSMOM strategy is
+      broadly long. Broad-based commodity momentum has historically coincided with reflationary,
+      late-cycle regimes and is itself a positive predictor of next-month returns.
+  - id: broad_downtrend
+    when: "breadth < -0.5"
+    says: >
+      The complex is broadly trending down — TSMOM is short across energy, metals and ags,
+      the signature of a disinflationary / demand-slowdown regime.
+charts:
+  - id: "The momentum surface (commodity x time)"
+    role: outcome
+    chart_type: heatmap
+    color_job: diverging
+    interpretation: broad_uptrend
+    insight: "the entire complex's 12m momentum through time — red rows are downtrends, blue uptrends; whole-column colour = a regime the whole complex shares"
+    data_contract:
+      kind: heatmap
+      cbar_label: "12m return (%)"
+      rows:
+        - {label: "crude (energy)", from: "output:crude_mom"}
+        - {label: "copper (metals)", from: "output:copper_mom"}
+        - {label: "gold (precious)", from: "output:gold_mom"}
+        - {label: "corn (ags)", from: "output:corn_mom"}
+  - id: "Momentum breadth (net share trending up)"
+    role: consequence
+    chart_type: gap_series
+    color_job: diverging
+    interpretation: broad_uptrend
+    pos_label: "complex trending up"
+    neg_label: "complex trending down"
+    insight: "how broad the trend is — persistent positive breadth is the reflation regime; the sharp swings to fully-short mark demand shocks (2008, 2014-15 oil, 2020, 2022 reversal)"
+    data_contract:
+      kind: gap_series
+      ylabel: "net breadth [-1,+1]"
+      label: "breadth"
+      minuend: "output:breadth"
+  - id: "The four legs: 12m momentum over time"
+    role: input
+    chart_type: series
+    color_job: categorical
+    insight: "which part of the complex leads — energy and metals (cyclical demand) vs gold (fear/real rates) vs ags (weather/supply); do they agree or diverge?"
+    data_contract:
+      kind: series
+      ylabel: "12m trailing return (%)"
+      zero_line: true
+      robust_ylim: true
+      series:
+        - {label: "crude", from: "output:crude_mom"}
+        - {label: "copper", from: "output:copper_mom"}
+        - {label: "gold", from: "output:gold_mom"}
+        - {label: "corn", from: "output:corn_mom"}
+  - id: "Momentum across the complex today"
+    role: outcome
+    chart_type: bar
+    color_job: diverging
+    insight: "the current 12m trend in each commodity — the sign is the TSMOM position (long green, short red)"
+    data_contract:
+      kind: named_values
+      ylabel: "12m trailing return (%)"
+      labels: ["crude", "copper", "gold", "corn"]
+      values: ["output:crude_mom", "output:copper_mom", "output:gold_mom", "output:corn_mom"]

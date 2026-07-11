@@ -68,11 +68,13 @@ def render_chart(ax, chart: dict, history: list, *, fig=None) -> None:
         series = [(s["label"], _hist(history, s["from"]), s.get("style", "solid"))
                   for s in dc["series"]]
         charts.overlay_lines(ax, x, series, xticklabels=_xlabels(history), title=title,
-                             ylabel=dc.get("ylabel", "%"), zero_line=dc.get("zero_line", False))
+                             ylabel=dc.get("ylabel", "%"), zero_line=dc.get("zero_line", False),
+                             robust_ylim=dc.get("robust_ylim", False))
 
     elif kind == "gap_series":
         x = list(range(len(history)))
-        gap = [(_val(r, dc["minuend"]) - _val(r, dc["subtrahend"])) for r in history]
+        sub = dc.get("subtrahend")
+        gap = [(_val(r, dc["minuend"]) - (_val(r, sub) if sub else 0.0)) for r in history]
         if cj == "diverging":
             charts.diverging_area(ax, x, gap, label=dc.get("label", "gap"),
                                   xticklabels=_xlabels(history), title=title,

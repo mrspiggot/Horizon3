@@ -150,7 +150,7 @@ def dumbbell(ax, labels, left, right, *, title=None, xlabel="value",
 
 
 def overlay_lines(ax, x, series, *, band=None, xticklabels=None, title=None, ylabel="value",
-                  zero_line=False):
+                  zero_line=False, robust_ylim=False):
     """Reusable time-series overlay (categorical identity). `series` = list of (label, y, style)
     where style in {"solid","dashed"}; `band` = (lo, hi, label) shaded region (a gap/premium/spread).
 
@@ -166,6 +166,13 @@ def overlay_lines(ax, x, series, *, band=None, xticklabels=None, title=None, yla
                 marker="o" if style != "dashed" else None, ms=3, label=label, zorder=4 + i)
     if zero_line:
         ax.axhline(0, color=theme.MUTED, lw=1, ls=":")
+    if robust_ylim:
+        allv = np.concatenate([np.asarray(y, dtype=float) for _, y, _ in series]) if series else np.array([])
+        allv = allv[np.isfinite(allv)]
+        if allv.size:
+            lo, hi = np.nanpercentile(allv, 2), np.nanpercentile(allv, 98)
+            pad = (hi - lo) * 0.08 or 1.0
+            ax.set_ylim(lo - pad, hi + pad)
     if xticklabels is not None:
         step = max(1, len(xticklabels) // 12)
         ax.set_xticks(list(range(0, len(xticklabels), step)))
@@ -336,18 +343,29 @@ def color_table(ax, columns, row_labels, values, *, color_job="sequential", titl
 
 
 def matrix_heatmap(ax, matrix, row_labels, col_labels, *, color_job="diverging", title=None,
-                   cbar_label="", fig=None, fmt=None):
+                   cbar_label="", fig=None, fmt=None, robust=True):
     """Information-dense heatmap: a value matrix (rows x cols) as a color mesh — the term-premium
     across tenors and time, a vol surface, a correlation grid. Diverging centers the scale at zero;
-    sequential runs light->dark. This is the form that shows a whole cross-section at once."""
+    sequential runs light->dark. This is the form that shows a whole cross-section at once.
+
+    `robust` clips the color scale to the 2nd–98th percentile so a single outlier cell (e.g. crude
+    momentum off a near-zero 2020 base) can't wash the whole surface to near-white — the values still
+    render, only the colour cap is robust. Out-of-cap cells saturate at the ramp ends.
+    """
     theme.use_theme()
     M = np.asarray(matrix, dtype=float)
     cmap = theme.div_cmap() if color_job == "diverging" else theme.seq_cmap()
+    finite = M[np.isfinite(M)]
     if color_job == "diverging":
-        m = float(np.nanmax(np.abs(M))) or 1.0
+        m = float(np.nanpercentile(np.abs(finite), 98)) if robust and finite.size else \
+            (float(np.nanmax(np.abs(M))) or 1.0)
+        m = m or 1.0
         vmin, vmax = -m, m
     else:
-        vmin, vmax = float(np.nanmin(M)), float(np.nanmax(M))
+        if robust and finite.size:
+            vmin, vmax = float(np.nanpercentile(finite, 2)), float(np.nanpercentile(finite, 98))
+        else:
+            vmin, vmax = float(np.nanmin(M)), float(np.nanmax(M))
     mesh = ax.pcolormesh(M, cmap=cmap, vmin=vmin, vmax=vmax, edgecolors="white", linewidth=0.4)
     ax.set_yticks(np.arange(len(row_labels)) + 0.5)
     ax.set_yticklabels(row_labels, fontsize=8)
