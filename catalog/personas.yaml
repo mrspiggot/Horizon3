@@ -40,8 +40,7 @@ personas:
   - persona_id: credit_investor
     name: "Credit investor"
     decision: "Credit allocation."
-    uses: []                   # TODO: spread_vs_fundamentals, merton_structural_pd, spread_decomposition
-    status: pending_authoring
+    uses: [cds_implied_pd, sovereign_cds_rv, merton_structural_pd]  # generic over sovereign ISSUER (12 of 40+ CDS)
 
   - persona_id: fx_trader
     name: "FX trader"

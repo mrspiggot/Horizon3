@@ -1,0 +1,76 @@
+model_id: sovereign_cds_rv
+name: "Sovereign CDS relative value"
+family: credit
+summary: >
+  Is a sovereign's credit cheap or rich — vs its OWN history (z-score / percentile) and vs peers?
+  The relative-value read that turns a level into a trade: buy protection where the spread is tight
+  vs history, sell where it is wide. GENERIC over sovereign ISSUER.
+
+generic_over: [issuer]
+instances: []
+implementation_coverage:
+  covers: []
+  gap: >
+    The IMPL EXISTS and is unit-tested (credit_analytics.cds_relative_value) — the blocker is DATA
+    QUALITY, not code (directive #2; caught by a live spot-trace 2026-07-11). The estate's CDS series
+    are STATIC SEED values today — CDS_ITA_5Y is 100.0 across all 73 obs (1 distinct value), likewise
+    every sovereign — so the RV z-score is degenerate (exactly 0.00, percentile 1.00) and would be a
+    green-lie if surfaced (hard-rule #1). Claims ZERO instances until a LIVE, time-varying CDS feed
+    replaces the seed (acquisition backlog, directive #1). The model is correct and activates
+    unchanged the moment the series carry real variation. cds_implied_pd is unaffected — it is a
+    pointwise transform of the current level, valid on a snapshot.
+
+spec:
+  form: >
+    z = (current − mean(history)) / std(history); percentile = share of history at-or-below current.
+    A high positive z = wide vs its own history (cheap credit / stress building); negative = rich.
+    The peer read ranks z across issuers cross-sectionally. §10: level + its position-in-distribution.
+  assumptions:
+    - "Mean-reversion of the spread toward its own history over the RV horizon."
+    - "History window is what the estate holds; a short window widens the confidence band (directive #2)."
+  references:
+    - "docs/assessment/11-model-reference.md"
+    - "UMD analysis/credit_analytics.py (cds_relative_value)"
+
+inputs:
+  - role: cds_5y
+    order: level
+    window: "1d"
+    horizon: spot
+    required: true
+    note: "Current 5Y CDS (bps)."
+  - role: cds_5y
+    order: context
+    window: "max"
+    horizon: history
+    required: true
+    note: "Its own history — the RV distribution."
+
+outputs:
+  - name: "zscore"
+    unit: "sigma"
+    note: "Spread vs its own history, in standard deviations."
+  - name: "percentile"
+    unit: "0..1"
+    note: "Position of the current spread in its history."
+
+interpretation: >
+  "Cheap or dear vs its own past — and vs peers? A +2σ z-score flags a sovereign whose spread is wide
+  vs its history (protection looks cheap / stress building); the cross-issuer ranking finds the
+  relative-value pair (long the rich, short the cheap on a spread basis)."
+
+visualizations:
+  - id: rv_zscore_ranking
+    form: "CDS RV z-score by sovereign (diverging horizontal bar around 0)"
+    encodes: "zscore per issuer"
+    insight: "who is cheap vs rich vs their own history, ranked"
+    color_job: diverging
+    dim: 2D
+  - id: spread_history
+    form: "5Y CDS (per sovereign) time series with the RV band"
+    encodes: "cds_5y over time"
+    insight: "the spread path + where current sits vs its range"
+    color_job: categorical
+    dim: 2D
+
+build_stub: true

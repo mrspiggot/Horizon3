@@ -1,0 +1,64 @@
+model_id: cds_implied_pd
+name: "CDS-implied default probability"
+family: credit
+summary: >
+  Inverting the credit triangle: a CDS spread is compensation for expected loss, so the market-implied
+  hazard rate is λ ≈ spread / (1 − recovery), and the default probability follows. Turns a quoted
+  spread into the market's actual view of default odds. GENERIC over sovereign ISSUER.
+
+generic_over: [issuer]
+instances: [JPN, KOR, CHN, ITA, ESP, GRC, POL, BRA, MEX, ZAF, TUR, ARG]
+implementation_coverage:
+  covers: [JPN, KOR, CHN, ITA, ESP, GRC, POL, BRA, MEX, ZAF, TUR, ARG]
+  gap: >
+    credit_analytics.cds_implied_pd — live for every sovereign with a 5Y CDS series (40+ ingested;
+    12 instantiated). Recovery is the 40% senior-unsecured convention; a per-issuer recovery would
+    refine it. DATA-QUALITY NOTE (directive #2): the estate's CDS are currently a STATIC snapshot
+    (each series 1 distinct value, verified 2026-07-11), so this is a point-in-time PD read with no
+    time variation — correct as a snapshot league table; the RV/history layer (sovereign_cds_rv)
+    waits on a live CDS feed.
+
+spec:
+  form: >
+    hazard λ = (spread_bps/10000) / (1 − recovery); annual PD = 1 − exp(−λ); cumulative PD over H
+    years = 1 − exp(−λ·H). recovery = 0.40 (senior-unsecured market convention). §11 credit block.
+  assumptions:
+    - "Flat hazard over the horizon; recovery fixed (a per-issuer/seniority recovery would refine)."
+    - "The spread is a LEVEL; its CHANGE and acceleration (§10) are the fresh-risk signal."
+  references:
+    - "docs/assessment/11-model-reference.md"
+    - "UMD analysis/credit_analytics.py (cds_implied_pd)"
+
+inputs:
+  - role: cds_5y
+    order: level
+    window: "1d"
+    horizon: 5y
+    required: true
+    note: "5Y sovereign CDS spread (bps)."
+
+outputs:
+  - name: "cumulative_pd_pct"
+    unit: "%"
+    note: "Implied cumulative default probability over the horizon."
+  - name: "annual_pd_pct"
+    unit: "%"
+    note: "Implied annual default probability."
+  - name: "hazard"
+    unit: "rate"
+    note: "Annual hazard rate λ."
+
+interpretation: >
+  "What odds of default is the market actually pricing? Argentina at 1500bps implies a double-digit
+  annual default probability; Japan at 42bps a fraction of a percent. The LEVEL is the market view;
+  a sharp spread WIDENING is the fresh-distress signal."
+
+visualizations:
+  - id: pd_ranking
+    form: "implied cumulative PD by sovereign (horizontal bar, ranked)"
+    encodes: "cumulative_pd_pct per issuer"
+    insight: "the sovereign default-risk league table at a glance"
+    color_job: sequential
+    dim: 2D
+
+implemented_by: "unified_market_data.analysis.credit_analytics.cds_implied_pd"

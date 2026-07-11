@@ -1,0 +1,58 @@
+model_id: merton_structural_pd
+name: "Merton structural default probability"
+family: credit
+summary: >
+  The structural (Merton) view of default: equity is a call option on the issuer's assets; default
+  occurs when asset value falls below debt at the horizon. Yields a distance-to-default and a
+  structural PD to compare against the CDS-implied PD (the basis is the trade). GENERIC over ISSUER.
+
+generic_over: [issuer]
+instances: []
+implementation_coverage:
+  covers: []
+  gap: >
+    To BUILD (Deliverable 5): distance-to-default = (ln(V/D) + (μ − ½σ²)T) / (σ√T); structural PD =
+    N(−DtD). For CORPORATES this needs equity market cap + asset vol + debt (equity_fundamentals is
+    empty — acquisition trigger). For SOVEREIGNS the structural analogue needs external
+    debt / reserves / fiscal data (not in the estate). Claims zero instances until that data lands —
+    an honest empty row. The comparison vs cds_implied_pd (structural-vs-market PD basis) is the payoff.
+
+spec:
+  form: >
+    Assets V follow GBM; equity E = call on V struck at debt D. DtD = (ln(V/D) + (μ − ½σ²)T)/(σ√T);
+    PD = N(−DtD). §11 credit block (Merton 1974 / KMV). §10: DtD level + its drift.
+  assumptions:
+    - "Asset value/vol inferred from equity (corporate) or fiscal/external metrics (sovereign)."
+  references:
+    - "docs/assessment/11-model-reference.md"
+
+inputs:
+  - role: cds_5y
+    order: level
+    window: "1d"
+    horizon: 5y
+    required: false
+    note: "CDS-implied PD as the market comparison leg (structural-vs-market basis)."
+
+outputs:
+  - name: "distance_to_default"
+    unit: "sigma"
+    note: "Standard deviations of asset value above the default barrier."
+  - name: "structural_pd_pct"
+    unit: "%"
+    note: "Structural default probability N(−DtD)."
+
+interpretation: >
+  "Independently of the CDS, how close is the issuer to its default barrier — and does the market
+  (CDS) agree? A structural PD far below the CDS-implied PD flags credit that looks cheap on
+  fundamentals (sell protection); the reverse flags rich."
+
+visualizations:
+  - id: structural_vs_market_pd
+    form: "structural PD vs CDS-implied PD by issuer (dumbbell)"
+    encodes: "structural_pd_pct vs cds-implied pd per issuer"
+    insight: "the fundamentals-vs-market basis — the RV signal"
+    color_job: diverging
+    dim: 2D
+
+build_stub: true

@@ -1,0 +1,34 @@
+# Sovereign-ISSUER bindings — the generalization axis for the CREDIT INVESTOR (parallel to
+# jurisdictions/underlyings/events/commodities/pairs). A credit model (implied PD, spread RV) is
+# generic over the ISSUER; instances are sovereigns identified by ISO-3, bound to their 5Y CDS series.
+#
+# Verified live (2026-07-11): CDS_<ISO3>_5Y for 40+ sovereigns, current to 2026-07-10, RELIABLE tier,
+# sane spectrum (JPN 42bps → ITA 100 → BRA 200 → TUR 280 → ARG 1500 → RUS 2500 → UKR 3000). A
+# representative 12-sovereign DM/EM/distressed sample is instantiated; the rest are one binding each
+# away (add the id + CDS ref).
+#
+# DATA-QUALITY (directive #2, verified 2026-07-11): the CDS series are STATIC SEED values today —
+# each CDS_<ISO3>_5Y holds ONE distinct value across all ~73 obs (ITA flat at 100.0, etc). So
+# cds_implied_pd is a valid point-in-time snapshot, but the RV/history model (sovereign_cds_rv) is
+# degenerate until a LIVE, time-varying CDS feed replaces the seed — the top acquisition item below.
+#
+# Acquisition backlog (directive #1): a LIVE time-varying CDS feed (replace the static seed — unblocks
+# sovereign_cds_rv); a CDS TERM STRUCTURE (only 5Y is ingested — 1Y/3Y/7Y/10Y would unlock a
+# credit-curve slope model); sovereign external-debt / reserves (→ merton_structural_pd).
+
+roles:
+  cds_5y: {kind: observations, desc: "5Y sovereign CDS spread (bps), senior USD."}
+
+issuers:
+  - {id: JPN, name: Japan,        region: DM,        bindings: {cds_5y: {ref: "CDS_JPN_5Y", source: observations}}}
+  - {id: KOR, name: Korea,        region: EM_Asia,   bindings: {cds_5y: {ref: "CDS_KOR_5Y", source: observations}}}
+  - {id: CHN, name: China,        region: EM_Asia,   bindings: {cds_5y: {ref: "CDS_CHN_5Y", source: observations}}}
+  - {id: ITA, name: Italy,        region: EU_periph, bindings: {cds_5y: {ref: "CDS_ITA_5Y", source: observations}}}
+  - {id: ESP, name: Spain,        region: EU_periph, bindings: {cds_5y: {ref: "CDS_ESP_5Y", source: observations}}}
+  - {id: GRC, name: Greece,       region: EU_periph, bindings: {cds_5y: {ref: "CDS_GRC_5Y", source: observations}}}
+  - {id: POL, name: Poland,       region: EM_EU,     bindings: {cds_5y: {ref: "CDS_POL_5Y", source: observations}}}
+  - {id: BRA, name: Brazil,       region: EM_LatAm,  bindings: {cds_5y: {ref: "CDS_BRA_5Y", source: observations}}}
+  - {id: MEX, name: Mexico,       region: EM_LatAm,  bindings: {cds_5y: {ref: "CDS_MEX_5Y", source: observations}}}
+  - {id: ZAF, name: South Africa, region: EM_EMEA,   bindings: {cds_5y: {ref: "CDS_ZAF_5Y", source: observations}}}
+  - {id: TUR, name: Turkey,       region: EM_EMEA,   bindings: {cds_5y: {ref: "CDS_TUR_5Y", source: observations}}}
+  - {id: ARG, name: Argentina,    region: distressed, bindings: {cds_5y: {ref: "CDS_ARG_5Y", source: observations}}}
