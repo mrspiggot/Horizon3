@@ -282,7 +282,8 @@ def main() -> int:
         print()
 
     # renderability — how many declared viz specs map to a render primitive (render/from_catalog)
-    _RENDERERS = {"fan", "heatmap", "surface3d", "smile", "lines", "bar", "dumbbell"}
+    _RENDERERS = {"fan", "heatmap", "surface3d", "smile", "lines", "bar", "dumbbell",
+                  "scatter", "stacked_area", "table"}
     _INFER = [("fan", ["fan"]), ("surface3d", ["3d surface"]), ("smile", ["smile"]),
               ("heatmap", ["heatmap"]), ("dumbbell", ["dumbbell", "lollipop"]), ("bar", ["bar"]),
               ("scatter", ["scatter"]), ("stacked_area", ["stacked area"]), ("table", ["table"]),

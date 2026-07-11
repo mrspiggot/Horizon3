@@ -192,3 +192,115 @@ def vol_smile(ax, smiles, *, title=None, xlabel="moneyness", ylabel="implied vol
         ax.set_title(title)
     theme.style_axes(ax, grid_axis="both")
     ax.legend(fontsize=6.5, ncol=2, framealpha=0.9)
+
+
+def scatter(ax, x, y, labels=None, *, ref_line=False, ref_label="fair (45°)",
+            title=None, xlabel="x", ylabel="y", color_job="categorical"):
+    """Scatter with optional 45° reference line + direct point labels. The DISTANCE from the ref line
+    is the signal (earnings yield vs bond yield, model vs market). color_job diverging/sequential
+    colors points by their y (polarity/magnitude); categorical = one identity hue."""
+    theme.use_theme()
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    if color_job in ("sequential", "diverging"):
+        cmap = theme.cmap_for(color_job)
+        if color_job == "diverging":
+            m = np.max(np.abs(y)) or 1.0
+            cols = [cmap(0.5 + 0.5 * v / m) for v in y]
+        else:
+            lo, hi = float(np.min(y)), float(np.max(y))
+            rng = (hi - lo) or 1.0
+            cols = [cmap(0.15 + 0.78 * (v - lo) / rng) for v in y]
+    else:
+        cols = theme.cat(0)
+    if ref_line:
+        lo = float(min(x.min(), y.min()))
+        hi = float(max(x.max(), y.max()))
+        pad = (hi - lo) * 0.06 or 1.0
+        ax.plot([lo - pad, hi + pad], [lo - pad, hi + pad], color=theme.MUTED, ls="--",
+                lw=1.2, zorder=1, label=ref_label)
+    ax.scatter(x, y, c=cols, s=64, zorder=3, edgecolors="white", linewidths=0.8)
+    if labels is not None:
+        for xi, yi, lab in zip(x, y, labels):
+            ax.annotate(str(lab), (xi, yi), textcoords="offset points", xytext=(5, 4),
+                        fontsize=8, color=theme.INK)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    if title:
+        ax.set_title(title)
+    theme.style_axes(ax, grid_axis="both")
+    if ref_line:
+        ax.legend(fontsize=8, framealpha=0.9)
+
+
+def stacked_area(ax, x, layers, *, xticklabels=None, title=None, ylabel="value", total_label=None):
+    """Stacked composition over x: `layers` = list of (label, y_array), summed to show the total and
+    which component drives it (funding = risk-free + OAS; attribution over time). A 2px white surface
+    gap between fills (the dataviz spacer rule)."""
+    theme.use_theme()
+    labels = [lab for lab, _ in layers]
+    ys = [np.asarray(y, dtype=float) for _, y in layers]
+    cols = [theme.cat(i) for i in range(len(ys))]
+    ax.stackplot(x, *ys, labels=labels, colors=cols, alpha=0.9, edgecolor="white", linewidth=2)
+    if total_label:
+        total = np.sum(ys, axis=0)
+        ax.plot(x, total, color=theme.FORWARD, lw=1.8, label=total_label, zorder=5)
+    if xticklabels is not None:
+        step = max(1, len(xticklabels) // 12)
+        ax.set_xticks(list(range(0, len(xticklabels), step)))
+        ax.set_xticklabels(xticklabels[::step], rotation=45, ha="right", fontsize=8)
+    ax.set_ylabel(ylabel)
+    if title:
+        ax.set_title(title)
+    theme.style_axes(ax, grid_axis="y")
+    ax.legend(loc="upper left", fontsize=8, framealpha=0.9)
+
+
+def color_table(ax, columns, row_labels, values, *, color_job="sequential", title=None,
+                fmt="{:.2f}", normalize="column"):
+    """Color-coded tabular: a value matrix (`values`[row][col]) with each cell shaded by job —
+    sequential = magnitude, diverging = polarity around 0. `normalize` = "column" (each metric shows
+    its own gradient — the right default for a multi-metric league table) or "table" (one shared
+    scale). Header/row-label cells wear the ink token; data-cell text flips to white on dark
+    backgrounds for contrast. The 'information-rich table' form."""
+    theme.use_theme()
+    ax.axis("off")
+    vals = np.asarray(values, dtype=float)
+    cmap = theme.cmap_for(color_job)
+    n_rows, n_cols = len(row_labels), len(columns)
+
+    # per-scope reference (whole table, or per column) for normalization
+    if normalize == "column":
+        scope = [vals[:, c] for c in range(n_cols)]
+    else:
+        scope = [vals.ravel()] * n_cols
+
+    def _cellcol(v, c):
+        col_vals = scope[c]
+        if color_job == "diverging":
+            m = np.nanmax(np.abs(col_vals)) or 1.0
+            return cmap(0.5 + 0.5 * v / m)
+        lo, hi = float(np.nanmin(col_vals)), float(np.nanmax(col_vals))
+        rng = (hi - lo) or 1.0
+        return cmap(0.12 + 0.78 * (v - lo) / rng)
+
+    tbl = ax.table(
+        cellText=[[fmt.format(vals[r][c]) for c in range(n_cols)] for r in range(n_rows)],
+        rowLabels=row_labels, colLabels=columns, loc="center", cellLoc="center")
+    tbl.auto_set_font_size(False)
+    tbl.set_fontsize(9)
+    tbl.scale(1, 1.5)
+    for (r, col), cell in tbl.get_celld().items():
+        cell.set_edgecolor("white")
+        cell.set_linewidth(2)  # 2px surface gap between cells
+        if r == 0 or col == -1:  # header row / row-label column
+            cell.set_facecolor("#f2f2f2")
+            cell.get_text().set_color(theme.INK)
+            cell.get_text().set_weight("bold")
+        else:
+            bg = _cellcol(vals[r - 1][col], col)
+            cell.set_facecolor(bg)
+            lum = 0.299 * bg[0] + 0.587 * bg[1] + 0.114 * bg[2]
+            cell.get_text().set_color("white" if lum < 0.5 else theme.INK)
+    if title:
+        ax.set_title(title, pad=14)

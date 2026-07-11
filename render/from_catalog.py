@@ -58,10 +58,29 @@ def _dumbbell(ax, d, fig=None, **st):
     return charts.dumbbell(ax, d["labels"], d["left"], d["right"], **st)
 
 
+def _scatter(ax, d, fig=None, color_job="categorical", **st):
+    return charts.scatter(ax, d["x"], d["y"], labels=d.get("labels"),
+                          ref_line=d.get("ref_line", False), xlabel=d.get("xlabel", "x"),
+                          ylabel=d.get("ylabel", "y"), color_job=color_job, **st)
+
+
+def _stacked_area(ax, d, fig=None, **st):
+    return charts.stacked_area(ax, d["x"], d["layers"], xticklabels=d.get("xticklabels"),
+                               ylabel=d.get("ylabel", "value"), total_label=d.get("total_label"), **st)
+
+
+def _table(ax, d, fig=None, color_job="sequential", **st):
+    return charts.color_table(ax, d["columns"], d["row_labels"], d["values"],
+                              color_job=color_job, fmt=d.get("fmt", "{:.2f}"), **st)
+
+
 CHART_RENDERERS = {
     "fan": _fan, "heatmap": _heatmap, "surface3d": _surface3d, "smile": _smile,
     "lines": _lines, "bar": _bar, "dumbbell": _dumbbell,
+    "scatter": _scatter, "stacked_area": _stacked_area, "table": _table,
 }
+# renderers that take a color_job from the spec
+_COLOR_JOB_CHARTS = {"bar", "scatter", "table"}
 NEEDS_3D = {"surface3d"}
 
 # form/id keyword -> chart_type (used when a spec has no explicit `chart_type`). Order matters:
@@ -106,7 +125,7 @@ def render_spec(ax, spec: dict, data: dict, *, fig=None, title=None):
     if r is None:
         raise ValueError(f"no renderer for chart_type {ct!r} (viz {spec.get('id')})")
     st = {"title": title} if title else {}
-    if ct == "bar":
+    if ct in _COLOR_JOB_CHARTS:
         st["color_job"] = spec.get("color_job", "diverging")
     return r(ax, data, fig=fig, **st)
 
