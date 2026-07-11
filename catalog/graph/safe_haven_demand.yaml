@@ -1,0 +1,65 @@
+model_id: safe_haven_demand
+name: "Safe-haven demand (dollar / gold / rates)"
+family: equity
+persona: equity_multiasset_pm
+grounded_in: [hatzius-fci]
+spec:
+  equations: "haven demand = mean(dollar_z, gold_z, -yield_z); >0 = flight to quality"
+history: {start: "2025-08-01", end: "2026-07-02", cadence: weekly}
+inputs:
+  - {id: dollar, series_id: DTWEXBGS, db_source: fred, state: zscore, context_window: 250}
+  - {id: gold, series_id: "GC=F", db_source: yahoo, state: zscore, context_window: 250}
+  - {id: yield10, series_id: DGS10, db_source: fred, state: zscore, context_window: 250}
+execution:
+  implemented_by: unified_market_data.analysis.cross_asset.safe_haven_demand
+  args: {dollar_z: dollar.zscore, gold_z: gold.zscore, yield_z: yield10.zscore}
+outputs:
+  - {name: safe_haven, unit: "sigma", meaning: "safe-haven demand composite; >0 flight to quality"}
+interpretations:
+  - id: flight
+    when: "safe_haven > 0.5"
+    says: "Safe-haven demand is elevated — the dollar and gold are bid and yields are falling together; a defensive tape."
+charts:
+  - id: "Safe-haven demand"
+    chart_type: series
+    color_job: diverging
+    interpretation: flight
+    insight: "the dollar / gold / rates haven signals combined, through time"
+    data_contract:
+      kind: series
+      ylabel: "haven demand (sigma)"
+      zero_line: true
+      series:
+        - {label: "safe-haven demand", from: "output:safe_haven"}
+  - id: "The haven signals (z-scores)"
+    chart_type: series
+    color_job: categorical
+    insight: "dollar, gold and the 10y yield standardized"
+    data_contract:
+      kind: series
+      ylabel: "z-score"
+      zero_line: true
+      series:
+        - {label: "dollar", from: "input:dollar.zscore"}
+        - {label: "gold", from: "input:gold.zscore"}
+        - {label: "10y yield", from: "input:yield10.zscore"}
+  - id: "Gold vs the dollar"
+    chart_type: series
+    color_job: categorical
+    insight: "gold and the dollar both bid is the classic flight-to-quality tell"
+    data_contract:
+      kind: series
+      ylabel: "z-score"
+      zero_line: true
+      series:
+        - {label: "gold z", from: "input:gold.zscore"}
+        - {label: "dollar z", from: "input:dollar.zscore"}
+  - id: "Haven signals today"
+    chart_type: bar
+    color_job: diverging
+    insight: "the current standardized read of each haven"
+    data_contract:
+      kind: named_values
+      ylabel: "z-score"
+      labels: ["dollar", "gold", "10y yield"]
+      values: ["input:dollar.zscore", "input:gold.zscore", "input:yield10.zscore"]

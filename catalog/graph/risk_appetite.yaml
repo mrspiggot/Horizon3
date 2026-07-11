@@ -1,0 +1,65 @@
+model_id: risk_appetite
+name: "Risk appetite (equity / credit / vol)"
+family: equity
+persona: equity_multiasset_pm
+grounded_in: [hatzius-fci]
+spec:
+  equations: "risk-on = mean(equity_z, -credit_z, -vol_z); >0 = risk-on"
+history: {start: "2025-08-01", end: "2026-07-02", cadence: weekly}
+inputs:
+  - {id: equity, series_id: "^GSPC", db_source: yahoo, state: zscore, context_window: 250}
+  - {id: credit, series_id: BAMLH0A0HYM2, db_source: fred, state: zscore, context_window: 250}
+  - {id: vix, series_id: "^VIX", db_source: yahoo, state: zscore, context_window: 250}
+execution:
+  implemented_by: unified_market_data.analysis.cross_asset.risk_appetite
+  args: {equity_z: equity.zscore, credit_z: credit.zscore, vol_z: vix.zscore}
+outputs:
+  - {name: risk_appetite, unit: "sigma", meaning: "risk-on/off composite; >0 risk-on"}
+interpretations:
+  - id: risk_on
+    when: "risk_appetite > 0.5"
+    says: "Risk appetite is elevated — equities strong, credit tight and vol low all point the same way; late-cycle complacency risk."
+charts:
+  - id: "Risk appetite (risk-on/off)"
+    chart_type: series
+    color_job: diverging
+    interpretation: risk_on
+    insight: "the three risk-asset signals combined into one, through time"
+    data_contract:
+      kind: series
+      ylabel: "risk-on (sigma)"
+      zero_line: true
+      series:
+        - {label: "risk appetite", from: "output:risk_appetite"}
+  - id: "The three risk signals (z-scores)"
+    chart_type: series
+    color_job: categorical
+    insight: "equity, credit and vol standardized — do they agree?"
+    data_contract:
+      kind: series
+      ylabel: "z-score"
+      zero_line: true
+      series:
+        - {label: "equity", from: "input:equity.zscore"}
+        - {label: "credit (HY)", from: "input:credit.zscore"}
+        - {label: "vol (VIX)", from: "input:vix.zscore"}
+  - id: "Equity vs vol (the risk-on/off tension)"
+    chart_type: series
+    color_job: categorical
+    insight: "when equities are high and vol is low together, risk is being taken freely"
+    data_contract:
+      kind: series
+      ylabel: "z-score"
+      zero_line: true
+      series:
+        - {label: "equity z", from: "input:equity.zscore"}
+        - {label: "vol z", from: "input:vix.zscore"}
+  - id: "Risk signals today"
+    chart_type: bar
+    color_job: diverging
+    insight: "the current standardized read of each risk signal"
+    data_contract:
+      kind: named_values
+      ylabel: "z-score"
+      labels: ["equity", "credit (HY)", "vol (VIX)"]
+      values: ["input:equity.zscore", "input:credit.zscore", "input:vix.zscore"]

@@ -88,3 +88,26 @@ personas:
       range — {credit_spread_regime.level_pct}% in absolute terms. One reading: spreads are tight and
       the down-in-quality premium is being paid grudgingly; the compensation for default risk is thin.
 
+  equity_multiasset_pm:
+    name: "Equity / multi-asset PM"
+    decision: "Set cross-asset risk exposure."
+    title: "Reading the whole tape: are financial conditions really as easy as they feel?"
+    models: [financial_conditions, risk_appetite, safe_haven_demand]
+    stub_charts:
+      - [financial_conditions, "What is driving conditions (component z-scores)"]
+      - [risk_appetite, "Risk appetite (risk-on/off)"]
+      - [risk_appetite, "The three risk signals (z-scores)"]
+      - [safe_haven_demand, "Safe-haven demand"]
+    summary_template: >
+      A multi-asset PM reads the whole tape at once, not one screen. Standardize vol, credit, the
+      dollar and equities and collapse them into one cross-asset conditions reading and it sits at
+      {financial_conditions.fci} sigma, where positive means tighter than average. It is a deliberately
+      crude proxy: set against the Chicago Fed's Kalman-filtered NFCI it catches the big swings but is
+      far noisier — a reminder that a real conditions index needs the full panel, not four series. The
+      cleaner signals are the components. Risk appetite — equities, credit and vol together — reads
+      {risk_appetite.risk_appetite} sigma, firmly risk-on, while safe-haven demand across the dollar,
+      gold and rates is {safe_haven_demand.safe_haven} sigma, roughly neutral. The tightening that
+      exists is almost all dollar ({financial_conditions.dollar_z} sigma); credit is loosening
+      ({financial_conditions.credit_z} sigma). Risk appetite is firm and havens are quiet — a tape to
+      respect, not chase.
+

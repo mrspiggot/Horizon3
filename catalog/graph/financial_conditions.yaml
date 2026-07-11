@@ -1,0 +1,72 @@
+model_id: financial_conditions
+name: "Financial conditions index (cross-asset)"
+family: equity
+persona: equity_multiasset_pm
+grounded_in: [hatzius-fci]
+spec:
+  equations: "FCI = mean of standardized z-scores: vol + credit + dollar - equity; >0 = tighter than average"
+history: {start: "2025-08-01", end: "2026-07-02", cadence: weekly}
+inputs:
+  - {id: vix, series_id: "^VIX", db_source: yahoo, state: zscore, context_window: 250}
+  - {id: credit, series_id: BAMLH0A0HYM2, db_source: fred, state: zscore, context_window: 250}
+  - {id: dollar, series_id: DTWEXBGS, db_source: fred, state: zscore, context_window: 250}
+  - {id: equity, series_id: "^GSPC", db_source: yahoo, state: zscore, context_window: 250}
+  - {id: nfci, series_id: NFCI, db_source: fred, state: level, context_window: 120}
+execution:
+  implemented_by: unified_market_data.analysis.cross_asset.financial_conditions_index
+  args: {vol_z: vix.zscore, credit_z: credit.zscore, dollar_z: dollar.zscore, equity_z: equity.zscore}
+outputs:
+  - {name: fci, unit: "sigma", meaning: "financial conditions index; >0 tighter than average"}
+  - {name: vol_z, unit: "sigma", meaning: "vol contribution"}
+  - {name: credit_z, unit: "sigma", meaning: "credit contribution"}
+  - {name: dollar_z, unit: "sigma", meaning: "dollar contribution"}
+  - {name: equity_z, unit: "sigma", meaning: "equity level (loosening) contribution"}
+interpretations:
+  - id: tight
+    when: "fci > 0.5"
+    says: "Financial conditions are tighter than average — the cross-asset complex is applying the brakes even before the Fed does."
+charts:
+  - id: "The financial conditions index"
+    chart_type: series
+    color_job: diverging
+    interpretation: tight
+    insight: "the whole cross-section collapsed to one tightness reading, through time"
+    data_contract:
+      kind: series
+      ylabel: "FCI (sigma; >0 tight)"
+      zero_line: true
+      series:
+        - {label: "FCI (built)", from: "output:fci"}
+  - id: "Built FCI vs the published NFCI (reality check)"
+    chart_type: series
+    color_job: categorical
+    insight: "a crude 4-factor proxy vs the Fed's Kalman-filtered NFCI — it catches the big swings but is FAR noisier; a real index needs the full panel"
+    data_contract:
+      kind: series
+      ylabel: "index (differing scales)"
+      zero_line: true
+      series:
+        - {label: "FCI (built)", from: "output:fci"}
+        - {label: "NFCI (Chicago Fed)", from: "input:nfci.level"}
+  - id: "What is driving conditions (component z-scores)"
+    chart_type: series
+    color_job: categorical
+    insight: "which asset class is tightening or loosening conditions right now"
+    data_contract:
+      kind: series
+      ylabel: "z-score"
+      zero_line: true
+      series:
+        - {label: "vol", from: "output:vol_z"}
+        - {label: "credit", from: "output:credit_z"}
+        - {label: "dollar", from: "output:dollar_z"}
+        - {label: "equity (loosening)", from: "output:equity_z"}
+  - id: "The conditions mix today"
+    chart_type: bar
+    color_job: diverging
+    insight: "the current contribution of each asset class to the conditions reading"
+    data_contract:
+      kind: named_values
+      ylabel: "z-score"
+      labels: ["vol", "credit", "dollar", "equity"]
+      values: ["output:vol_z", "output:credit_z", "output:dollar_z", "output:equity_z"]
