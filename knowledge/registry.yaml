@@ -158,3 +158,148 @@ papers:
     added: "2026-07-10"
     why: "Concrete pattern catalog mapped to number-grounding: context-augmentation + prompt-chaining with validation gates so the LLM narrates but never authors numbers."
     superseded_by: null
+
+  # ── Economic models (the substance the corpus grounds) — added 2026-07-11 ──
+  - id: taylor-1993-rule
+    title: "Discretion versus Policy Rules in Practice"
+    authors: ["John B. Taylor"]
+    url: "https://web.stanford.edu/~johntayl/Papers/Discretion.PDF"
+    arxiv_id: null
+    local_path: sources/taylor_1993.pdf
+    topics: [reaction-function, monetary-policy, rates]
+    tier: canonical
+    added: "2026-07-11"
+    why: "The canonical central-bank reaction function: i = r* + pi + 0.5(pi-pi*) + 0.5*gap. Inputs: inflation, output gap. Grounds the policymaker/rates reaction-function models."
+    superseded_by: null
+
+  - id: hlw-natural-rate
+    title: "Measuring the Natural Rate of Interest: International Trends and Determinants"
+    authors: ["Kathryn Holston", "Thomas Laubach", "John C. Williams"]
+    url: "https://www.frbsf.org/economic-research/files/wp2016-11.pdf"
+    arxiv_id: null
+    local_path: sources/hlw_r_star_2016.pdf
+    topics: [natural-rate, r-star, monetary-policy]
+    tier: canonical
+    added: "2026-07-11"
+    why: "State-space/Kalman estimation of r* jointly with trend growth and the output gap. Inputs: real GDP, inflation, real policy rate. Anchors 'how restrictive is policy vs neutral'."
+    superseded_by: null
+
+  - id: estrella-mishkin-recession
+    title: "Predicting U.S. Recessions: Financial Variables as Leading Indicators"
+    authors: ["Arturo Estrella", "Frederic S. Mishkin"]
+    url: "https://www.nber.org/papers/w5379"
+    arxiv_id: null
+    local_path: sources/estrella_mishkin_1998.pdf
+    topics: [recession-probability, yield-curve, leading-indicators]
+    tier: canonical
+    added: "2026-07-11"
+    why: "Probit recession model on the 10y-3m term spread (and other financials). Output: recession probability at a horizon. Grounds the regime/recession models."
+    superseded_by: null
+
+  - id: hatzius-fci
+    title: "Financial Conditions Indexes: A Fresh Look after the Financial Crisis"
+    authors: ["Jan Hatzius", "Peter Hooper", "Frederic Mishkin", "Kermit Schoenholtz", "Mark Watson"]
+    url: "https://www.nber.org/papers/w16150"
+    arxiv_id: null
+    local_path: sources/hatzius_fci_2010.pdf
+    topics: [financial-conditions, factor-model, multi-asset]
+    tier: canonical
+    added: "2026-07-11"
+    why: "Builds a financial-conditions index as the first principal component of a broad panel (rates, spreads, equity/vol, FX, credit). The whole financial cross-section -> one interpretable state."
+    superseded_by: null
+
+  - id: banbura-nowcasting
+    title: "Nowcasting"
+    authors: ["Marta Banbura", "Domenico Giannone", "Lucrezia Reichlin"]
+    url: "https://www.ecb.europa.eu/pub/pdf/scpwps/ecbwp1275.pdf"
+    arxiv_id: null
+    local_path: sources/banbura_nowcasting_2010.pdf
+    topics: [nowcasting, dynamic-factor-model, growth]
+    tier: canonical
+    added: "2026-07-11"
+    why: "Dynamic factor model on a mixed-frequency panel to nowcast current-quarter GDP from the flow of releases. Grounds the forecaster's growth-nowcast model."
+    superseded_by: null
+
+  - id: bnp-carry-crashes
+    title: "Carry Trades and Currency Crashes"
+    authors: ["Markus K. Brunnermeier", "Stefan Nagel", "Lasse H. Pedersen"]
+    url: "https://www.nber.org/papers/w14473"
+    arxiv_id: null
+    local_path: sources/bnp_carry_2008.pdf
+    topics: [fx-carry, uip, currency]
+    tier: canonical
+    added: "2026-07-11"
+    why: "Carry = interest-rate differential; UIP fails, so realized carry is a risk premium with crash asymmetry. Inputs: rate differentials, spot, vol. Grounds the FX carry models."
+    superseded_by: null
+
+  - id: gorton-rouwenhorst-facts
+    title: "Facts and Fantasies about Commodity Futures"
+    authors: ["Gary Gorton", "K. Geert Rouwenhorst"]
+    url: "https://www.nber.org/papers/w10595"
+    arxiv_id: null
+    local_path: sources/gorton_rouwenhorst_alt.pdf
+    topics: [commodity-futures, term-structure, storage]
+    tier: canonical
+    added: "2026-07-11"
+    why: "Commodity futures returns, backwardation/contango and the roll. Complements w13249 (storage). Grounds the commodity term-structure models."
+    superseded_by: null
+
+  - id: duarte-rosa-erp
+    title: "The Equity Risk Premium: A Review of Models"
+    authors: ["Fernando Duarte", "Carlo Rosa"]
+    url: "https://www.newyorkfed.org/research/staff_reports/sr714"
+    arxiv_id: null
+    local_path: sources/duarte_rosa_erp_2015.pdf
+    topics: [equity-risk-premium, ddm, fed-model]
+    tier: canonical
+    added: "2026-07-11"
+    why: "Surveys 20 ERP models (DDM, cross-sectional, time-series, surveys). The authoritative reference for the equity/multi-asset PM's valuation models — and the corrective to the naive Fed model."
+    superseded_by: null
+
+  - id: fama-french-equity-premium
+    title: "The Equity Premium"
+    authors: ["Eugene F. Fama", "Kenneth R. French"]
+    url: "https://www.nber.org/papers/w9270"
+    arxiv_id: null
+    local_path: sources/fama_french_erp.pdf
+    topics: [equity-risk-premium, dividend-growth]
+    tier: canonical
+    added: "2026-07-11"
+    why: "Estimates the equity premium from dividend/earnings growth (fundamentals) vs realized returns. Grounds the DDM / ERP decomposition for the equity persona."
+    superseded_by: null
+
+  - id: gsw-yield-curve
+    title: "The U.S. Treasury Yield Curve: 1961 to the Present"
+    authors: ["Refet S. Gurkaynak", "Brian Sack", "Jonathan H. Wright"]
+    url: "https://www.federalreserve.gov/pubs/feds/2006/200628/200628pap.pdf"
+    arxiv_id: null
+    local_path: sources/gurkaynak_yieldcurve.pdf
+    topics: [term-structure, yield-curve, nominal-curve]
+    tier: canonical
+    added: "2026-07-11"
+    why: "The Nelson-Siegel-Svensson fitted Treasury curve (the FED's own). Grounds curve construction, fair value, and the level/slope/curvature inputs for rates RV."
+    superseded_by: null
+
+  - id: longstaff-credit-spreads
+    title: "Corporate Yield Spreads: Default Risk or Liquidity? New Evidence from the Credit-Default Swap Market"
+    authors: ["Francis A. Longstaff", "Sanjay Mithal", "Eric Neis"]
+    url: "https://www.nber.org/papers/w10418"
+    arxiv_id: null
+    local_path: sources/longstaff_credit_2004.pdf
+    topics: [credit-spreads, cds, default-risk]
+    tier: canonical
+    added: "2026-07-11"
+    why: "Decomposes corporate/CDS spreads into default vs liquidity; the credit-triangle link spread = PD x LGD. Grounds the credit investor's CDS-implied PD and spread decomposition."
+    superseded_by: null
+
+  - id: wolfers-zitzewitz-prediction
+    title: "Prediction Markets"
+    authors: ["Justin Wolfers", "Eric Zitzewitz"]
+    url: "https://www.nber.org/papers/w10504"
+    arxiv_id: null
+    local_path: sources/wolfers_zitzewitz_2004.pdf
+    topics: [prediction-markets, event-probability, calibration]
+    tier: canonical
+    added: "2026-07-11"
+    why: "Prices in prediction markets as probability estimates, their calibration and biases. Grounds the event/prediction-market trader's implied-probability and calibration models."
+    superseded_by: null
