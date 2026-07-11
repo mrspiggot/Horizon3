@@ -74,5 +74,4 @@ personas:
   - persona_id: economist_forecaster
     name: "Economist / forecaster"
     decision: "Forecast + surprise read."
-    uses: []                   # TODO: nowcast, surprise_vs_consensus, regime_detection
-    status: pending_authoring
+    uses: [surprise_vs_consensus, regime_detection, nowcast]

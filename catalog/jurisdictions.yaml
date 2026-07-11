@@ -19,6 +19,8 @@ roles:
   core_inflation:           {kind: observations, optional: true, desc: "Core inflation index (yoy computed = Taylor π). US = PCEPILFE (core PCE)."}
   real_gdp:                 {kind: observations, optional: true, desc: "Real GDP — output-gap numerator. US = GDPC1."}
   potential_gdp:            {kind: observations, optional: true, desc: "Potential real GDP — output-gap denominator. US = GDPPOT. DATE-ALIGN with real_gdp (projections run to 2036)."}
+  macro_release:            {kind: computed,     optional: true, desc: "Macro release actual/expected/surprise (macro_events). Surprise-vs-consensus input."}
+  macro_indicators:         {kind: computed,     optional: true, desc: "Macro indicator set (growth/inflation/labour) for regime classification."}
   overnight_index:          {kind: observations, desc: "RFR overnight fixing (SOFR/ESTR/SONIA/...)."}
   policy_rate:              {kind: observations, desc: "Central-bank target/effective policy rate."}
   overnight_deposit_anchor: {kind: any,          desc: "Short-end bootstrap anchor (OBFR for US; RFR/curve-front elsewhere)."}
@@ -44,6 +46,8 @@ jurisdictions:
       core_inflation:           {ref: "PCEPILFE",           source: observations, note: "Core PCE index; yoy = Taylor π."}
       real_gdp:                 {ref: "GDPC1",              source: observations}
       potential_gdp:            {ref: "GDPPOT",             source: observations, note: "Date-align with real_gdp."}
+      macro_release:            {ref: "macro_events",       source: computed, note: "actual/expected/surprise (48 events)."}
+      macro_indicators:         {ref: "us_macro",           source: computed, note: "growth/inflation/labour set for regime."}
       overnight_index:          {ref: "SOFR",               source: observations}
       policy_rate:              {ref: "DFF",                source: observations}
       overnight_deposit_anchor: {ref: "OBFR",               source: observations}

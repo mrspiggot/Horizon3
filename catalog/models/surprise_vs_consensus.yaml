@@ -1,0 +1,68 @@
+model_id: surprise_vs_consensus
+name: "Surprise vs consensus"
+family: macro
+summary: >
+  The signed, scaled gap between a macro release and what was priced/expected (market-implied or
+  survey) — the surprise, plus the calibration receipt (did OIS/Kalshi call it right?). The surprise,
+  not the level, moves markets. GENERIC over jurisdiction / release.
+
+generic_over: [currency]
+jurisdictions: [US]
+implementation_coverage:
+  covers: [US]
+  gap: >
+    surprise_detector.detect_surprises — live over macro_events (48 releases, actual/expected/surprise
+    + kalshi_was_right / ois_was_right calibration). Extends per-country as their release calendars +
+    consensus are ingested (acquisition).
+
+spec:
+  form: >
+    surprise = actual − expected, scaled (by the release's historical stdev). "expected" is
+    market-implied (OIS/Kalshi) or survey consensus. A surprise INDEX aggregates signed surprises
+    across releases. The calibration receipt = share of releases each forecast source called right.
+    (§11 H2 — the "context vs expectations" order of §10 as a first-class series.)
+  assumptions:
+    - "Expected is a genuine pre-event estimate (no look-ahead); market-implied preferred where available."
+  references:
+    - "docs/assessment/11-model-reference.md#h2"
+    - "UMD services/surprise_detector.py (detect_surprises)"
+
+inputs:
+  - role: macro_release
+    order: surprise
+    window: "release"
+    horizon: target_event
+    required: true
+    note: "Release actual + pre-event expectation (market-implied / consensus) from macro_events."
+
+outputs:
+  - name: "surprise"
+    unit: "z / units"
+    note: "Signed, scaled actual − expected."
+  - name: "surprise_index"
+    unit: "z"
+    note: "Aggregate signed surprise across recent releases."
+  - name: "calibration_receipt"
+    unit: "hit rate"
+    note: "Share of releases each forecast source (OIS / Kalshi) called correctly."
+
+interpretation: >
+  "Markets move on the gap between the print and what was priced — not the level. A run of same-signed
+  surprises (a positive surprise index) is the momentum/positioning signal; the calibration receipt
+  says which forecaster to trust."
+
+visualizations:
+  - id: surprise_bars
+    form: "signed surprise per release (bar), sign-colored"
+    encodes: "surprise by release"
+    insight: "which prints beat/missed, and by how much"
+    color_job: diverging
+    dim: 2D
+  - id: surprise_index_history
+    form: "surprise index time series with a zero line"
+    encodes: "surprise_index over time"
+    insight: "the data-momentum regime — persistently beating/missing consensus"
+    color_job: diverging
+    dim: 2D
+
+implemented_by: "unified_market_data.services.surprise_detector.detect_surprises"

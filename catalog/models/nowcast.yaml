@@ -1,0 +1,56 @@
+model_id: nowcast
+name: "Nowcast (current-quarter GDP)"
+family: macro
+summary: >
+  A running estimate of current-quarter real GDP that updates with each data release — a dynamic
+  factor model / bridge-equation aggregate (GDPNow-style). GENERIC over jurisdiction.
+
+generic_over: [currency]
+jurisdictions: [US]
+implementation_coverage:
+  covers: []
+  gap: >
+    To BUILD (Deliverable 5): a dynamic factor model extracting a common factor from higher-frequency
+    series + bridge equations across GDP subcomponents (GDPNow aggregates CHANGES in ~13 series —
+    fundamentally a §10 derivative-driven model). Indicator data present for US; needs the DFM/bridge
+    implementation.
+
+spec:
+  form: >
+    nowcast_t = f(Δ ISM, Δ construction, Δ vehicle sales, Δ trade, Δ employment, Δ IP, Δ housing, ...)
+    via a dynamic factor model + bridge equations / BVARs across GDP subcomponents. The revision path
+    (its own derivative) as data arrive is the surprise signal. (§11 H1.)
+  assumptions:
+    - "Subcomponent releases map to GDP via stable bridge equations over the estimation window."
+  references:
+    - "docs/assessment/11-model-reference.md#h1"
+
+inputs:
+  - role: macro_indicators
+    order: delta
+    window: "current_quarter"
+    horizon: spot
+    required: true
+    note: "The higher-frequency subcomponent releases, as CHANGES (§10 first derivative)."
+
+outputs:
+  - name: "nowcast_gdp_pct"
+    unit: "% saar"
+    note: "Running current-quarter real GDP estimate."
+  - name: "nowcast_revision"
+    unit: "pp"
+    note: "The revision path as releases arrive (its own derivative)."
+
+interpretation: >
+  "Given the data in so far, growth is tracking X%. The nowcast vs consensus, and its revision path as
+  releases land, is the surprise/positioning signal — often ahead of the official print."
+
+visualizations:
+  - id: nowcast_vs_consensus
+    form: "nowcast time series vs consensus, with the revision path"
+    encodes: "nowcast_gdp_pct, nowcast_revision over time"
+    insight: "where growth is tracking vs consensus, and the momentum of revisions"
+    color_job: sequential
+    dim: 2D
+
+build_stub: true

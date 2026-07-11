@@ -1,0 +1,55 @@
+model_id: regime_detection
+name: "Macro regime detection"
+family: macro
+summary: >
+  Classifies the current macro regime (e.g. reflation / stagflation / goldilocks / slowdown) from a
+  set of growth, inflation and financial-conditions indicators — the backdrop every other model reads.
+  GENERIC over jurisdiction.
+
+generic_over: [currency]
+jurisdictions: [US]
+implementation_coverage:
+  covers: [US]
+  gap: >
+    regime_classifier.classify_regime — the classifier is live, but regime_history is SPARSE (1 row);
+    it needs to be run on a schedule to build the trajectory. Indicator set present for US.
+
+spec:
+  form: >
+    Map a vector of current indicators (growth, inflation, labour, financial conditions) to a discrete
+    regime label + confidence, via a rules/scoring classifier. (§11 H — regime.)
+  assumptions:
+    - "The indicator vector is current and consistent; regime labels are a coarse but useful summary."
+  references:
+    - "docs/assessment/11-model-reference.md#h"
+    - "UMD services/regime_classifier.py (classify_regime)"
+
+inputs:
+  - role: macro_indicators
+    order: context
+    window: "current"
+    horizon: spot
+    required: true
+    note: "Current growth/inflation/labour/financial-conditions indicator vector."
+
+outputs:
+  - name: "regime_label"
+    unit: "category"
+    note: "The classified regime."
+  - name: "regime_confidence"
+    unit: "0-1"
+    note: "Classifier confidence."
+
+interpretation: >
+  "Which macro world are we in — the backdrop that conditions every trade. A regime SHIFT (and its
+  confidence) is the signal; models behave differently across regimes."
+
+visualizations:
+  - id: regime_timeline
+    form: "regime label over time (colored band timeline)"
+    encodes: "regime_label over time"
+    insight: "regime persistence + the shifts (the turning points)"
+    color_job: categorical
+    dim: 2D
+
+implemented_by: "unified_market_data.services.regime_classifier.classify_regime"
