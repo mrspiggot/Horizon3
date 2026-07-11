@@ -1,0 +1,66 @@
+model_id: funding_vs_inflation
+name: "Real funding cost (funding vs inflation)"
+family: credit
+summary: >
+  The treasurer's REAL cost of debt: nominal all-in funding minus expected inflation. Debt that looks
+  expensive nominally can be cheap in real terms when inflation is high — the fund-now-vs-wait and
+  fixed-vs-inflation-linked decision turns on the real rate. GENERIC over currency.
+
+generic_over: [currency]
+jurisdictions: []
+implementation_coverage:
+  covers: []
+  gap: >
+    Composes funding_cost_decomposition with an inflation leg — the SAME data blocker as
+    fx_real_rate_differential (hard-rule #5): a clean core-inflation YoY% is not available in the
+    estate (PCEPILFE is an index LEVEL needing the §10 YoY transform, a D2 task). Claims zero
+    instances until the D2 transform stack lands, then flips on over US first. Honest empty row.
+
+spec:
+  form: >
+    real_funding = all_in_nominal − inflation_yoy (%). §10: the real rate is a LEVEL whose CHANGE
+    (are you being squeezed by rising real rates?) is the decision signal.
+  assumptions:
+    - "Inflation = core YoY, horizon-matched to the funding tenor (expected, not spot, ideally)."
+  references:
+    - "docs/assessment/11-model-reference.md"
+    - "docs/assessment/10-input-state.md"
+
+inputs:
+  - role: ois_par_curve
+    order: level
+    window: "1d"
+    horizon: 5y
+    required: true
+    note: "Risk-free leg of the nominal funding cost."
+  - role: credit_oas
+    order: level
+    window: "1d"
+    horizon: 5y
+    required: true
+    note: "Credit leg of the nominal funding cost."
+  - role: core_inflation
+    order: level
+    window: "1y"
+    horizon: latest
+    required: true
+    note: "Core inflation YoY% (needs the D2 YoY transform — PCEPILFE is a level)."
+
+outputs:
+  - name: "real_funding_pct"
+    unit: "%"
+    note: "Nominal all-in funding minus expected inflation."
+
+interpretation: >
+  "What does the debt REALLY cost after inflation? A high nominal rate with high inflation can be a
+  cheap real funding — the case to term out fixed; a positive and rising real rate is the squeeze."
+
+visualizations:
+  - id: real_vs_nominal_funding
+    form: "nominal vs real funding cost, time series"
+    encodes: "all_in_pct and real_funding_pct over time"
+    insight: "how much of the funding cost inflation erodes"
+    color_job: diverging
+    dim: 2D
+
+build_stub: true

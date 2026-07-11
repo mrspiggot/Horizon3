@@ -1,0 +1,85 @@
+model_id: funding_cost_decomposition
+name: "All-in funding cost decomposition"
+family: credit
+summary: >
+  The treasurer's core read: all-in fixed funding cost = risk-free rate + credit OAS, decomposed so
+  you can see WHICH leg is driving it — a rate move (the central bank) or a credit move (the market's
+  view of your issuer). The swap spread is the fixed→floating basis for the hedge decision. GENERIC
+  over currency (US IG instantiated; euro/sterling IG OAS is an acquisition gap).
+
+generic_over: [currency]
+jurisdictions: [US]
+implementation_coverage:
+  covers: [US]
+  gap: >
+    treasury_analytics.funding_cost — live for US IG (risk-free from the USD OIS curve + ICE BofA IG
+    OAS BAMLC0A0CM). HY/EM funding uses the same function with BAMLH0A0HYM2 / BAMLEMCBPIOAS (a rating
+    sub-dimension, not yet a separate instance). Euro/sterling IG OAS not ingested (acquisition gap,
+    directive #1).
+
+spec:
+  form: >
+    all_in_fixed = risk_free + credit_OAS (both %). The OAS is option-adjusted spread over the
+    government curve (ICE BofA BAML, native unit percentage points). swap_spread (bps) = the
+    fixed→floating basis (cost of swapping the funding).
+    §10: each leg is a STATE — the LEVEL of the all-in cost and the CHANGE in each component (is it
+    rates or credit widening?) is the decision-relevant read.
+  assumptions:
+    - "Risk-free from the OIS curve at the funding tenor; OAS is senior-unsecured IG."
+    - "Fixed funding = risk_free + OAS; the swap spread converts it to floating."
+  references:
+    - "docs/assessment/11-model-reference.md"
+    - "docs/assessment/10-input-state.md"
+    - "UMD analysis/treasury_analytics.py (funding_cost)"
+
+inputs:
+  - role: ois_par_curve
+    order: level
+    window: "1d"
+    horizon: 5y
+    required: true
+    note: "Risk-free curve — the funding-tenor point is the risk-free leg."
+  - role: credit_oas
+    order: level
+    window: "1d"
+    horizon: 5y
+    required: true
+    note: "IG corporate OAS — the credit funding leg. UNIT: percentage points (ICE BofA BAML native unit, e.g. 0.76 = 76bps), NOT bps — a units-provenance point verified live 2026-07-11."
+  - role: swap_par_curve
+    order: context
+    window: "1d"
+    horizon: 5y
+    required: false
+    note: "Swap curve — the fixed→floating basis (swap spread) for the hedge decision."
+
+outputs:
+  - name: "all_in_pct"
+    unit: "%"
+    note: "All-in fixed funding cost."
+  - name: "credit_oas_pct"
+    unit: "%"
+    note: "The credit component (OAS)."
+  - name: "risk_free_pct"
+    unit: "%"
+    note: "The rate component."
+
+interpretation: >
+  "What does it cost me to fund, and what is moving it — rates or credit? A rising all-in cost driven
+  by OAS (not the risk-free leg) says the market is repricing MY credit, not the whole curve — a very
+  different treasury response (term out now vs wait) than a rate-driven move."
+
+visualizations:
+  - id: funding_stack
+    form: "stacked bar: risk-free + OAS = all-in, over time"
+    encodes: "risk_free_pct and credit_oas_pct stacked to all_in_pct"
+    insight: "which component drives the funding cost, through time"
+    color_job: categorical
+    dim: 2D
+  - id: funding_history
+    form: "all-in funding cost + its components, time series"
+    encodes: "all_in_pct over time"
+    insight: "the funding regime + credit-vs-rate attribution"
+    color_job: categorical
+    dim: 2D
+
+implemented_by: "unified_market_data.analysis.treasury_analytics.funding_cost"

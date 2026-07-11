@@ -34,8 +34,7 @@ personas:
   - persona_id: corporate_treasurer
     name: "Corporate treasurer"
     decision: "Hedge funding / FX / rates exposure."
-    uses: []                   # TODO: cost_of_carry, hedge_ratio, funding_vs_inflation, scenario
-    status: pending_authoring
+    uses: [funding_cost_decomposition, funding_vs_inflation, hedge_scenario]  # US IG funding (risk-free + OAS)
 
   - persona_id: credit_investor
     name: "Credit investor"

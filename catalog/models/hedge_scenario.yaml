@@ -1,0 +1,62 @@
+model_id: hedge_scenario
+name: "Funding / hedge scenario"
+family: credit
+summary: >
+  Shock the funding book: what does a +100bp rate move, a credit-widening, or an FX move do to the
+  all-in cost — and how much swap/FX hedge neutralizes it? The treasurer's what-if and hedge-sizing
+  tool. GENERIC over currency.
+
+generic_over: [currency]
+jurisdictions: []
+implementation_coverage:
+  covers: []
+  gap: >
+    To BUILD (Deliverable 5): a scenario engine that revalues the funding stack under rate / credit /
+    FX shocks and solves the DV01- (and FX-delta-) neutral hedge size. Depends on funding_cost_
+    decomposition (built) + a curve DV01 + a shock grid. No scenario/DV01 harness exists yet.
+
+spec:
+  form: >
+    all_in(shock) = funding_cost(risk_free + Δrate, OAS + Δcredit); hedge_notional solves
+    ΔP_funding + ΔP_hedge = 0 (DV01 match). FX leg analogous via delta. §10: the shock is a
+    directional CHANGE applied to each input state.
+  assumptions:
+    - "Parallel curve shocks first; key-rate/twist shocks a later refinement."
+  references:
+    - "docs/assessment/11-model-reference.md"
+
+inputs:
+  - role: ois_par_curve
+    order: delta
+    window: "1d"
+    horizon: 5y
+    required: true
+    note: "Rate shock applied to the risk-free leg."
+  - role: credit_oas
+    order: delta
+    window: "1d"
+    horizon: 5y
+    required: true
+    note: "Credit-widening shock applied to the OAS leg."
+
+outputs:
+  - name: "shocked_all_in_pct"
+    unit: "%"
+    note: "All-in funding cost under the scenario."
+  - name: "hedge_notional"
+    unit: "ccy"
+    note: "DV01-neutral swap hedge size."
+
+interpretation: >
+  "If rates jump 100bp or my credit widens 50bp, what happens to my funding — and what hedge sizes it
+  out? The scenario that hurts most, and the cheapest hedge against it, is the treasury decision."
+
+visualizations:
+  - id: scenario_tornado
+    form: "tornado bar: funding-cost impact per shock scenario"
+    encodes: "shocked_all_in_pct − base per scenario"
+    insight: "which shock hurts the funding book most"
+    color_job: diverging
+    dim: 2D
+
+build_stub: true

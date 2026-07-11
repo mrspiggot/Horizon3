@@ -27,6 +27,7 @@ roles:
   rate_futures_strip:       {kind: observations, optional: true, desc: "RFR futures strip (e.g. CME SR3). US-rich; sparse elsewhere."}
   pm_implied_rate:          {kind: event,        optional: true, desc: "Prediction-market implied policy rate. Kalshi = US-only."}
   equity_vol:               {kind: observations, optional: true, desc: "Equity vol index for structural-premium terms."}
+  credit_oas:               {kind: observations, optional: true, desc: "Investment-grade corporate OAS (option-adjusted spread over govt, bps) — the treasurer's credit funding leg. US = ICE BofA IG (BAMLC0A0CM). HY/EM are separate indices; euro/sterling IG OAS not yet ingested."}
 
 # ---------------------------------------------------------------------------------------------
 # Jurisdictions. `scope: major` = the G7-ish OIS majors we instantiate first (user priority:
@@ -54,6 +55,7 @@ jurisdictions:
       rate_futures_strip:       {ref: "CME_SR3_*",          source: observations}
       pm_implied_rate:          {ref: "KXFED_implied_rate", source: event}
       equity_vol:               {ref: "^VIX",               source: observations}
+      credit_oas:               {ref: "BAMLC0A0CM",         source: observations, note: "ICE BofA US IG corporate OAS (bps). HY=BAMLH0A0HYM2, EM=BAMLEMCBPIOAS also ingested."}
 
   - id: EU
     central_bank: "European Central Bank"
