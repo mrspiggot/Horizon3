@@ -95,23 +95,24 @@ personas:
     name: "Equity / multi-asset PM"
     decision: "Set cross-asset risk exposure."
     title: "Reading the whole tape: are financial conditions really as easy as they feel?"
-    models: [financial_conditions, risk_appetite, safe_haven_demand]
+    models: [financial_conditions, risk_premia_ff89, gold_real_yield]
     stub_charts:
-      - [financial_conditions, "The NFCI's published subindices — risk / credit / leverage"]
       - [financial_conditions, "The subindices as a heatmap (component x time)"]
-      - [financial_conditions, "The National Financial Conditions Index (Chicago Fed)"]
-      - [financial_conditions, "What is driving conditions today"]
+      - [risk_premia_ff89, "The yield curve as a recession signal"]
+      - [gold_real_yield, "Gold's dislocation from the real-yield model"]
+      - [gold_real_yield, "Gold vs the inverse of real yields"]
     summary_template: >
       A multi-asset PM reads the whole tape at once, not one screen. The Chicago Fed's published
-      National Financial Conditions Index — the first factor of a 105-indicator panel, the proven
-      model used directly rather than a homemade proxy — reads {financial_conditions.nfci} sigma, where
-      positive is tighter than average. It decomposes cleanly: the risk subindex at
-      {financial_conditions.risk}, credit at {financial_conditions.credit} and leverage at
-      {financial_conditions.leverage} sigma, which is where you see WHICH part of the system is doing
-      the tightening or loosening. Alongside it, risk appetite across equities, credit and vol sits at
-      {risk_appetite.risk_appetite} sigma and safe-haven demand at {safe_haven_demand.safe_haven} sigma.
-      One reading: with the published NFCI where it is and risk appetite firm, the cross-asset backdrop
-      is supportive — the thing to watch is which subindex turns first.
+      National Financial Conditions Index — the first factor of a 105-indicator panel, used directly
+      rather than a homemade proxy — reads {financial_conditions.nfci} sigma, positive being tighter
+      than average. The compensation for risk comes from the Fama-French (1989) premia: the default
+      spread (Baa - 10y) at {risk_premia_ff89.def_spread}% and the term spread (10y - 2y) at
+      {risk_premia_ff89.term_spread}% — both are the published countercyclical predictors of forward
+      returns, widest in recessions and thinnest late-cycle, with the curve's sign the most reliable
+      recession lead. And gold, read as Erb-Harvey's real-yield instrument, sits {gold_real_yield.dislocation_z}
+      sigma from its real-yield-implied level: a positive dislocation is a fear / official-flow premium
+      the rates model cannot explain. One reading: set cross-asset risk from the compensation on offer
+      (the FF89 premia) and the conditions backdrop (NFCI), and use gold's dislocation as the haven tell.
 
   commodity_analyst:
     name: "Commodity analyst"

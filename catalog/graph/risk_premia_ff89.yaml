@@ -1,0 +1,89 @@
+model_id: risk_premia_ff89
+name: "Fama-French risk premia (default & term spreads)"
+family: cross_asset
+persona: equity_multiasset_pm
+grounded_in: [ff-1989-business-conditions]
+method: data-direct
+method_note: >
+  The default spread (Baa - 10y Treasury) and term spread (10y - 2y) are the published,
+  countercyclical predictors of expected returns (Fama-French 1989). Presented as observed
+  §10 states — no synthetic index; the high-yield OAS is added as a sharper realized-stress gauge.
+spec:
+  equations: >
+    DEF = Baa corporate yield - 10y Treasury (BAA10Y); TERM = 10y - 2y Treasury (T10Y2Y);
+    HY = high-yield OAS. FF89: E[R] rises with DEF and TERM — both widen in recessions (rich
+    compensation) and compress late-cycle (thin). Read as levels + percentiles vs their own history.
+history: {start: "2010-01", end: "2026-07", cadence: monthly}
+inputs:
+  - {id: def,  series_id: "BAA10Y",       db_source: fred, state: level, context_window: 60}
+  - {id: term, series_id: "T10Y2Y",       db_source: fred, state: level, context_window: 60}
+  - {id: hy,   series_id: "BAMLH0A0HYM2",  db_source: fred, state: level, context_window: 60}
+execution:
+  implemented_by: unified_market_data.analysis.cross_asset.risk_premia
+  args:
+    def_spread: def.level
+    term_spread: term.level
+    hy_spread: hy.level
+outputs:
+  - {name: def_spread,  unit: "%", meaning: "default premium: Baa - 10y Treasury"}
+  - {name: term_spread, unit: "%", meaning: "term premium: 10y - 2y Treasury"}
+  - {name: hy_spread,   unit: "%", meaning: "high-yield OAS: realized credit risk premium"}
+interpretations:
+  - id: rich_compensation
+    when: "def_spread > 2.2 and term_spread > 0"
+    says: >
+      Both Fama-French premia are elevated with a positively-sloped curve — the market is paying
+      rich compensation for risk while signalling recovery ahead. FF89's evidence says this is when
+      forward equity and bond returns are highest: the contrarian moment to add risk.
+  - id: thin_compensation
+    when: "term_spread < 0"
+    says: >
+      The curve is inverted — the term premium has gone negative, the most reliable published
+      recession lead. With the default spread still tight this is late-cycle complacency: thin
+      compensation for risk just as the cycle turns.
+charts:
+  - id: "The two Fama-French premia over time"
+    role: input
+    chart_type: series
+    color_job: categorical
+    insight: "the default and term spreads move countercyclically — both widen into recessions (2011, 2016, 2020) and compress in expansions; the term spread leads, the default spread confirms"
+    data_contract:
+      kind: series
+      ylabel: "spread (%)"
+      zero_line: true
+      series:
+        - {label: "default (Baa - 10y)", from: "output:def_spread"}
+        - {label: "term (10y - 2y)", from: "output:term_spread"}
+  - id: "The yield curve as a recession signal"
+    role: outcome
+    chart_type: gap_series
+    color_job: diverging
+    interpretation: thin_compensation
+    pos_label: "curve steep (early-cycle)"
+    neg_label: "curve inverted (recession warning)"
+    insight: "the term spread's sign is the published recession lead — every inversion since 2010 (2019, 2022-24) has preceded a growth scare; steep = high forward returns"
+    data_contract:
+      kind: gap_series
+      ylabel: "term spread (%)"
+      label: "10y - 2y"
+      minuend: "output:term_spread"
+  - id: "High-yield risk premium (realized stress)"
+    role: consequence
+    chart_type: series
+    color_job: sequential
+    insight: "where the compensation is actually paid — the HY OAS spikes when default risk is realized (2011 euro crisis, 2016 energy, 2020 COVID), the mirror image of the forward-looking curve"
+    data_contract:
+      kind: series
+      ylabel: "HY OAS (%)"
+      series:
+        - {label: "high-yield OAS", from: "output:hy_spread"}
+  - id: "The risk premia today"
+    role: outcome
+    chart_type: bar
+    color_job: sequential
+    insight: "the current compensation for risk across the three premia — where the cycle sits"
+    data_contract:
+      kind: named_values
+      ylabel: "spread (%)"
+      labels: ["default (Baa-10y)", "term (10y-2y)", "high-yield OAS"]
+      values: ["output:def_spread", "output:term_spread", "output:hy_spread"]

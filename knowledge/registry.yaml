@@ -327,3 +327,26 @@ papers:
     added: "2026-07-11"
     why: "A security's own 12-month trailing return predicts its next-month return, across 58 futures incl. the commodity complex. The published TSMOM signal that replaces the homemade commodity_reflation z-average."
     superseded_by: null
+
+  - id: erb-harvey-golden-dilemma
+    title: "The Golden Dilemma"
+    authors: ["Claude B. Erb", "Campbell R. Harvey"]
+    url: "https://www.nber.org/system/files/working_papers/w18706/w18706.pdf"
+    arxiv_id: null
+    local_path: sources/golden_dilemma_erb_harvey.pdf
+    topics: [gold, real-yields, safe-haven, cross-asset]
+    tier: canonical
+    added: "2026-07-11"
+    why: "Gold has no cash flow; its real price moves inversely with the real yield (opportunity cost) — the published relationship behind the gold real-yield model that replaces the safe_haven_demand z-average."
+    superseded_by: null
+  - id: ff-1989-business-conditions
+    title: "Business Conditions and Expected Returns on Stocks and Bonds"
+    authors: ["Eugene F. Fama", "Kenneth R. French"]
+    url: "https://www.bauer.uh.edu/rsusmel/phd/Fama-French_1989.pdf"
+    arxiv_id: null
+    local_path: null
+    topics: [risk-premia, default-spread, term-spread, expected-returns]
+    tier: reference
+    added: "2026-07-11"
+    why: "The default spread (Baa-Treasury) and term spread (long-short) are the published, countercyclical predictors of expected returns — the risk-compensation premia that replace the risk_appetite z-average."
+    superseded_by: null

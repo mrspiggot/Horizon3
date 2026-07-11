@@ -1,0 +1,94 @@
+model_id: gold_real_yield
+name: "Gold as a real-yield instrument (Erb-Harvey)"
+family: cross_asset
+persona: equity_multiasset_pm
+grounded_in: [erb-harvey-golden-dilemma]
+method: published
+method_note: >
+  Erb & Harvey (2013), 'The Golden Dilemma': gold pays no cash flow, so it has no earnings anchor;
+  empirically its real price moves INVERSELY with the 10y real yield (the opportunity cost of a
+  zero-coupon real asset) and with the dollar. Model-implied gold = -real_yield (standardized);
+  the dislocation is gold's detachment from that — the fear/flow premium.
+spec:
+  equations: >
+    Standardize each series to z vs its trailing window. Model-implied gold level = -z(real_yield).
+    Dislocation = z(gold) - (-z(real_yield)) = z(gold) + z(real_yield). Positive = gold dearer than
+    real yields justify (a safe-haven / flow premium); negative = cheap. Dollar is the second driver.
+history: {start: "2010-01", end: "2026-07", cadence: monthly}
+inputs:
+  - {id: gold,       series_id: "GC=F",    db_source: yahoo, state: level, context_window: 252}
+  - {id: real_yield, series_id: "DFII10",  db_source: fred,  state: level, context_window: 252}
+  - {id: dollar,     series_id: "DTWEXBGS", db_source: fred, state: level, context_window: 252}
+execution:
+  implemented_by: unified_market_data.analysis.cross_asset.gold_real_yield
+  args:
+    gold_z: gold.zscore
+    real_yield_z: real_yield.zscore
+    dollar_z: dollar.zscore
+outputs:
+  - {name: gold_z,           unit: "sigma", meaning: "gold price, standardized"}
+  - {name: real_yield_z,     unit: "sigma", meaning: "10y TIPS real yield, standardized"}
+  - {name: neg_real_yield_z, unit: "sigma", meaning: "model-implied gold = -real_yield (standardized)"}
+  - {name: dollar_z,         unit: "sigma", meaning: "broad dollar, standardized"}
+  - {name: dislocation_z,    unit: "sigma", meaning: "gold rich(+)/cheap(-) vs the real-yield model"}
+interpretations:
+  - id: haven_premium
+    when: "dislocation_z > 0.75"
+    says: >
+      Gold has detached ABOVE its real-yield-implied level — it is trading richer than the
+      opportunity-cost model justifies. Per Erb-Harvey this is a fear / official-flow premium
+      (central-bank buying, de-dollarization, geopolitical hedging), not a rates story.
+  - id: rates_driven
+    when: "dislocation_z > -0.5 and dislocation_z < 0.5"
+    says: >
+      Gold is tracking real yields closely — the classic regime where the 10y TIPS yield explains
+      the gold price and there is little independent haven premium.
+charts:
+  - id: "Gold vs the inverse of real yields"
+    role: outcome
+    chart_type: series
+    color_job: categorical
+    interpretation: rates_driven
+    insight: "the Erb-Harvey relationship made visible — gold (standardized) tracks the INVERSE real yield tightly; where the two lines separate is the fear/flow premium"
+    data_contract:
+      kind: series
+      ylabel: "standard deviations"
+      zero_line: true
+      series:
+        - {label: "gold (z)", from: "output:gold_z"}
+        - {label: "-real yield (z) = model", from: "output:neg_real_yield_z"}
+  - id: "Gold's dislocation from the real-yield model"
+    role: consequence
+    chart_type: gap_series
+    color_job: diverging
+    interpretation: haven_premium
+    pos_label: "gold rich (fear/flow premium)"
+    neg_label: "gold cheap"
+    insight: "when gold detaches from real yields — the positive episodes (2011, 2020, 2024-25) are safe-haven and official-buying premia the rates model cannot explain"
+    data_contract:
+      kind: gap_series
+      ylabel: "dislocation (sigma)"
+      label: "gold - model"
+      minuend: "output:dislocation_z"
+  - id: "The two drivers: real yields and the dollar"
+    role: input
+    chart_type: series
+    color_job: categorical
+    insight: "gold's headwinds standardized — a rising real yield and a strong dollar both weigh on gold; the mid-2020s show both easing as gold broke out"
+    data_contract:
+      kind: series
+      ylabel: "standard deviations"
+      zero_line: true
+      series:
+        - {label: "real yield (z)", from: "output:real_yield_z"}
+        - {label: "dollar (z)", from: "output:dollar_z"}
+  - id: "Gold, real yields and the dollar today"
+    role: outcome
+    chart_type: bar
+    color_job: diverging
+    insight: "where each stands now in standardized terms — the current configuration behind the gold price"
+    data_contract:
+      kind: named_values
+      ylabel: "standard deviations"
+      labels: ["gold", "real yield", "dollar"]
+      values: ["output:gold_z", "output:real_yield_z", "output:dollar_z"]
