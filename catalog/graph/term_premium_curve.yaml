@@ -23,6 +23,7 @@ interpretations:
     says: "The term-premium curve is steep — long duration is being paid materially more risk premium than the front."
 charts:
   - id: "Term premium by tenor (2s / 5s / 10s)"
+    role: input
     chart_type: series
     color_job: sequential
     insight: "the whole term-premium curve moving through time"
@@ -35,6 +36,7 @@ charts:
         - {label: "5Y", from: "input:tp05.level"}
         - {label: "10Y", from: "input:tp10.level"}
   - id: "TP-curve slope (10Y - 2Y)"
+    role: outcome
     chart_type: gap_series
     color_job: diverging
     interpretation: tp_steep
@@ -46,6 +48,7 @@ charts:
       minuend: "input:tp10.level"
       subtrahend: "input:tp02.level"
   - id: "10Y term premium vs its own range"
+    role: consequence
     chart_type: series
     color_job: diverging
     insight: "where the 10Y term premium sits in its recent distribution (z-score)"
@@ -56,6 +59,7 @@ charts:
       series:
         - {label: "10Y TP z-score", from: "input:tp10.zscore"}
   - id: "The term-premium curve today"
+    role: outcome
     chart_type: bar
     color_job: sequential
     insight: "the current term premium at each tenor"

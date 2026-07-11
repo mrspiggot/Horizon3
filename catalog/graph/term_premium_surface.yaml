@@ -31,6 +31,7 @@ interpretations:
     says: "The term-premium curve has re-steepened — the long end is repricing duration risk while the front stays anchored."
 charts:
   - id: "Term-premium surface (tenor x time)"
+    role: outcome
     chart_type: heatmap
     color_job: diverging
     interpretation: premium_rebuild
@@ -46,6 +47,7 @@ charts:
         - {label: "7y", from: "output:t7y"}
         - {label: "10y", from: "output:t10y"}
   - id: "The term-premium curve: now vs 3 months ago"
+    role: outcome
     chart_type: curve_snapshot
     color_job: categorical
     insight: "how the whole curve of duration risk-premia shifted over the quarter"
@@ -59,6 +61,7 @@ charts:
         - {label: "now", k: 0, style: solid}
         - {label: "3 months ago", k: 13, style: faded}
   - id: "Term premium by tenor today"
+    role: consequence
     chart_type: bar
     color_job: diverging
     insight: "the current shape of the term-premium curve"
@@ -68,6 +71,7 @@ charts:
       labels: ["1y", "2y", "3y", "5y", "7y", "10y"]
       values: ["output:t1y", "output:t2y", "output:t3y", "output:t5y", "output:t7y", "output:t10y"]
   - id: "The ends: 10y vs 1y term premium"
+    role: input
     chart_type: series
     color_job: categorical
     insight: "the front and the long end of duration risk-premia, and the gap between them"

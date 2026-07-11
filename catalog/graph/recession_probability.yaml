@@ -24,6 +24,7 @@ interpretations:
     says: "The term-spread probit puts recession odds above 30% — the curve is pricing a downturn."
 charts:
   - id: "Recession probability, 12m ahead"
+    role: outcome
     chart_type: series
     color_job: sequential
     interpretation: elevated
@@ -34,6 +35,7 @@ charts:
       series:
         - {label: "recession probability", from: "output:prob_12m"}
   - id: "The term spread (10y - 3m)"
+    role: input
     chart_type: series
     color_job: diverging
     insight: "the yield-curve slope the model reads; inversion (below 0) is the signal"
@@ -44,6 +46,7 @@ charts:
       series:
         - {label: "10y - 3m spread", from: "input:spread.level"}
   - id: "Spread vs its recent range"
+    role: consequence
     chart_type: series
     color_job: sequential
     insight: "the spread's level against where it has traded (its z-score context)"
@@ -54,6 +57,7 @@ charts:
       series:
         - {label: "spread z-score", from: "input:spread.zscore"}
   - id: "Recession odds now"
+    role: outcome
     chart_type: bar
     color_job: sequential
     insight: "the current probit reading and the spread that drives it"

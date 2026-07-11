@@ -25,6 +25,7 @@ interpretations:
     says: "Implied vol trades well above realized — selling vol is being paid a fat premium."
 charts:
   - id: "Implied (VIX) vs realized vol"
+    role: input
     chart_type: series
     color_job: categorical
     insight: "the gap between implied and realized IS the variance risk premium"
@@ -35,6 +36,7 @@ charts:
         - {label: "implied (VIX)", from: "output:implied_vol_pct"}
         - {label: "realized (SPX 21d)", from: "output:realized_vol_pct"}
   - id: "The variance risk premium"
+    role: outcome
     chart_type: gap_series
     color_job: diverging
     interpretation: rich_vol
@@ -46,6 +48,7 @@ charts:
       minuend: "output:implied_vol_pct"
       subtrahend: "output:realized_vol_pct"
   - id: "Near-term vs 1-month implied (VIX9D vs VIX)"
+    role: consequence
     chart_type: series
     color_job: categorical
     insight: "when 9-day implied jumps above 1-month, the market is pricing an imminent event"
@@ -56,6 +59,7 @@ charts:
         - {label: "VIX9D (9-day)", from: "input:vix9d.level"}
         - {label: "VIX (1-month)", from: "input:vix.level"}
   - id: "The premium today"
+    role: outcome
     chart_type: bar
     color_job: sequential
     insight: "the current implied, realized and their spread"

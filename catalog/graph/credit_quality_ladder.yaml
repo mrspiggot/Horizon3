@@ -26,6 +26,7 @@ interpretations:
     says: "The HY-IG premium is thin — investors are paid little to move down in quality; complacency."
 charts:
   - id: "The credit spread ladder (quality x time)"
+    role: outcome
     chart_type: heatmap
     color_job: sequential
     interpretation: quality_compressed
@@ -38,6 +39,7 @@ charts:
         - {label: "EM", from: "output:em"}
         - {label: "HY", from: "output:hy"}
   - id: "The spread curve: now vs 3 months ago"
+    role: outcome
     chart_type: curve_snapshot
     color_job: categorical
     insight: "the spread paid at each quality rung and how it shifted over the quarter"
@@ -51,6 +53,7 @@ charts:
         - {label: "now", k: 0, style: solid}
         - {label: "3 months ago", k: 13, style: faded}
   - id: "The down-in-quality premium (HY - IG)"
+    role: consequence
     chart_type: gap_series
     color_job: diverging
     interpretation: quality_compressed
@@ -62,6 +65,7 @@ charts:
       minuend: "output:hy"
       subtrahend: "output:ig"
   - id: "The ladder today"
+    role: input
     chart_type: bar
     color_job: sequential
     insight: "the current OAS at each quality rung"

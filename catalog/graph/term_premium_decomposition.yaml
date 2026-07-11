@@ -27,6 +27,7 @@ interpretations:
     says: "The 10Y term premium is compressed — most of the yield is expectations, so duration pays little for its risk."
 charts:
   - id: "The 10Y, split: expectations + term premium"
+    role: outcome
     chart_type: series
     color_job: categorical
     insight: "the fitted 10Y and its two ACM components through time"
@@ -38,6 +39,7 @@ charts:
         - {label: "expectations", from: "output:expectations_pct"}
         - {label: "term premium", from: "output:term_premium_pct"}
   - id: "The term premium alone"
+    role: outcome
     chart_type: series
     color_job: diverging
     interpretation: tp_compressed
@@ -49,6 +51,7 @@ charts:
       series:
         - {label: "10Y term premium", from: "output:term_premium_pct"}
   - id: "Term-premium share of the yield"
+    role: consequence
     chart_type: series
     color_job: sequential
     insight: "how much of the 10Y is risk premium vs expectations"
@@ -59,6 +62,7 @@ charts:
       series:
         - {label: "term-premium share", from: "output:tp_share"}
   - id: "The decomposition today"
+    role: input
     chart_type: bar
     color_job: sequential
     insight: "the current split of the 10Y into expectations and term premium"

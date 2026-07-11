@@ -23,6 +23,7 @@ interpretations:
     says: "The expectations curve is inverted — the market expects the average short rate to fall, i.e. cuts ahead."
 charts:
   - id: "The market-implied path (2s / 5s / 10s expectations)"
+    role: input
     chart_type: series
     color_job: sequential
     insight: "the risk-neutral (expectations) yields by tenor — what path the market prices, through time"
@@ -34,6 +35,7 @@ charts:
         - {label: "5Y", from: "input:rny05.level"}
         - {label: "10Y", from: "input:rny10.level"}
   - id: "Expectations-curve slope (10Y - 2Y)"
+    role: outcome
     chart_type: gap_series
     color_job: diverging
     interpretation: path_inverted
@@ -45,6 +47,7 @@ charts:
       minuend: "input:rny10.level"
       subtrahend: "input:rny02.level"
   - id: "Near-term path (2Y expectations) vs its range"
+    role: consequence
     chart_type: series
     color_job: diverging
     insight: "the front-end expected path and where it sits in its recent history"
@@ -55,6 +58,7 @@ charts:
       series:
         - {label: "2Y expectations z-score", from: "input:rny02.zscore"}
   - id: "The expectations curve today"
+    role: outcome
     chart_type: bar
     color_job: sequential
     insight: "the current market-implied average short rate at each tenor"

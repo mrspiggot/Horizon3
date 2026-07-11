@@ -25,6 +25,7 @@ interpretations:
     says: "The HY market is pricing an annual default rate above 5% — meaningfully above the long-run average."
 charts:
   - id: "HY implied annual default rate"
+    role: outcome
     chart_type: series
     color_job: sequential
     interpretation: default_pricing_up
@@ -35,6 +36,7 @@ charts:
       series:
         - {label: "implied annual PD", from: "output:annual_pd_pct"}
   - id: "5-year cumulative default probability"
+    role: outcome
     chart_type: series
     color_job: sequential
     insight: "the cumulative odds of default over 5 years priced into HY"
@@ -44,6 +46,7 @@ charts:
       series:
         - {label: "5y cumulative PD", from: "output:cumulative_pd_pct"}
   - id: "HY OAS (the input spread)"
+    role: input
     chart_type: series
     color_job: diverging
     insight: "the HY spread that drives the implied default rate"
@@ -53,6 +56,7 @@ charts:
       series:
         - {label: "HY OAS", from: "input:hy.level"}
   - id: "Implied default, IG vs HY vs EM (today)"
+    role: consequence
     chart_type: bar
     color_job: sequential
     insight: "the current spread at each rung — the raw material of the implied default rate"
