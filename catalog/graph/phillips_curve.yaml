@@ -7,17 +7,23 @@ method: published
 # CANONICAL: the inflation-unemployment trade-off is a two-variable relationship taught throughout
 # economics. Its two inputs ARE the model — the >=3-input floor does not apply.
 canonical: true
+# Jurisdiction-generic: inputs declare ROLES, bound to each economy's series by catalog/jurisdictions.yaml.
+# The US is one instance among the Fed/ECB/BoE/BoJ economies, never the definition — the divergence of
+# the curve ACROSS them is the geoeconomics insight.
+generic_over: [currency]
+instances: [US, EU, GB, JP]
 method_note: >
   The Phillips curve (Phillips 1958): inflation and unemployment trade off. Friedman (1968) and Phelps
   augmented it with expectations — the trade-off is only short-run; in the long run the curve is
   vertical at the natural rate. The insight is the SHAPE of the (unemployment, inflation) cloud and how
-  it SHIFTS across regimes, read as a time-coloured scatter with an OLS fit — not a single number.
+  it SHIFTS across regimes and, above all, how it DIFFERS across economies — the flat/dead Japanese
+  curve vs the live US one is the cross-sectional story.
 spec:
   equations: "Phillips: pi = f(u), downward-sloping short-run. Augmented (Friedman-Phelps): pi = pi^e - b(u - u*)."
-history: {start: "1962-01", end: "2026-05", cadence: monthly}
+history: {start: "1962-01", end: "2026-01", cadence: monthly}
 inputs:
-  - {id: u,  series_id: UNRATE,    db_source: fred, state: level, context_window: 120}
-  - {id: pi, series_id: CPIAUCSL,  db_source: fred, transform: yoy, state: level, context_window: 120}
+  - {id: u,  role: unemployment_rate, state: level, context_window: 120}
+  - {id: pi, role: headline_cpi, transform: yoy, state: level, context_window: 120}
 execution:
   implemented_by: unified_market_data.analysis.macro_signals.phillips_curve
   args: {unemployment_pct: u.level, inflation_pct: pi.level}
