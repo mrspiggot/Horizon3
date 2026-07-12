@@ -177,12 +177,52 @@ def _mark_slope(ax, enc, df):
 
 def _mark_bar(ax, enc, df, grouped: bool):
     xf, yf = enc.encoding.x.field, enc.encoding.y.field
+    gf = (enc.encoding.color.field if enc.encoding.color else
+          (enc.encoding.detail.field if enc.encoding.detail else None))
+    if grouped and gf and gf in df and gf != xf:
+        # real grouped bars: one cluster per x category, a bar per group value
+        cats = list(dict.fromkeys(df[xf]))
+        groups = list(dict.fromkeys(df[gf]))
+        xi = np.arange(len(cats)); w = 0.8 / max(len(groups), 1)
+        for j, gval in enumerate(groups):
+            sub = df[df[gf] == gval].set_index(xf)[yf]
+            ys = [float(sub.get(c, np.nan)) for c in cats]
+            ax.bar(xi + (j - (len(groups) - 1) / 2) * w, ys, width=w, color=theme.cat(j),
+                   label=str(gval), zorder=3)
+        ax.set_xticks(xi); ax.set_xticklabels(cats, rotation=30, ha="right")
+        ax.axhline(0, color=theme.GRID, lw=0.8)
+        ax.legend(fontsize=9, framealpha=0.9)
+        return
     cats = df[xf].tolist()
     vals = df[yf].to_numpy(float)
     colors = [theme.DIVERGING[3] if v >= 0 else theme.DIVERGING[1] for v in vals] \
         if enc.color_job == "diverging" else [theme.cat(0)] * len(vals)
     ax.bar(range(len(cats)), vals, color=colors, zorder=3, width=0.68)
     ax.set_xticks(range(len(cats))); ax.set_xticklabels(cats, rotation=30, ha="right")
+    ax.axhline(0, color=theme.GRID, lw=0.8)
+
+
+def _mark_waterfall(ax, enc, df):
+    """A decomposition built up step by step: each component bar starts where the last ended;
+    a final 'total' bar closes to the cumulative sum. Uses the latest snapshot per component."""
+    compf = (enc.encoding.color.field if enc.encoding.color else
+             (enc.encoding.detail.field if enc.encoding.detail else enc.encoding.x.field))
+    valf = enc.encoding.y.field if enc.encoding.y else "value"
+    if "date" in df:  # take the latest snapshot of each component
+        last = df["date"].max()
+        snap = df[df["date"] == last]
+    else:
+        snap = df
+    comps = list(dict.fromkeys(snap[compf]))
+    vals = [float(snap[snap[compf] == c][valf].iloc[-1]) for c in comps]
+    cum = 0.0
+    for i, (c, v) in enumerate(zip(comps, vals)):
+        col = theme.DIVERGING[3] if v >= 0 else theme.DIVERGING[1]
+        ax.bar(i, v, bottom=cum, color=col, zorder=3, width=0.66)
+        cum += v
+    ax.bar(len(comps), cum, color=theme.INK, alpha=0.85, zorder=3, width=0.66)
+    ax.set_xticks(range(len(comps) + 1))
+    ax.set_xticklabels([str(c) for c in comps] + ["total"], rotation=30, ha="right")
     ax.axhline(0, color=theme.GRID, lw=0.8)
 
 
@@ -240,9 +280,19 @@ def _mark_stacked(ax, enc, df):
 
 
 def _mark_ridgeline(ax, enc, df):
-    """Distribution over time: one faint filled density per facet value, vertically offset."""
-    ff = enc.encoding.facet.field
+    """Distribution over a grouping: one faint filled density per group value, vertically offset."""
+    ff = (enc.encoding.facet.field if enc.encoding.facet else
+          (enc.encoding.detail.field if enc.encoding.detail else
+           (enc.encoding.color.field if enc.encoding.color else None)))
     vf = enc.encoding.x.field
+    if not ff or ff not in df:
+        # single distribution — one ridge
+        vals = df[vf].to_numpy(float)
+        if len(vals) >= 3:
+            hist, edges = np.histogram(vals, bins=30, density=True)
+            centers = (edges[:-1] + edges[1:]) / 2
+            ax.fill_between(centers, 0, hist, color=theme.cat(0), alpha=0.55, lw=1)
+        return
     groups = list(df.groupby(ff, sort=True))
     for i, (lbl, g) in enumerate(groups):
         vals = g[vf].to_numpy(float)
@@ -269,32 +319,37 @@ _DISPATCH = {
     "bubble": lambda ax, e, d, f: _mark_point(ax, e, d),
     "heatmap": lambda ax, e, d, f: _mark_heatmap(ax, e, d, f),
     "ridgeline": lambda ax, e, d, f: _mark_ridgeline(ax, e, d),
+    "waterfall": lambda ax, e, d, f: _mark_waterfall(ax, e, d),
 }
 
 
-def compile_encoding(enc: ChartEncoding, out_path: str, *, figsize=(11, 7.2)) -> str:
-    """Render a ChartEncoding to `out_path` (PNG). Returns the path."""
-    theme.use_theme()
-    df = _df(enc)
-    fig, ax = plt.subplots(figsize=figsize)
-    mark = enc.mark.value if hasattr(enc.mark, "value") else enc.mark
-    drawer = _DISPATCH.get(mark)
-    if drawer is None:
-        raise ValueError(f"compile: unsupported mark '{mark}'")
-    drawer(ax, enc, df, fig)
+def _cap(s: str | None, n: int) -> str | None:
+    """Cap text — an over-long unwrapped title/subtitle/note blows the tight bbox to an impossible size."""
+    if not s:
+        return s
+    s = " ".join(str(s).split())
+    return s if len(s) <= n else s[: n - 1].rstrip() + "…"
 
+
+def _coerce_domain(ch, dom):
+    if ch and ch.type == "temporal":
+        return [pd.to_datetime(v) for v in dom]
+    try:
+        return [float(v) for v in dom]
+    except (TypeError, ValueError):
+        return None
+
+
+def _draw_on_axes(ax, enc: ChartEncoding, df, fig, mark: str, *, panel: bool = False):
+    """Draw the mark + refs + domain + legend on one Axes. `panel=True` for a small-multiple cell
+    (suppresses per-panel axis labels; the figure carries shared labels)."""
+    _DISPATCH[mark](ax, enc, df, fig)
     ex, ey = enc.encoding.x, enc.encoding.y
-    if ex and mark not in ("dumbbell", "heatmap", "slope"):
-        ax.set_xlabel(ex.title or ex.field, fontsize=11)
-    if ey and mark not in ("heatmap", "ridgeline"):
-        ax.set_ylabel(ey.title or ey.field, fontsize=11)
-    def _coerce_domain(ch, dom):
-        if ch and ch.type == "temporal":
-            return [pd.to_datetime(v) for v in dom]
-        try:
-            return [float(v) for v in dom]
-        except (TypeError, ValueError):
-            return None
+    if not panel:
+        if ex and mark not in ("dumbbell", "heatmap", "slope"):
+            ax.set_xlabel(ex.title or ex.field, fontsize=11)
+        if ey and mark not in ("heatmap", "ridgeline"):
+            ax.set_ylabel(ey.title or ey.field, fontsize=11)
     if ey and ey.scale and ey.scale.domain:
         d = _coerce_domain(ey, ey.scale.domain)
         if d:
@@ -303,22 +358,65 @@ def compile_encoding(enc: ChartEncoding, out_path: str, *, figsize=(11, 7.2)) ->
         d = _coerce_domain(ex, ex.scale.domain)
         if d:
             ax.set_xlim(*d)
-
     _apply_refs_events(ax, enc, df)
-
-    # legend only when >=2 identity groups and not already direct-labelled to death
     ng = len(_series_groups(df, enc))
-    if ng >= 2 and mark in ("line", "area", "point", "bubble") and not enc.annotations.label_last:
+    if ng >= 2 and mark in ("line", "area", "point", "bubble") and not enc.annotations.label_last and not panel:
         ax.legend(fontsize=9, framealpha=0.9, loc="best")
+    theme.style_axes(ax, grid_axis="both")
 
-    # Cap text lengths — an over-long title/subtitle/note, unwrapped, blows the tight bbox up to an
-    # impossible canvas size. (The vision critic separately flags a wordy headline.)
-    def _cap(s: str | None, n: int) -> str | None:
-        if not s:
-            return s
-        s = " ".join(str(s).split())
-        return s if len(s) <= n else s[: n - 1].rstrip() + "…"
 
+def _savefig(fig, out_path):
+    try:
+        fig.savefig(out_path, dpi=145, bbox_inches="tight", facecolor="white")
+    except ValueError:
+        fig.savefig(out_path, dpi=145, facecolor="white")
+    plt.close(fig)
+    return out_path
+
+
+def compile_encoding(enc: ChartEncoding, out_path: str, *, figsize=(11, 7.2)) -> str:
+    """Render a ChartEncoding to `out_path` (PNG). Returns the path. Honours `encoding.facet`
+    (small multiples: one panel per facet value)."""
+    theme.use_theme()
+    df = _df(enc)
+    mark = enc.mark.value if hasattr(enc.mark, "value") else enc.mark
+    if mark not in _DISPATCH:
+        raise ValueError(f"compile: unsupported mark '{mark}'")
+
+    fac = enc.encoding.facet
+    facet_vals = list(dict.fromkeys(df[fac.field])) if (fac and fac.field in df) else None
+
+    if facet_vals and len(facet_vals) > 1:
+        # ── small multiples ──────────────────────────────────────────────────────────────────
+        n = len(facet_vals)
+        ncol = 2 if n <= 4 else 3
+        nrow = (n + ncol - 1) // ncol
+        fig, axes = plt.subplots(nrow, ncol, figsize=(6.4 * ncol, 4.2 * nrow),
+                                 squeeze=False, sharex=True, sharey=True)
+        flat = [a for row in axes for a in row]
+        for a in flat:
+            a.axis("off")
+        for a, val in zip(flat, facet_vals):
+            a.axis("on")
+            sub = df[df[fac.field] == val]
+            _draw_on_axes(a, enc, sub, fig, mark, panel=True)
+            a.set_title(str(val), fontsize=11, fontweight="bold", color=theme.INK)
+        ex, ey = enc.encoding.x, enc.encoding.y
+        if ex:
+            fig.supxlabel(ex.title or ex.field, fontsize=11)
+        if ey and mark not in ("heatmap", "ridgeline"):
+            fig.supylabel(ey.title or ey.field, fontsize=11)
+        fig.suptitle(_cap(enc.title, 95), fontsize=15, fontweight="bold", x=0.02, ha="left", y=1.0)
+        if enc.subtitle:
+            fig.text(0.02, 0.975, _cap(enc.subtitle, 150), fontsize=10.5, color=theme.MUTED, ha="left")
+        if enc.source_note:
+            fig.text(0.99, 0.005, _cap(enc.source_note, 130), fontsize=7.8, color=theme.MUTED, ha="right")
+        fig.tight_layout(rect=[0, 0.01, 1, 0.96])
+        return _savefig(fig, out_path)
+
+    # ── single panel ─────────────────────────────────────────────────────────────────────────
+    fig, ax = plt.subplots(figsize=figsize)
+    _draw_on_axes(ax, enc, df, fig, mark, panel=False)
     ax.set_title(_cap(enc.title, 95), fontsize=15, fontweight="bold", loc="left",
                  pad=(20 if enc.subtitle else 8), wrap=True)
     if enc.subtitle:
@@ -327,12 +425,4 @@ def compile_encoding(enc: ChartEncoding, out_path: str, *, figsize=(11, 7.2)) ->
     if enc.source_note:
         ax.text(1.0, -0.13, _cap(enc.source_note, 130), transform=ax.transAxes, fontsize=7.8,
                 color=theme.MUTED, va="top", ha="right")
-    theme.style_axes(ax, grid_axis="both")
-    # Guard savefig: if a stray far-off-canvas artist still makes the tight bbox oversized, fall
-    # back to the fixed figure size rather than crash the whole Studio run.
-    try:
-        fig.savefig(out_path, dpi=145, bbox_inches="tight", facecolor="white")
-    except ValueError:
-        fig.savefig(out_path, dpi=145, facecolor="white")
-    plt.close(fig)
-    return out_path
+    return _savefig(fig, out_path)
