@@ -77,6 +77,21 @@ class Judgment(BaseModel):
 _MARKS = "line, area, stacked_area, bar, grouped_bar, dumbbell, slope, point, connected_scatter, bubble, heatmap, ridgeline, waterfall"
 
 
+def _img_b64(path: str, max_px: int = 1568) -> str:
+    """Base64-encode a chart PNG for the vision model, downscaled so no dimension exceeds max_px
+    (the API rejects images > 8000px, and a big small-multiple can blow past that; the model reads
+    a ~1.5k-px image fine). The saved chart on disk stays full-resolution."""
+    from io import BytesIO
+
+    from PIL import Image
+    img = Image.open(path)
+    if max(img.size) > max_px:
+        img.thumbnail((max_px, max_px), Image.LANCZOS)
+    buf = BytesIO()
+    img.convert("RGB").save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode()
+
+
 # ── nodes ────────────────────────────────────────────────────────────────────────────────────
 
 def framer(state: StudioState) -> dict:
@@ -182,7 +197,7 @@ def compile_node(state: StudioState) -> dict:
 
 def multimodal_critique(state: StudioState) -> dict:
     png = state["png_path"]
-    b64 = base64.b64encode(Path(png).read_bytes()).decode()
+    b64 = _img_b64(png)
     llm = get_llm(model=VISION_MODEL, temperature=0.1).with_structured_output(VisualCritique)
     msg = [{"role": "user", "content": [
         {"type": "text", "text":
@@ -222,7 +237,7 @@ def reviser(state: StudioState) -> dict:
 def judge(state: StudioState) -> dict:
     brief = state["brief"]
     llm = get_llm(model=VISION_MODEL, temperature=0.1).with_structured_output(Judgment)
-    b64 = base64.b64encode(Path(state["png_path"]).read_bytes()).decode()
+    b64 = _img_b64(state["png_path"])
     j: Judgment = llm.invoke([{"role": "user", "content": [
         {"type": "text", "text":
             "You are the final judge. Does this chart SHIP? Criteria: (1) expressive — faithful to the data; "
