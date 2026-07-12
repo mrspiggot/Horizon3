@@ -365,10 +365,16 @@ def _draw_on_axes(ax, enc: ChartEncoding, df, fig, mark: str, *, panel: bool = F
     theme.style_axes(ax, grid_axis="both")
 
 
-def _savefig(fig, out_path):
-    try:
-        fig.savefig(out_path, dpi=145, bbox_inches="tight", facecolor="white")
-    except ValueError:
+def _savefig(fig, out_path, *, tight: bool = True):
+    # tight-bbox expands the canvas to fit stray artists (e.g. a connected-scatter's endpoint labels
+    # in a small panel) — fine for a single axes, catastrophic for a faceted grid (17k-px strips).
+    # Faceted figures use their computed size and CLIP overflow instead.
+    if tight:
+        try:
+            fig.savefig(out_path, dpi=145, bbox_inches="tight", facecolor="white")
+        except ValueError:
+            fig.savefig(out_path, dpi=145, facecolor="white")
+    else:
         fig.savefig(out_path, dpi=145, facecolor="white")
     plt.close(fig)
     return out_path
@@ -406,13 +412,20 @@ def compile_encoding(enc: ChartEncoding, out_path: str, *, figsize=(11, 7.2)) ->
             fig.supxlabel(ex.title or ex.field, fontsize=11)
         if ey and mark not in ("heatmap", "ridgeline"):
             fig.supylabel(ey.title or ey.field, fontsize=11)
-        fig.suptitle(_cap(enc.title, 95), fontsize=15, fontweight="bold", x=0.02, ha="left", y=1.0)
+        fig.suptitle(_cap(enc.title, 95), fontsize=15, fontweight="bold", x=0.01, ha="left", y=0.995)
         if enc.subtitle:
-            fig.text(0.02, 0.975, _cap(enc.subtitle, 150), fontsize=10.5, color=theme.MUTED, ha="left")
+            fig.text(0.01, 0.945, _cap(enc.subtitle, 140), fontsize=10, color=theme.MUTED, ha="left")
         if enc.source_note:
             fig.text(0.99, 0.005, _cap(enc.source_note, 130), fontsize=7.8, color=theme.MUTED, ha="right")
-        fig.tight_layout(rect=[0, 0.01, 1, 0.96])
-        return _savefig(fig, out_path)
+        fig.tight_layout(rect=[0, 0.02, 1, 0.90])
+        # clip in-panel marks so a connected-scatter's overflowing end labels can't distort the grid
+        for a in flat:
+            for art in a.get_children():
+                try:
+                    art.set_clip_on(True)
+                except Exception:
+                    pass
+        return _savefig(fig, out_path, tight=False)
 
     # ── single panel ─────────────────────────────────────────────────────────────────────────
     fig, ax = plt.subplots(figsize=figsize)
