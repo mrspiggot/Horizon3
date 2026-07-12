@@ -12,10 +12,15 @@ method_note: >
   probit (which leads by ~a year but with more false positives).
 spec:
   equations: "sahm_gap = MA3(U) - min_{t-12..t} MA3(U). Trigger when sahm_gap >= 0.5pp. headroom = 0.5 - sahm_gap."
+# Jurisdiction-generic: the Sahm rule is a pure unemployment-rate signal, and unemployment_rate is
+# bound for US/EU/GB/JP in jurisdictions.yaml — so the same rule runs across four central banks
+# (run_model_instances), the cross-country recession-trigger comparison. US is one instance, not the
+# definition. (EU unemployment currently lags ~2yr; honest per §04 — thin points are skipped.)
+instances: [US, EU, GB, JP]
 history: {start: "1962-01", end: "2026-06", cadence: monthly}
 inputs:
-  - {id: sahm, series_id: UNRATE, db_source: fred, transform: sahm, state: level, context_window: 120}
-  - {id: u,    series_id: UNRATE, db_source: fred, state: level, context_window: 120}
+  - {id: sahm, role: unemployment_rate, transform: sahm, state: level, context_window: 120}
+  - {id: u,    role: unemployment_rate, state: level, context_window: 120}
 execution:
   implemented_by: unified_market_data.analysis.macro_signals.sahm_rule
   args: {sahm_gap_pp: sahm.level, unemployment_pct: u.level}
