@@ -70,9 +70,19 @@ def brief_for_chart(persona: str, decision: str, model_id: str, chart_id: str, r
     insight = " ".join((chart.get("insight") or "").split())
     interp = f"{chart_id}. {insight}" if insight else chart_id
     n_series = len({r["series"] for r in rows})
+    # The authored data_contract kind is the model author's intent — a strong prior on the form
+    # (e.g. 'stacked' = a genuine part-to-whole; 'gap_series' = a signed difference). The Studio
+    # still designs the encoding, but should honour a declared composition.
+    kind = (chart.get("data_contract") or {}).get("kind", "")
+    prior = ""
+    if kind == "stacked":
+        prior = (" The authored form is a STACKED composition: these fields sum to a total — draw it as "
+                 "a stacked_area with a total line (components may be signed), NOT as separate lines.")
+    elif kind == "gap_series":
+        prior = " The authored form is a signed gap around a baseline (a filled area above/below zero)."
     note = (f"{n_series} field(s) the authored insight names, over "
             f"{'time' if any(rr.get('date') for rr in rows) else 'items'}. Design the FORM that "
-            f"carries the insight; do not assume the fields sum to a total unless the insight says so.")
+            f"carries the insight." + prior)
     return InsightBrief(persona=persona, decision=decision, model_id=model_id, papers=papers,
                         interpretation=interp, profile=profile_rows(rows, series_field="series", note=note),
                         rows=rows)
@@ -93,7 +103,12 @@ def studio_charts_for_persona(persona_id: str, conn, out_dir: str) -> list[dict]
             continue
         d = Path(out_dir) / f"{i}_{model_id}"
         d.mkdir(parents=True, exist_ok=True)
-        final = run_studio(brief, str(d), max_iterations=3)
+        try:
+            final = run_studio(brief, str(d), max_iterations=3)
+        except Exception as exc:
+            results.append({"model_id": model_id, "chart_id": chart_id,
+                            "error": f"{type(exc).__name__}: {str(exc)[:160]}"})
+            continue
         ch = final.get("chosen")
         results.append({"model_id": model_id, "chart_id": chart_id,
                         "mark": (ch.mark if ch else None), "title": (ch.title if ch else None),

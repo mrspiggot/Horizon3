@@ -53,7 +53,7 @@ class FieldType(str, Enum):
 class Scale(BaseModel):
     zero: bool | None = Field(None, description="Force the axis to include zero (bars: yes; trend lines: usually no).")
     type: Literal["linear", "log", "symlog"] = "linear"
-    domain: list[float] | None = Field(None, description="Explicit [min, max]; omit to auto-fit.")
+    domain: list[float | str] | None = Field(None, description="Explicit [min, max]; numbers for a quantitative axis, ISO date strings for a temporal one. Omit to auto-fit.")
     nice: bool = True
 
 

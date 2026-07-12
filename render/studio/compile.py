@@ -288,10 +288,21 @@ def compile_encoding(enc: ChartEncoding, out_path: str, *, figsize=(11, 7.2)) ->
         ax.set_xlabel(ex.title or ex.field, fontsize=11)
     if ey and mark not in ("heatmap", "ridgeline"):
         ax.set_ylabel(ey.title or ey.field, fontsize=11)
+    def _coerce_domain(ch, dom):
+        if ch and ch.type == "temporal":
+            return [pd.to_datetime(v) for v in dom]
+        try:
+            return [float(v) for v in dom]
+        except (TypeError, ValueError):
+            return None
     if ey and ey.scale and ey.scale.domain:
-        ax.set_ylim(*ey.scale.domain)
-    if ex and ex.scale and ex.scale.domain:
-        ax.set_xlim(*ex.scale.domain)
+        d = _coerce_domain(ey, ey.scale.domain)
+        if d:
+            ax.set_ylim(*d)
+    if ex and ex.scale and ex.scale.domain and mark not in ("dumbbell", "heatmap", "slope"):
+        d = _coerce_domain(ex, ex.scale.domain)
+        if d:
+            ax.set_xlim(*d)
 
     _apply_refs_events(ax, enc, df)
 
@@ -300,13 +311,28 @@ def compile_encoding(enc: ChartEncoding, out_path: str, *, figsize=(11, 7.2)) ->
     if ng >= 2 and mark in ("line", "area", "point", "bubble") and not enc.annotations.label_last:
         ax.legend(fontsize=9, framealpha=0.9, loc="best")
 
-    ax.set_title(enc.title, fontsize=15, fontweight="bold", loc="left", pad=(20 if enc.subtitle else 8))
+    # Cap text lengths — an over-long title/subtitle/note, unwrapped, blows the tight bbox up to an
+    # impossible canvas size. (The vision critic separately flags a wordy headline.)
+    def _cap(s: str | None, n: int) -> str | None:
+        if not s:
+            return s
+        s = " ".join(str(s).split())
+        return s if len(s) <= n else s[: n - 1].rstrip() + "…"
+
+    ax.set_title(_cap(enc.title, 95), fontsize=15, fontweight="bold", loc="left",
+                 pad=(20 if enc.subtitle else 8), wrap=True)
     if enc.subtitle:
-        ax.text(0, 1.02, enc.subtitle, transform=ax.transAxes, fontsize=10.5, color=theme.MUTED, va="bottom")
+        ax.text(0, 1.02, _cap(enc.subtitle, 150), transform=ax.transAxes, fontsize=10.5,
+                color=theme.MUTED, va="bottom")
     if enc.source_note:
-        ax.text(1.0, -0.13, enc.source_note, transform=ax.transAxes, fontsize=7.8, color=theme.MUTED,
-                va="top", ha="right")
+        ax.text(1.0, -0.13, _cap(enc.source_note, 130), transform=ax.transAxes, fontsize=7.8,
+                color=theme.MUTED, va="top", ha="right")
     theme.style_axes(ax, grid_axis="both")
-    fig.savefig(out_path, dpi=145, bbox_inches="tight", facecolor="white")
+    # Guard savefig: if a stray far-off-canvas artist still makes the tight bbox oversized, fall
+    # back to the fixed figure size rather than crash the whole Studio run.
+    try:
+        fig.savefig(out_path, dpi=145, bbox_inches="tight", facecolor="white")
+    except ValueError:
+        fig.savefig(out_path, dpi=145, facecolor="white")
     plt.close(fig)
     return out_path

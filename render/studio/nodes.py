@@ -15,9 +15,33 @@ from pathlib import Path
 from pydantic import BaseModel, Field, model_validator
 
 from .compile import compile_encoding
-from .encoding import ChartEncoding
+from .encoding import (Annotations, Channel, ChartEncoding, ColorJob, Encoding, FieldType,
+                       Mark)
 from .llm import VISION_MODEL, get_llm
 from .state import StudioState
+
+
+def _fallback_encoding(brief) -> ChartEncoding:
+    """A guaranteed-renderable encoding derived from the data profile — used if the agent's
+    chosen encoding won't compile (references a missing field, an unsupported combination, …).
+    A line of the quantitative value over the temporal/ordinal axis, coloured by series."""
+    fields = brief.profile.fields
+    temporal = next((f.name for f in fields if f.dtype == "temporal"), None)
+    quant = next((f.name for f in fields if f.dtype == "quantitative" and f.name != "order"), None)
+    xcol = temporal or (brief.profile.series_field or (fields[0].name if fields else "x"))
+    xtype = FieldType.temporal if temporal else FieldType.nominal
+    enc = ChartEncoding(
+        title=(brief.model_id.replace("_", " ").title()),
+        message="fallback line of the executed series",
+        mark=Mark.line, color_job=ColorJob.categorical,
+        encoding=Encoding(
+            x=Channel(field=xcol, type=xtype),
+            y=Channel(field=(quant or "value"), type=FieldType.quantitative),
+            detail=(Channel(field=brief.profile.series_field, type=FieldType.nominal)
+                    if brief.profile.series_field else None)),
+        annotations=Annotations(label_last=True),
+        source_note=f"{brief.model_id} · {', '.join(brief.papers)}")
+    return enc
 
 # ── small schemas for the reasoning nodes ────────────────────────────────────────────────────
 
@@ -63,7 +87,18 @@ def framer(state: StudioState) -> dict:
         "journalist would produce. Start from the MESSAGE, not a chart you like. Given the executed "
         "insight and the data shape, state the single communicative job and the 2–3 forms that best carry "
         "it.\n\n" + brief.as_prompt() +
-        f"\n\nAvailable marks: {_MARKS}."
+        f"\n\nAvailable marks: {_MARKS}.\n\n"
+        "FORM-CHOICE PRINCIPLES:\n"
+        "- If the insight is a PART-TO-WHOLE / DECOMPOSITION — the fields SUM to a total, or the text says "
+        "'split into', 'decomposed', 'X = A + B', 'compensation for … plus …' — lead with stacked_area (over "
+        "time) or waterfall; a set of separate lines HIDES the composition and is wrong.\n"
+        "- A relationship-with-a-time-path → connected_scatter; two values per item → dumbbell; two time "
+        "points across items → slope; a whole cross-section over time → heatmap; a distribution moving over "
+        "time → ridgeline.\n"
+        "- A plain line/area is legitimate when the message really is one-or-few series over time — but only "
+        "if it earns it: the DIFFERENTIATION then comes from the analytical framing (reference lines, "
+        "thresholds, shaded regimes/recessions, direct labels, a sharp thesis headline), not the mark. Note "
+        "that framing intent in `reasoning` so the proposer builds it."
     )
     return {"message": out.message, "candidate_marks": out.candidate_marks[:3]}
 
@@ -77,11 +112,16 @@ def proposer(state: StudioState) -> dict:
             enc: ChartEncoding = llm.invoke(
                 "You are the proposer in a data-visualization studio. Emit a COMPLETE ChartEncoding for the "
                 f"insight below using mark='{mark}'. Reference ONLY the field names in the data shape. "
-                "Design the encoding to carry the executed interpretation as its headline. Add annotations "
-                "(reference lines like zero or a model line, dated event markers, direct labels) where they "
-                "sharpen the reading. Write a `message`, a `rationale` (why this beats a vanilla default), and "
-                "a `source_note`. CRITICAL: leave `data` EMPTY — the real rows are injected by the renderer; "
-                "you must never author numbers.\n\n" + brief.as_prompt()
+                "Design it to carry the executed interpretation as its headline.\n"
+                "ALWAYS add the editorial layer that separates craft from a muppet-with-the-FT — this is "
+                "where a line/area earns its place: reference lines (zero, a model/rule line, a ±1σ or "
+                "average threshold the reader measures against), dated event markers for the regimes that "
+                "matter (crises, policy pivots), shaded regions where relevant, and selective DIRECT LABELS "
+                "instead of a legend. Write a thesis `title`, a `subtitle`, a `message`, a `rationale` (why "
+                "this beats a vanilla default), and a `source_note`. For a decomposition, colour by the "
+                "component field so the parts stack to the total. "
+                "CRITICAL: leave `data` EMPTY — the real rows are injected by the renderer; never author "
+                "numbers.\n\n" + brief.as_prompt()
             )
             enc.data = []  # never trust the LLM with data
             candidates.append(enc)
@@ -115,11 +155,23 @@ def critic_panel(state: StudioState) -> dict:
 
 
 def compile_node(state: StudioState) -> dict:
+    brief = state["brief"]
     enc = state["chosen"].model_copy(deep=True)
-    enc.data = state["brief"].rows          # inject the real numbers deterministically
+    enc.data = brief.rows                    # inject the real numbers deterministically
     out_dir = state.get("out_dir", "/tmp")
     png = str(Path(out_dir) / "studio_chart.png")
-    compile_encoding(enc, png)
+    try:
+        compile_encoding(enc, png)
+    except Exception as exc:
+        # The chosen encoding won't render (missing field, bad combo). Don't kill the run —
+        # fall back to a guaranteed-renderable line so the critic/judge still get a chart, and
+        # record why so the next revision can recover.
+        fb = _fallback_encoding(brief)
+        fb.data = brief.rows
+        compile_encoding(fb, png)
+        enc = fb
+        return {"png_path": png, "chosen": enc, "iterations": state.get("iterations", 0) + 1,
+                "visual_feedback": f"[compile fell back to a safe line: {type(exc).__name__}: {str(exc)[:120]}]"}
     return {"png_path": png, "chosen": enc, "iterations": state.get("iterations", 0) + 1}
 
 
@@ -147,14 +199,19 @@ def reviser(state: StudioState) -> dict:
     cur = state["chosen"].model_copy(deep=True)
     cur.data = []
     llm = get_llm(temperature=0.2).with_structured_output(ChartEncoding)
-    enc: ChartEncoding = llm.invoke(
-        "Revise this ChartEncoding to fix the visual defects the critic found. Keep the mark and message "
-        "unless a defect requires changing them; make the specific fixes. Leave `data` EMPTY.\n\n"
-        f"CURRENT ENCODING:\n{cur.model_dump(exclude_none=True)}\n\n"
-        f"CRITIC FEEDBACK:\n{state.get('visual_feedback')}\n\n{brief.as_prompt()}"
-    )
-    enc.data = []
-    return {"chosen": enc}
+    try:
+        enc: ChartEncoding = llm.invoke(
+            "Revise this ChartEncoding to fix the visual defects the critic found. Keep the mark and message "
+            "unless a defect requires changing them; make the specific fixes. Reference ONLY fields that "
+            "exist in the data shape. Leave `data` EMPTY.\n\n"
+            f"CURRENT ENCODING:\n{cur.model_dump(exclude_none=True)}\n\n"
+            f"CRITIC FEEDBACK:\n{state.get('visual_feedback')}\n\n{brief.as_prompt()}"
+        )
+        enc.data = []
+        return {"chosen": enc}
+    except Exception:
+        # A failed revision must not kill the run — keep the current chart and move to the judge.
+        return {"visual_ok": True}
 
 
 def judge(state: StudioState) -> dict:
@@ -163,10 +220,16 @@ def judge(state: StudioState) -> dict:
     b64 = base64.b64encode(Path(state["png_path"]).read_bytes()).decode()
     j: Judgment = llm.invoke([{"role": "user", "content": [
         {"type": "text", "text":
-            "You are the final judge. Does this chart SHIP? Criteria: expressive (faithful to the data), "
-            "effective (decoded fast), carries the executed insight as its headline, and is genuinely "
-            "differentiated — not something a muppet with the FT and a chatbot could reproduce. The insight it "
-            "must carry:\n" + brief.interpretation + "\nMessage: " + str(state.get("message"))},
+            "You are the final judge. Does this chart SHIP? Criteria: (1) expressive — faithful to the data; "
+            "(2) effective — decoded fast and accurately; (3) it carries the executed insight as its headline; "
+            "(4) differentiated. IMPORTANT on (4): differentiation is a property of the WHOLE artifact — the "
+            "analytical framing, reference lines, regime/event annotations, thesis headline and the model "
+            "behind it — NOT merely whether the mark is exotic. A line or area SHIPS when the form genuinely "
+            "fits the message AND it is enriched with framing a muppet-with-the-FT would not add (a threshold "
+            "the reader measures against, recession/crisis shading, a decomposition that reveals structure). "
+            "FAIL it when: the form mis-serves the insight (e.g. a part-to-whole drawn as separate lines "
+            "instead of stacked), it is a bare undifferentiated plot, labels collide, or it reads as generic. "
+            "The insight it must carry:\n" + brief.interpretation + "\nMessage: " + str(state.get("message"))},
         {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
     ]}])
     return {"judge_pass": j.verdict, "judge_notes": j.notes}
