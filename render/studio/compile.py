@@ -61,8 +61,13 @@ def _apply_refs_events(ax, enc: ChartEncoding, df: pd.DataFrame):
                 xf = np.linspace(*xlim0, 60)
                 ax.fill_between(xf, ylim0[0], r.slope * xf + b, color=theme.MUTED, alpha=0.06, zorder=1)
             if r.label:
-                # place the label where the line is comfortably inside the panel
-                lx = xlim0[0] + 0.32 * (xlim0[1] - xlim0[0])
+                # anchor the label at ~40% panel HEIGHT on the line, so it never rides up into
+                # the title/subtitle band (the collision the visual critic flagged); fall back
+                # along x if that point is off-panel.
+                y_t = ylim0[0] + 0.40 * (ylim0[1] - ylim0[0])
+                lx = (y_t - b) / r.slope if r.slope else xlim0[0]
+                if not (xlim0[0] < lx < xlim0[1]):
+                    lx = xlim0[0] + 0.22 * (xlim0[1] - xlim0[0])
                 ax.text(lx, r.slope * lx + b, f"  {r.label}", color=theme.MUTED, fontsize=9,
                         rotation=38, rotation_mode="anchor", va="bottom")
     x_is_temporal = bool(enc.encoding.x and enc.encoding.x.type == "temporal")
@@ -127,19 +132,31 @@ def _mark_connected_scatter(ax, enc, df):
 
 
 def _mark_dumbbell(ax, enc, df):
-    """Two values per item on one row each — actual vs reference. Needs y=item(nominal),
-    and two quantitative fields named by x (start) and text/size (end); we read columns
-    'start' and 'end' by convention, falling back to the two quantitative channels."""
-    items = df[enc.encoding.y.field].tolist()
-    start = df["start"].to_numpy(float) if "start" in df else df[enc.encoding.x.field].to_numpy(float)
-    end = df["end"].to_numpy(float) if "end" in df else df[enc.encoding.size.field].to_numpy(float)
-    ypos = np.arange(len(items))[::-1]
-    for i, y in enumerate(ypos):
-        ax.plot([start[i], end[i]], [y, y], color=theme.GRID, lw=3, zorder=2, solid_capstyle="round")
-        ax.scatter(start[i], y, s=90, color=theme.cat(0), zorder=4, edgecolor="white", lw=1.2)
-        ax.scatter(end[i], y, s=90, color=theme.cat(1), zorder=4, edgecolor="white", lw=1.2)
-    ax.set_yticks(ypos)
-    ax.set_yticklabels(items)
+    """Long-form: y=item (nominal), x=value (quantitative), color/detail=phase (2 categories,
+    e.g. actual vs rule). One horizontal connector per item joins its two phase points — the
+    gap (divergence) reads at a glance. Grammar-consistent: no special columns."""
+    itemf = enc.encoding.y.field
+    valf = enc.encoding.x.field
+    phasef = (enc.encoding.color.field if enc.encoding.color
+              else (enc.encoding.detail.field if enc.encoding.detail else None))
+    items = list(dict.fromkeys(df[itemf]))
+    phases = list(dict.fromkeys(df[phasef])) if phasef and phasef in df else []
+    ypos = {it: len(items) - 1 - i for i, it in enumerate(items)}
+    for it in items:
+        sub = df[df[itemf] == it]
+        xs = sub[valf].astype(float).tolist()
+        y = ypos[it]
+        if len(xs) >= 2:
+            ax.plot([min(xs), max(xs)], [y, y], color=theme.GRID, lw=3.5, zorder=2, solid_capstyle="round")
+        for _, row in sub.iterrows():
+            ci = phases.index(row[phasef]) if phasef else 0
+            ax.scatter(float(row[valf]), y, s=110, color=theme.cat(ci), zorder=4, edgecolor="white", lw=1.3)
+    ax.set_yticks(list(ypos.values()))
+    ax.set_yticklabels(list(ypos.keys()))
+    for i, p in enumerate(phases):
+        ax.scatter([], [], color=theme.cat(i), label=str(p))
+    if phases:
+        ax.legend(fontsize=9, loc="best", framealpha=0.9)
 
 
 def _mark_slope(ax, enc, df):
@@ -196,6 +213,32 @@ def _mark_heatmap(ax, enc, df, fig):
         fig.colorbar(im, ax=ax, pad=0.01).set_label(enc.encoding.color.title or cf, fontsize=8)
 
 
+def _mark_stacked(ax, enc, df):
+    """True part-to-whole over time: cumulatively stack the components so they SUM to the total,
+    with a total line on top. Handles signed components (a negative component dips the stack
+    below the one beneath it). Base = the larger/steadier component (highest mean), so the
+    volatile residual reads on top."""
+    xf = enc.encoding.x.field
+    yf = enc.encoding.y.field
+    catf = (enc.encoding.color.field if enc.encoding.color
+            else (enc.encoding.detail.field if enc.encoding.detail else None))
+    if not catf or catf not in df:
+        return _mark_line_area(ax, enc, df, fill=True)
+    piv = df.pivot_table(index=xf, columns=catf, values=yf, aggfunc="sum").sort_index()
+    order = piv.mean().sort_values(ascending=False).index      # steadiest/largest as the base
+    piv = piv[order]
+    x = pd.to_datetime(piv.index) if (enc.encoding.x and enc.encoding.x.type == "temporal") else piv.index
+    cum = np.zeros(len(piv))
+    for i, comp in enumerate(piv.columns):
+        vals = piv[comp].fillna(0).to_numpy(float)
+        ax.fill_between(x, cum, cum + vals, color=theme.cat(i), alpha=0.6, lw=0.4,
+                        label=str(comp), zorder=3 + i)
+        cum = cum + vals
+    ax.plot(x, cum, color=theme.INK, lw=1.6, label="total", zorder=10)
+    ax.axhline(0, color=theme.GRID, lw=0.8, zorder=2)
+    ax.legend(fontsize=9, framealpha=0.9, loc="upper left")
+
+
 def _mark_ridgeline(ax, enc, df):
     """Distribution over time: one faint filled density per facet value, vertically offset."""
     ff = enc.encoding.facet.field
@@ -216,7 +259,7 @@ def _mark_ridgeline(ax, enc, df):
 _DISPATCH = {
     "line": lambda ax, e, d, f: _mark_line_area(ax, e, d, fill=False),
     "area": lambda ax, e, d, f: _mark_line_area(ax, e, d, fill=True),
-    "stacked_area": lambda ax, e, d, f: _mark_line_area(ax, e, d, fill=True),
+    "stacked_area": lambda ax, e, d, f: _mark_stacked(ax, e, d),
     "bar": lambda ax, e, d, f: _mark_bar(ax, e, d, grouped=False),
     "grouped_bar": lambda ax, e, d, f: _mark_bar(ax, e, d, grouped=True),
     "connected_scatter": lambda ax, e, d, f: _mark_connected_scatter(ax, e, d),
