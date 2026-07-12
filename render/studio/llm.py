@@ -35,8 +35,9 @@ VISION_MODEL = "claude-opus-4-8"
 
 
 @lru_cache(maxsize=4)
-def get_llm(model: str = REASONING_MODEL, temperature: float = 0.4, max_tokens: int = 4096):
-    """A cached ChatAnthropic. temperature a touch >0 so the proposer can diversify candidates."""
+def get_llm(model: str = REASONING_MODEL, temperature: float | None = None, max_tokens: int = 4096):
+    """A cached ChatAnthropic. temperature is omitted — Opus 4.8 deprecates it (proposer
+    diversity comes from per-form prompts instead). Kept in the signature for call-site clarity."""
     _load_env()
     from langchain_anthropic import ChatAnthropic
-    return ChatAnthropic(model=model, temperature=temperature, max_tokens=max_tokens, timeout=120)
+    return ChatAnthropic(model=model, max_tokens=max_tokens, timeout=120)
