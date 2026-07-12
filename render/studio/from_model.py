@@ -194,6 +194,77 @@ def brief_for_chart(persona: str, decision: str, model_id: str, chart_id: str, r
         profile=profile_rows(rows, series_field=series_field), rows=rows)
 
 
+def brief_for_model_instances(persona: str, decision: str, model_id: str, chart_id: str, conn) -> InsightBrief | None:
+    """Cross-JURISDICTION brief: run a jurisdiction-generic model across ALL its instances
+    (Fed/ECB/BoE/BoJ…) and assemble a cross-sectional table with a `jurisdiction` column — the raw
+    material for small multiples / a jurisdiction×time heatmap / a dumbbell where the DIVERGENCE is
+    the insight. Wires the previously-latent graph_corpus.run_model_instances."""
+    runs = graph_corpus.run_model_instances(model_id, conn)
+    instances = runs.get("instances") or {}
+    if len(instances) < 2:
+        return None
+    meta = runs["meta"]
+    chart = next((c for c in (runs.get("charts") or []) if c.get("id") == chart_id), None)
+    if chart is None:
+        return None
+    dc = chart.get("data_contract", {}) or {}
+    kind = dc.get("kind", "")
+    rows: list[dict] = []
+    if kind in ("scatter", "pearson"):
+        xr, yr = _parse_ref(dc.get("x", "")), _parse_ref(dc.get("y", ""))
+        if not xr or not yr:
+            return None
+        xcol, ycol = _label(xr[1], xr[2]), _label(yr[1], yr[2])
+        for jid, obj in instances.items():
+            cb = obj.get("cb", jid)
+            for i, r in enumerate(obj.get("history") or []):
+                xv, yv = _value(r, *xr), _value(r, *yr)
+                if xv is not None and yv is not None:
+                    rows.append({xcol: round(float(xv), 4), ycol: round(float(yv), 4),
+                                 "order": i, "jurisdiction": cb})
+        itype = "relationship"
+        hint = (f"CROSS-JURISDICTION RELATIONSHIP: '{xcol}' vs '{ycol}' for {len(instances)} central banks. "
+                f"Draw SMALL MULTIPLES — one connected_scatter panel per 'jurisdiction' (set encoding.facet="
+                f"'jurisdiction'), shared axes — so each bank's curve is comparable at a glance.")
+    else:
+        outs = meta.get("outputs") or []
+        field = outs[0]["name"] if outs else None
+        if not field:
+            return None
+        for jid, obj in instances.items():
+            cb = obj.get("cb", jid)
+            for r in obj.get("history") or []:
+                v = r.outputs.get(field)
+                if v is not None:
+                    rows.append({"date": str(r.as_of)[:10], _label(field, None): round(float(v), 4),
+                                 "jurisdiction": cb})
+        itype = "cross_section"
+        hint = (f"CROSS-JURISDICTION: '{_label(field, None)}' over time for {len(instances)} central banks. Draw "
+                f"SMALL MULTIPLES (encoding.facet='jurisdiction'), a jurisdiction×time HEATMAP, or a DUMBBELL of "
+                f"the latest value per bank — the DIVERGENCE across banks is the insight, not any one line.")
+    if not rows:
+        return None
+    insight = " ".join((chart.get("insight") or "").split())
+    interp = f"{chart_id} — compared across {len(instances)} central banks. {insight}"
+    return InsightBrief(persona=persona, decision=decision, model_id=model_id, papers=(meta.get("grounded_in") or []),
+                        interpretation=interp, insight_type=itype, form_hint=hint,
+                        profile=profile_rows(rows, series_field="jurisdiction"), rows=rows)
+
+
+def studio_cross_jurisdiction(model_id: str, chart_id: str, conn, out_dir: str,
+                              persona: str = "Macro strategist", decision: str = "") -> dict:
+    """Design a cross-jurisdiction chart with the Studio for one generic model's chart."""
+    brief = brief_for_model_instances(persona, decision, model_id, chart_id, conn)
+    if brief is None:
+        return {"error": "not jurisdiction-generic or no data"}
+    Path(out_dir).mkdir(parents=True, exist_ok=True)
+    final = run_studio(brief, out_dir, max_iterations=3)
+    ch = final.get("chosen")
+    return {"model_id": model_id, "chart_id": chart_id, "insight_type": brief.insight_type,
+            "mark": (ch.mark if ch else None), "title": (ch.title if ch else None),
+            "png": final.get("png_path"), "judge_pass": final.get("judge_pass")}
+
+
 def studio_charts_for_persona(persona_id: str, conn, out_dir: str) -> list[dict]:
     """Design each of a persona's authored stub charts with the Studio (form chosen by the graph)."""
     personas = yaml.safe_load((GRAPH_DIR / "personas.yaml").read_text())["personas"]
