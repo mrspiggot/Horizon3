@@ -216,7 +216,7 @@ def studio_charts_for_persona(persona_id: str, conn, out_dir: str) -> list[dict]
                             "error": f"{type(exc).__name__}: {str(exc)[:160]}"})
             continue
         ch = final.get("chosen")
-        results.append({"model_id": model_id, "chart_id": chart_id,
+        results.append({"model_id": model_id, "chart_id": chart_id, "insight_type": brief.insight_type,
                         "mark": (ch.mark if ch else None), "title": (ch.title if ch else None),
                         "png": final.get("png_path"), "visual_ok": final.get("visual_ok"),
                         "judge_pass": final.get("judge_pass")})

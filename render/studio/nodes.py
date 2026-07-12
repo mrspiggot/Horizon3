@@ -88,6 +88,11 @@ def framer(state: StudioState) -> dict:
         "insight and the data shape, state the single communicative job and the 2–3 forms that best carry "
         "it.\n\n" + brief.as_prompt() +
         f"\n\nAvailable marks: {_MARKS}.\n\n"
+        "The brief states an INSIGHT TYPE and FORM GUIDANCE — treat them as the primary signal and "
+        "propose the canonical forms for that type FIRST (relationship→connected_scatter/point; "
+        "surface→heatmap/small-multiples; cross_section→curve/slope/dumbbell; decomposition→stacked_area/"
+        "waterfall; distribution→ridgeline/violin/pearson; state_space→quadrant/momentum; trend→line/area "
+        "only when it earns it). Then:\n"
         "FORM-CHOICE PRINCIPLES:\n"
         "- If the insight is a PART-TO-WHOLE / DECOMPOSITION — the fields SUM to a total, or the text says "
         "'split into', 'decomposed', 'X = A + B', 'compensation for … plus …' — lead with stacked_area (over "
