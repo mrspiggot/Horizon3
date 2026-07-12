@@ -89,3 +89,21 @@ charts:
       ylabel: "%"
       labels: ["GZ spread", "expected default", "excess bond premium"]
       values: ["output:gz_spread", "output:expected_default", "output:ebp"]
+  - id: "What the credit market is charging for, decomposed"
+    role: outcome
+    chart_type: decomposition
+    color_job: diverging
+    insight: "the GZ spread split into compensation for expected default and the excess bond premium — the 2008 and 2020 spikes are EBP (fear/risk-appetite), not a jump in expected default"
+    data_contract:
+      kind: decomposition
+      title: "What is the credit market charging for — default, or fear?"
+      subtitle: "The Gilchrist–Zakrajšek credit spread, decomposed into compensation for expected default and the\nexcess bond premium — the risk-appetite residual. The premium, not defaults, drives the crises."
+      ylabel: "Contribution to the GZ credit spread  (%)"
+      unit: "%"
+      components:
+        - {label: "Expected-default compensation", from: "output:expected_default", tone: neutral}
+        - {label: "Excess bond premium  (risk appetite)", from: "output:ebp", tone: warm}
+      net: {label: "GZ credit spread", from: "output:gz_spread"}
+      callouts:
+        - {text: "2008 & 2020: the spike is EXCESS BOND\nPREMIUM (red) — a collapse in risk appetite,\nnot a jump in expected default", at: "2008-11", to_y: 4.4, from: "2013-01", from_y: 5.6}
+      source: "Decomposition: GZ spread = expected-default compensation + excess bond premium (Gilchrist–Zakrajšek 2012, Fed). Source: Fed EBP dataset."

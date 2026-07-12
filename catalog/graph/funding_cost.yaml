@@ -82,3 +82,22 @@ charts:
       ylabel: "%"
       labels: ["risk-free", "IG spread", "all-in"]
       values: ["output:risk_free_pct", "output:credit_oas_pct", "output:all_in_pct"]
+  - id: "What a treasurer actually pays, decomposed"
+    role: outcome
+    chart_type: decomposition
+    color_job: sequential
+    insight: "the all-in fixed funding cost split into the risk-free rate and the credit spread — since 2022 it is the risk-free leg, not credit, driving a cost the firm cannot fix by improving its own rating"
+    data_contract:
+      kind: decomposition
+      title: "What a corporate treasurer actually pays for fixed funding"
+      subtitle: "The all-in IG funding cost, decomposed into the two legs a treasurer faces — the 5-year risk-free rate\nand the Baa credit spread. Which leg is moving decides whether the firm can do anything about it."
+      ylabel: "Contribution to the all-in fixed funding cost  (%)"
+      unit: "%"
+      components:
+        - {label: "Risk-free rate  (5Y Treasury)", from: "output:risk_free_pct", tone: neutral}
+        - {label: "Credit spread  (Baa, default risk)", from: "output:credit_oas_pct", tone: warm}
+      net: {label: "All-in funding cost", from: "output:all_in_pct"}
+      callouts:
+        - {text: "2020: the jump is the CREDIT leg (red) —\nthe market repricing default risk, not rates", at: "2020-05", to_y: 3.8, from: "2011-06", from_y: 7.6}
+        - {text: "2022–23: the RISK-FREE leg (grey) drove the\ncost up — a treasurer cannot fix this by\nimproving the firm's own credit", at: "2023-06", to_y: 1.8, from: "2011-06", from_y: 5.3}
+      source: "Decomposition: all-in funding = 5Y risk-free (DGS5) + Baa credit spread (BAA10Y). Source: FRED."

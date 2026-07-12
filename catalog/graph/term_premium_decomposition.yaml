@@ -7,7 +7,7 @@ method: published
 method_note: "ACM SR340 decomposition (consumes the published ACM series)"
 spec:
   equations: "y = expectations + term_premium (ACM SR340); tp_share = term_premium / y"
-history: {start: "2025-07-10", end: "2026-07-09", cadence: weekly}
+history: {start: "2000-01", end: "2026-07", cadence: monthly}
 inputs:
   - {id: tp10, series_id: ACMTP10, db_source: nyfed_acm, state: level, context_window: 120}
   - {id: exp10, series_id: ACMRNY10, db_source: nyfed_acm, state: level, context_window: 120}
@@ -71,3 +71,23 @@ charts:
       ylabel: "%"
       labels: ["fitted 10Y", "expectations", "term premium"]
       values: ["output:fitted_yield_pct", "output:expectations_pct", "output:term_premium_pct"]
+  - id: "Why the 10Y is where it is — expectations vs term premium"
+    role: outcome
+    chart_type: decomposition
+    color_job: categorical
+    insight: "the 10Y decomposed into the expected average short-rate path and the term premium — the 2010s decline was a collapsing (then negative) term premium; the 2022-23 sell-off was the expected-rate path repricing"
+    data_contract:
+      kind: decomposition
+      title: "Why is the 10-year yield where it is?"
+      subtitle: "The 10-year Treasury yield, decomposed into the two inputs the ACM model reads — the market's expected\naverage short rate over ten years, and the term premium for holding the duration."
+      ylabel: "Contribution to the 10-year Treasury yield  (%)"
+      unit: "%"
+      ylim: [-1.8, 7.6]
+      components:
+        - {label: "Expected-rate path  (risk-neutral)", from: "output:expectations_pct", tone: cool}
+        - {label: "Term premium  (duration risk)", from: "output:term_premium_pct", tone: amber}
+      net: {label: "ACM-fitted 10y yield", from: "output:fitted_yield_pct"}
+      callouts:
+        - {text: "2012–2020: the term premium turned NEGATIVE\n(amber below zero) — investors accepted less than\nthe expected-rate path to own duration", at: "2016-06", to_y: -0.6, from: "2001-06", from_y: -1.15}
+        - {text: "2022–23 sell-off: the 10y repriced on the\nEXPECTED-RATE PATH (blue), not term premium —\na Fed-expectations move, not a risk-premium one", at: "2023-01", to_y: 4.6, from: "2005-06", from_y: 6.7}
+      source: "Decomposition: 10y yield = expected-rate path + term premium (Adrian–Crump–Moench, NY Fed). Source: NY Fed ACM (ACMY10, ACMTP10, ACMRNY10)."
