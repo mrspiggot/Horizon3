@@ -54,6 +54,19 @@ class DataFrameProfile:
         return "\n".join(lines)
 
 
+# The insight taxonomy — what KIND of thing the chart says. The bridge classifies each insight
+# from the authored data_contract; the framer maps the type to its canonical differentiated forms.
+INSIGHT_TYPES = {
+    "relationship": "how one variable moves AGAINST another (a scatter / connected-scatter, not two lines over time)",
+    "cross_section": "a whole cross-section at one or a few moments (a curve / small multiples / dumbbell across items)",
+    "surface": "a cross-section evolving over time (an item × time heatmap / surface)",
+    "decomposition": "a total split into parts that sum to it (a stacked area / waterfall)",
+    "distribution": "the SHAPE of a distribution — spread, skew, tails (a ridgeline / violin / Pearson diagram)",
+    "state_space": "the §10 STATE — level + direction + acceleration + z-score + percentile (a quadrant / momentum map)",
+    "trend": "one or a few series genuinely over time (a line/area — legitimate, but it must EARN it with framing)",
+}
+
+
 @dataclass
 class InsightBrief:
     persona: str                    # e.g. "Central-bank policymaker"
@@ -62,14 +75,20 @@ class InsightBrief:
     papers: list[str]
     interpretation: str             # the executed reading — what the outputs MEAN
     profile: DataFrameProfile
+    insight_type: str = "trend"     # one of INSIGHT_TYPES — what KIND of chart this is
+    form_hint: str = ""             # the canonical forms + why (from the bridge's structural read)
     rows: list[dict] = field(default_factory=list)   # the raw data — NOT shown to the LLM
 
     def as_prompt(self) -> str:
+        it = self.insight_type
+        it_desc = INSIGHT_TYPES.get(it, "")
         return (
             f"PERSONA: {self.persona}\n"
             f"DECISION: {self.decision}\n"
             f"MODEL: {self.model_id}  (grounded in: {', '.join(self.papers) or 'n/a'})\n"
-            f"EXECUTED INTERPRETATION (what the numbers mean — narrate, don't invent):\n"
+            f"INSIGHT TYPE: {it} — {it_desc}\n"
+            + (f"FORM GUIDANCE: {self.form_hint}\n" if self.form_hint else "")
+            + f"EXECUTED INTERPRETATION (what the numbers mean — narrate, don't invent):\n"
             f"  {self.interpretation}\n"
             f"DATA SHAPE (design the chart for THIS; reference these field names):\n"
             f"{self.profile.as_prompt()}"
