@@ -12,7 +12,7 @@ from __future__ import annotations
 import base64
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from .compile import compile_encoding
 from .encoding import ChartEncoding
@@ -23,25 +23,31 @@ from .state import StudioState
 
 
 class Frame(BaseModel):
-    message: str = Field(..., description="The ONE thing the chart must say, one sentence, naming the communicative job (compare/trend/spread/relationship/part-to-whole/rank/divergence).")
-    candidate_marks: list[str] = Field(..., description="2–3 chart FORMS worth proposing for this message+data-shape, from: line, area, bar, grouped_bar, dumbbell, slope, point, connected_scatter, bubble, heatmap, ridgeline, waterfall. Ordered best-first. Avoid defaulting to line/bar unless the data genuinely calls for it.")
-    reasoning: str = Field(..., description="Why these forms fit the message and the number/shape of variables.")
+    message: str = Field("", description="The ONE thing the chart must say, one sentence, naming the communicative job (compare/trend/spread/relationship/part-to-whole/rank/divergence).")
+    candidate_marks: list[str] = Field(default_factory=list, description="2–3 chart FORMS worth proposing for this message+data-shape, from: line, area, bar, grouped_bar, dumbbell, slope, point, connected_scatter, bubble, heatmap, ridgeline, waterfall. Ordered best-first. Avoid defaulting to line/bar unless the data genuinely calls for it.")
+    reasoning: str = Field("", description="Why these forms fit the message and the number/shape of variables.")
 
 
 class PanelVerdict(BaseModel):
-    chosen_index: int = Field(..., description="0-based index of the winning candidate.")
-    rationale: str = Field(..., description="Consensus of the three experts: why this encoding carries the insight best (effectiveness + insight-carriage + differentiation vs a vanilla default).")
+    chosen_index: int = Field(0, description="0-based index of the winning candidate.")
+    rationale: str = Field("", description="Consensus of the three experts: why this encoding carries the insight best (effectiveness + insight-carriage + differentiation vs a vanilla default).")
 
 
 class VisualCritique(BaseModel):
-    ok: bool = Field(..., description="True if the rendered chart is clean and reads clearly with no defects worth fixing.")
+    ok: bool | None = Field(None, description="True if the rendered chart is clean and reads clearly with no defects worth fixing. If omitted, inferred from whether defects were listed.")
     defects: list[str] = Field(default_factory=list, description="Concrete rendered-pixel problems: label collisions, occlusion, clipped/overshooting axes, unreadable spaghetti, a legend that duplicates direct labels, a near-empty panel, etc.")
     fixes: list[str] = Field(default_factory=list, description="Specific, encoding-level changes to fix each defect (e.g. 'set y scale.domain to [-1,6]', 'drop the legend, keep direct labels', 'switch color_job to diverging').")
 
+    @model_validator(mode="after")
+    def _derive_ok(self):
+        if self.ok is None:
+            self.ok = not self.defects
+        return self
+
 
 class Judgment(BaseModel):
-    verdict: bool = Field(..., description="True = ships (expressive, effective, carries the insight, and is differentiated — not something a muppet with the FT could reproduce).")
-    notes: str = Field(..., description="One or two sentences justifying the verdict against those criteria.")
+    verdict: bool = Field(False, description="True = ships (expressive, effective, carries the insight, and is differentiated — not something a muppet with the FT could reproduce).")
+    notes: str = Field("", description="One or two sentences justifying the verdict against those criteria.")
 
 
 _MARKS = "line, area, stacked_area, bar, grouped_bar, dumbbell, slope, point, connected_scatter, bubble, heatmap, ridgeline, waterfall"
