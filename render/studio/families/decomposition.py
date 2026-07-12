@@ -278,3 +278,92 @@ def _short(label: str) -> str:
     """A compact end-label token from a full legend label."""
     label = label.split("(")[0].strip()
     return label if len(label) <= 20 else label[:19] + "…"
+
+
+# ─────────────────────────────── faceted (cross-jurisdiction) small-multiples ───────────────────
+def render_decomposition_faceted(panels: list[tuple[str, pd.DataFrame]], components: list[Component],
+                                 net_key: str, net_label: str, actual_key: str, actual_label: str, *,
+                                 title: str, subtitle: str, ylabel: str, source: str, footer: str,
+                                 out: str, ncols: int = 2, ylim: tuple[float, float] | None = None,
+                                 tick_years: int = 5) -> str:
+    """One signed-contribution decomposition PER panel (e.g. one central bank each), shared scale.
+
+    Composes the decomposition family with cross-jurisdiction faceting: the SAME model, the SAME
+    inputs, rendered across markets so the divergence between them is the insight.
+    """
+    if not any(u in ylabel for u in _UNIT_HINTS):
+        raise ValueError(f"CRAFT LINT FAILED: y-axis label states no unit: {ylabel!r}")
+    keys = [c.key for c in components] + [net_key, actual_key]
+    for pt, df in panels:
+        missing = [k for k in keys if k not in df.columns]
+        if missing:
+            raise ValueError(f"CRAFT LINT FAILED: panel {pt!r} missing {missing}")
+
+    if ylim is None:
+        los, his = [], []
+        for _pt, df in panels:
+            pos = np.zeros(len(df)); neg = np.zeros(len(df))
+            for c in components:
+                v = np.nan_to_num(df[c.key].to_numpy(dtype=float), nan=0.0)
+                pos += np.clip(v, 0, None); neg += np.clip(v, None, 0)
+            his += [np.nanmax(pos), df[net_key].max(), df[actual_key].max()]
+            los += [np.nanmin(neg), df[net_key].min(), df[actual_key].min()]
+        pad = 0.08 * (np.nanmax(his) - np.nanmin(los))
+        ylim = (float(np.nanmin(los) - pad), float(np.nanmax(his) + pad))
+
+    plt.rcParams.update({
+        "font.family": "sans-serif",
+        "font.sans-serif": ["Helvetica Neue", "Helvetica", "Arial", "DejaVu Sans"],
+        "axes.edgecolor": "#8a8a93", "text.color": INK, "axes.labelcolor": INK,
+        "xtick.color": "#55555c", "ytick.color": "#55555c",
+    })
+    nrows = (len(panels) + ncols - 1) // ncols
+    fig, axes = plt.subplots(nrows, ncols, figsize=(13.6, 4.3 * nrows + 1.2), dpi=200,
+                             sharex=True, sharey=True)
+    fig.subplots_adjust(left=0.07, right=0.985, top=0.83, bottom=0.10, wspace=0.06, hspace=0.16)
+    axf = axes.ravel()
+
+    for ax, (ptitle, df) in zip(axf, panels):
+        t = df.index
+        pos_base = np.zeros(len(df)); neg_base = np.zeros(len(df))
+        for c in components:
+            v = df[c.key].to_numpy(dtype=float)
+            pos = np.clip(v, 0, None); neg = np.clip(v, None, 0)
+            ax.fill_between(t, pos_base, pos_base + pos, color=c.color, lw=0, zorder=2)
+            ax.fill_between(t, neg_base, neg_base + neg, color=c.color, lw=0, zorder=2)
+            pos_base = pos_base + pos; neg_base = neg_base + neg
+        ax.axhline(0, color="#6b6b73", lw=0.9, zorder=3)
+        ax.plot(t, df[net_key], color=INK, lw=1.9, ls=(0, (5, 2)), zorder=5, path_effects=_HALO)
+        ax.plot(t, df[actual_key], color=INK, lw=2.3, zorder=6, path_effects=_HALO)
+        ax.set_ylim(*ylim); ax.set_xlim(t[0], t[-1])
+        ax.yaxis.grid(True, color=GRID, lw=0.7, zorder=0); ax.set_axisbelow(True)
+        for s in ("top", "right"):
+            ax.spines[s].set_visible(False)
+        ax.set_title(ptitle, fontsize=12.5, fontweight="bold", loc="left", color=INK, pad=6)
+        nv = df[net_key].last_valid_index()   # rule may end before the actual-rate tail (stale CPI)
+        gap = (df[net_key][nv] - df[actual_key][nv]) if nv is not None else float("nan")
+        gtxt = f"rule − actual: {gap:+.1f} pp" + (f"  (at {nv.year})" if nv is not None and nv != df.index[-1] else "")
+        ax.annotate(gtxt, xy=(0.025, 0.045), xycoords="axes fraction",
+                    fontsize=9.0, color=INK, ha="left", va="bottom",
+                    bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="#c8c8d0", lw=0.7, alpha=0.92))
+        ax.xaxis.set_major_locator(mdates.YearLocator(tick_years))
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+        ax.tick_params(labelsize=9.5)
+    for ax in axf[len(panels):]:
+        ax.axis("off")
+    for ax in axf:
+        if ax.get_subplotspec().is_first_col():
+            ax.set_ylabel(ylabel, fontsize=10.5)
+
+    fig.text(0.07, 0.955, title, fontsize=18.5, fontweight="bold", color=INK)
+    fig.text(0.07, 0.895, subtitle, fontsize=11.0, color="#4a4a52", linespacing=1.3, va="top")
+
+    handles = [Patch(fc=c.color, label=c.label) for c in components]
+    handles.append(Line2D([], [], color=INK, lw=1.9, ls=(0, (5, 2)), label=net_label))
+    handles.append(Line2D([], [], color=INK, lw=2.3, label=actual_label))
+    fig.legend(handles=handles, loc="upper right", bbox_to_anchor=(0.985, 0.905), fontsize=9.5,
+               frameon=False, ncol=2, handlelength=1.6, columnspacing=1.4)
+    fig.text(0.07, 0.035, source, fontsize=8.2, color="#8a8a93")
+    fig.text(0.07, 0.013, footer, fontsize=8.2, color="#8a8a93", style="italic")
+    fig.savefig(out, dpi=200, facecolor="white"); plt.close(fig)
+    return out
