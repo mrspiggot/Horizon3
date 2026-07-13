@@ -57,10 +57,40 @@ def _norm_unit(u: str) -> tuple[str, str]:
     return u, "{:.2f}"
 
 
+_SOURCE_LABEL = {
+    "fred": "FRED", "nyfed_acm": "NY Fed ACM term-structure model",
+    "nyfed_hlw": "NY Fed (Holston–Laubach–Williams)", "fed_ebp": "Federal Reserve (GZ / EBP)",
+    "boe": "Bank of England", "yahoo": "Yahoo Finance", "ecb": "ECB", "cftc": "CFTC",
+}
+
+
+def clean_meaning(meaning: str, fallback: str = "") -> str:
+    """A short, reader-facing tile heading from an output's authored `meaning`.
+    Falls back to the humanised field id when the meaning is too long to sit cleanly."""
+    m = re.sub(r"\s+", " ", re.split(r"[—(;,]", meaning or "", 1)[0].strip())
+    if not m:
+        return fallback
+    if len(m) <= 26:
+        return m
+    return fallback or (m[:24].rsplit(" ", 1)[0] + "…")
+
+
+def reader_takeaway(summary: str) -> str:
+    """The last number-free sentence of the exec summary — a grounded, client-ready 'read'."""
+    sents = re.split(r"(?<=[.!?])\s+", " ".join((summary or "").split()))
+    for s in reversed(sents):
+        s = s.strip()
+        if s and not re.search(r"\{|\d+\.\d+|\d+\s?(?:%|pp|bp|×|σ)", s):
+            return s
+    return ""
+
+
 def persona_material(persona_id: str, conn) -> dict:
     p = yaml.safe_load((GRAPH_DIR / "personas.yaml").read_text())["personas"][persona_id]
     runs: dict[str, dict] = {}
     numbers: dict[str, NumberObject] = {}
+    meanings: dict[str, str] = {}
+    model_names: list[str] = []
     papers, sources = set(), set()
     for mid in p["models"]:
         run = graph_corpus.run_model(mid, conn)
@@ -70,6 +100,8 @@ def persona_material(persona_id: str, conn) -> dict:
             continue
         as_of = str(latest.as_of)[:10]
         meta = run.get("meta") or {}
+        if meta.get("name"):
+            model_names.append(meta["name"])
         outs = {o["name"]: o for o in (meta.get("outputs") or [])}
         sp = meta.get("spec")
         comp = (sp.get("equations", "") if isinstance(sp, dict) else getattr(sp, "equations", "")) \
@@ -82,6 +114,7 @@ def persona_material(persona_id: str, conn) -> dict:
             numbers[f"{mid}.{name}"] = NumberObject(
                 name=f"{mid}.{name}", value=float(val), unit=unit, fmt=fmt,
                 source=f"{mid}.{name}", source_computation=comp, as_of=as_of)
+            meanings[f"{mid}.{name}"] = outs.get(name, {}).get("meaning", "")
         for iid, obj in latest.inputs.items():
             lvl = getattr(obj, "level", obj)
             key = f"{mid}.{iid}"
@@ -96,8 +129,10 @@ def persona_material(persona_id: str, conn) -> dict:
         k = f"{m.group(1)}.{m.group(2)}"
         if k in numbers and k not in salient:
             salient.append(k)
-    return {"id": persona_id, "p": p, "runs": runs, "numbers": numbers, "salient": salient,
-            "papers": sorted(papers), "sources": sorted(sources),
+    source_labels = sorted({_SOURCE_LABEL.get(s, s) for s in sources})
+    return {"id": persona_id, "p": p, "runs": runs, "numbers": numbers, "meanings": meanings,
+            "salient": salient, "papers": sorted(papers), "sources": sorted(sources),
+            "source_labels": source_labels, "model_names": model_names,
             "as_of": max((n.as_of for n in numbers.values()), default="")}
 
 
@@ -118,6 +153,10 @@ def chart_png(run: dict, chart_id: str, figsize=(6.4, 3.9)) -> str | None:
 
 
 def first_sentence(text: str) -> str:
-    t = " ".join((text or "").split())
-    i = t.find(". ")
-    return (t[:i + 1] if i > 0 else t)[:240]
+    """The first clean, number-free sentence — a reader-ready thesis opener."""
+    sents = re.split(r"(?<=[.!?])\s+", " ".join((text or "").split()))
+    for s in sents:
+        s = s.strip()
+        if s and "{" not in s and not re.search(r"\d+\.\d+|\d+\s?(?:%|pp|bp|×|σ)", s):
+            return s[:240]
+    return (sents[0][:240] if sents else "")

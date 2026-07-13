@@ -85,6 +85,10 @@ def lint_infographic(spec: InfographicSpec, html: str,
         if illus.select("span.num") or _DIGITS.search(re.sub(r"\s", "", illus.get_text())):
             p.append("a number/digit appears inside the illustration slot (diffusion isolation broken)")
 
+    # ── an unfilled {placeholder} means a template leaked to the page ─────────
+    if "{" in soup.get_text() or "}" in soup.get_text():
+        p.append("an unfilled {placeholder} template remains in the rendered page")
+
     # ── data numbers in prose that are NOT NumberObjects (the H2-class leak) ───
     for node in soup.select(".callout, .note p, .tile .s, .deck"):
         prose = "".join(t for t in node.find_all(string=True, recursive=True)

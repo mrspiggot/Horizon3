@@ -99,7 +99,8 @@ h1{font:600 33px/1.12 var(--serif);margin:12px 0 8px;letter-spacing:-.01em;}
   background:color-mix(in srgb,var(--accent) 6%,transparent);border-radius:0 8px 8px 0;margin:0 0 22px;}
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin:0 0 22px;}
 .tile{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:var(--board);}
-.tile .k{font:600 11px/1.2 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);}
+.tile .k{font:600 11px/1.3 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);
+  min-height:2.3em;display:flex;align-items:flex-start;}
 .tile .v{font:600 30px/1.1 var(--sans);margin:8px 0 4px;letter-spacing:-.02em;}
 .tile .s{font:400 12.5px/1.35 var(--sans);color:var(--muted);}
 .tile.up{border-top:3px solid var(--up);} .tile.dn{border-top:3px solid var(--dn);}
