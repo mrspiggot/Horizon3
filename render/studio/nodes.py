@@ -197,15 +197,18 @@ def compile_node(state: StudioState) -> dict:
 
 def multimodal_critique(state: StudioState) -> dict:
     png = state["png_path"]
-    b64 = _img_b64(png)
+    b64 = _img_b64(png, max_px=2000)   # keep faceted panels legible to the vision model
     llm = get_llm(model=VISION_MODEL, temperature=0.1).with_structured_output(VisualCritique)
     msg = [{"role": "user", "content": [
         {"type": "text", "text":
             "You are the visual critic. LOOK at this rendered chart and judge it as printed pixels — not the "
             "idea, the execution. The chart must say: " + str(state.get("message")) + ". Flag concrete defects "
             "(label collisions, occlusion, clipped or overshooting axes, unreadable spaghetti, a redundant "
-            "legend, a near-empty panel) and give specific encoding-level fixes. If it is clean and reads well, "
-            "set ok=true."},
+            "legend, a near-empty panel) and give specific encoding-level fixes. "
+            "BUT if this is a SMALL-MULTIPLE / faceted grid, judge it as a whole: a plain-looking single panel on "
+            "a shared scale is CORRECT, so do NOT flag panels as 'near-empty' or repeated axes as redundant — only "
+            "flag genuine cross-panel defects (inconsistent scales, per-panel label collisions). "
+            "If it is clean and reads well, set ok=true."},
         {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
     ]}]
     c: VisualCritique = llm.invoke(msg)
@@ -237,7 +240,7 @@ def reviser(state: StudioState) -> dict:
 def judge(state: StudioState) -> dict:
     brief = state["brief"]
     llm = get_llm(model=VISION_MODEL, temperature=0.1).with_structured_output(Judgment)
-    b64 = _img_b64(state["png_path"])
+    b64 = _img_b64(state["png_path"], max_px=2000)   # faceted grids need the extra px to stay legible
     j: Judgment = llm.invoke([{"role": "user", "content": [
         {"type": "text", "text":
             "You are the final judge. Does this chart SHIP? Criteria: (1) expressive — faithful to the data; "
@@ -247,7 +250,13 @@ def judge(state: StudioState) -> dict:
             "behind it — NOT merely whether the mark is exotic. A line or area SHIPS when the form genuinely "
             "fits the message AND it is enriched with framing a muppet-with-the-FT would not add (a threshold "
             "the reader measures against, recession/crisis shading, a decomposition that reveals structure). "
-            "FAIL it when: the form mis-serves the insight (e.g. a part-to-whole drawn as separate lines "
+            "SMALL MULTIPLES / faceted grids are a LEGITIMATE and often SUPERIOR form (Tufte) for comparing a "
+            "model across instances (currencies, tenors, sectors): judge the GRID AS A WHOLE — does the shared "
+            "scale let the reader read the cross-panel DIVERGENCE at a glance? Do NOT fail a small-multiple for "
+            "per-panel simplicity, repeated axes, or because one panel alone looks plain — that repetition on a "
+            "common scale IS the point. Only fail a grid for real defects: panels on INCONSISTENT scales, "
+            "per-panel label collisions, or a grid that carries no cross-panel signal. "
+            "FAIL any chart when: the form mis-serves the insight (e.g. a part-to-whole drawn as separate lines "
             "instead of stacked), it is a bare undifferentiated plot, labels collide, or it reads as generic. "
             "The insight it must carry:\n" + brief.interpretation + "\nMessage: " + str(state.get("message"))},
         {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
