@@ -46,17 +46,19 @@ interpretations:
 charts:
   - id: "Gold vs the inverse of real yields"
     role: outcome
-    chart_type: series
-    color_job: categorical
+    chart_type: scatter
+    color_job: sequential
     interpretation: rates_driven
-    insight: "the Erb-Harvey relationship made visible — gold (standardized) tracks the INVERSE real yield tightly; where the two lines separate is the fear/flow premium"
+    insight: "the Erb-Harvey relationship as a scatter — each point a month of gold (y) against the INVERSE real yield (x), both standardized. The positive slope IS the model; the wide scatter around it is the fear/flow premium gold carries beyond rates"
     data_contract:
-      kind: series
-      ylabel: "standard deviations"
-      zero_line: true
-      series:
-        - {label: "gold (z)", from: "output:gold_z"}
-        - {label: "-real yield (z) = model", from: "output:neg_real_yield_z"}
+      kind: scatter
+      title: "Gold and real yields: the Erb–Harvey relationship"
+      xlabel: "inverse real yield, z-score (σ)"
+      ylabel: "gold, z-score (σ)"
+      x: "output:neg_real_yield_z"
+      y: "output:gold_z"
+      fit: true
+      time_colour: true
   - id: "Gold's dislocation from the real-yield model"
     role: consequence
     chart_type: gap_series

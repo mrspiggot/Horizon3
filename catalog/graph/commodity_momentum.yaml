@@ -53,7 +53,7 @@ charts:
     chart_type: heatmap
     color_job: diverging
     interpretation: broad_uptrend
-    insight: "the entire complex's 12m momentum through time — red rows are downtrends, blue uptrends; whole-column colour = a regime the whole complex shares"
+    insight: "the entire complex's 12-month momentum through time — each leg's trend by strength and sign, and where a whole vertical stripe shares one sign it is a regime the complex moves through together (2008, 2020-22)"
     data_contract:
       kind: heatmap
       cbar_label: "12m return (%)"
