@@ -19,6 +19,9 @@ _DIGITS = re.compile(r"-?\d[\d,]*\.?\d*")
 # a "data leak" in prose = a decimal or a unit-suffixed number (what a real figure looks like).
 # Bare integers (counts) and 4-digit years are fine — this is the H2-class leak, not enumeration.
 _LEAK = re.compile(r"\d+\.\d+|\d+\s?(?:%|pp|bp|bps|×|σ)")
+# equivocation a real publication would never print — a decisive read, or none.
+_HEDGE = re.compile(r"\b(one reading|one interpretation|one could argue|arguably|on balance|"
+                    r"broadly speaking|it may be that|some would say)\b", re.I)
 
 
 def _fmt(fmt: str, val: float, unit: str) -> str:
@@ -96,6 +99,9 @@ def lint_infographic(spec: InfographicSpec, html: str,
         m = _LEAK.search(prose)
         if m:
             p.append(f"un-traced data number {m.group()!r} in prose (must be a NumberObject)")
+        h = _HEDGE.search(prose)
+        if h:
+            p.append(f"equivocation {h.group()!r} in reader copy — make a call, not a shrug")
     return p
 
 

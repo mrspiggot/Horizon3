@@ -75,13 +75,27 @@ def clean_meaning(meaning: str, fallback: str = "") -> str:
     return fallback or (m[:24].rsplit(" ", 1)[0] + "…")
 
 
+# hedges a real publication would never print — strip them so the read is a CALL, not a shrug
+_HEDGE_PREFIX = re.compile(r"^.*?\b(reading|reads|trade|interpretation|take|models?)\b[^:]*:\s*", re.I)
+_HEDGE_WORD = re.compile(
+    r"\b(arguably|perhaps|somewhat|broadly|on balance|it may be(?: that)?|one could argue|"
+    r"tends to|seems to|appears to)\b[,]?\s*", re.I)
+
+
+def decisive(s: str) -> str:
+    """Turn a hedged sentence into a declarative call (drop 'One reading:' etc.)."""
+    s = _HEDGE_PREFIX.sub("", s or "").strip()
+    s = _HEDGE_WORD.sub("", s).strip()
+    return (s[:1].upper() + s[1:]) if s else s
+
+
 def reader_takeaway(summary: str) -> str:
-    """The last number-free sentence of the exec summary — a grounded, client-ready 'read'."""
+    """The exec summary's closing read as a DECISIVE, number-free call — no equivocation."""
     sents = re.split(r"(?<=[.!?])\s+", " ".join((summary or "").split()))
     for s in reversed(sents):
         s = s.strip()
         if s and not re.search(r"\{|\d+\.\d+|\d+\s?(?:%|pp|bp|×|σ)", s):
-            return s
+            return decisive(s)
     return ""
 
 
