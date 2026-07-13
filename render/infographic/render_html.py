@@ -105,10 +105,10 @@ h1{font:600 33px/1.12 var(--serif);margin:12px 0 8px;letter-spacing:-.01em;}
 .tile .s{font:400 12.5px/1.35 var(--sans);color:var(--muted);}
 .tile.up{border-top:3px solid var(--up);} .tile.dn{border-top:3px solid var(--dn);}
 .tile.mid{border-top:3px solid var(--mid);}
-.charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:18px;margin:0 0 22px;}
+.charts{display:grid;grid-template-columns:1fr;gap:20px;margin:0 0 22px;}
 .chart{margin:0;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--board);}
 .chart img{width:100%;display:block;}
-.chart figcaption{font:400 12px/1.3 var(--sans);color:var(--muted);padding:9px 12px;border-top:1px solid var(--line);}
+.chart figcaption{font:400 13.5px/1.45 var(--serif);color:var(--ink);padding:12px 16px 14px;border-top:1px solid var(--line);}
 .note{border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:0 0 20px;}
 .note h3{font:600 12px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin:0 0 8px;}
 .note p{font:400 14px/1.55 var(--sans);color:var(--ink);margin:0;}

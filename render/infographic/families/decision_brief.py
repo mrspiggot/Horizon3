@@ -7,8 +7,8 @@ LLM. Every KPI is a provenance-traced NumberObject; the tier-1 gate refuses anyt
 """
 from __future__ import annotations
 
-from ..from_persona import (chart_png, clean_meaning, first_sentence, humanise,
-                            persona_material, reader_takeaway)
+from ..from_persona import (chart_png, clean_meaning, decisive, first_sentence, hero_charts,
+                            humanise, persona_material, reader_takeaway)
 from ..gate import emit
 from ..schema import Block, InfographicSpec, Layout
 
@@ -16,7 +16,7 @@ _PALETTE = ["#4C6EA8", "#D55E00", "#009E73", "#B8C4CE", "#D98A00"]
 _TONES = ["mid", "up", "dn", "mid"]
 
 
-def spec_from_persona(persona_id: str, conn, *, n_tiles: int = 4, n_charts: int = 2) -> tuple[InfographicSpec, set[str]]:
+def spec_from_persona(persona_id: str, conn, *, n_tiles: int = 4, n_charts: int = 1) -> tuple[InfographicSpec, set[str]]:
     """Return (spec, valid_sources) — valid_sources is the set of executed output keys the gate
     checks every rendered number against."""
     mat = persona_material(persona_id, conn)
@@ -33,13 +33,22 @@ def spec_from_persona(persona_id: str, conn, *, n_tiles: int = 4, n_charts: int 
         tiles.append(Block(id=f"kpi{i}", type="kpi_tile", title=heading,
                            numbers=[numbers[key]], tone=_TONES[i % len(_TONES)]))
 
+    # Hero chart(s): the best POLISHED ACS structure-family render available anywhere in the
+    # persona's models; the chart's authored `insight` becomes an editorial caption.
+    def _cap(insight: str) -> str:
+        s = decisive(insight)
+        return (s[:128] + "…") if len(s) > 128 else s
+
     charts: list[Block] = []
-    for mid, cid in p["stub_charts"]:
-        if len(charts) >= n_charts:
-            break
-        png = chart_png(mat["runs"].get(mid, {}), cid)
-        if png:
-            charts.append(Block(id=f"ch{len(charts)}", type="chart_embed", title=cid, chart_png=png))
+    for png, insight in hero_charts(p, mat["runs"], n=n_charts):
+        charts.append(Block(id=f"ch{len(charts)}", type="chart_embed",
+                            title=_cap(insight), chart_png=png))
+    if not charts:                                          # fall back to a graph render of a stub
+        for mid, cid in p["stub_charts"]:
+            png = chart_png(mat["runs"].get(mid, {}), cid)
+            if png:
+                charts.append(Block(id="ch0", type="chart_embed", title=cid, chart_png=png))
+                break
 
     thesis = Block(id="thesis", type="thesis_callout",
                    text=first_sentence(p.get("summary_template", "")))

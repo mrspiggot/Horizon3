@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import base64
 import io
+import os
 import re
+import tempfile
 from pathlib import Path
 
 import matplotlib
@@ -18,7 +20,60 @@ import matplotlib.pyplot as plt  # noqa: E402
 import yaml                      # noqa: E402
 
 from .. import from_graph, graph_corpus  # noqa: E402
-from .schema import NumberObject          # noqa: E402
+from ..studio.families import decomposition as _dc  # noqa: E402
+from ..studio.families import relationship as _rel  # noqa: E402
+from ..studio.families import surface as _surf      # noqa: E402
+from .schema import NumberObject                     # noqa: E402
+
+# authored data_contract.kind → the polished ACS structure-family renderer
+_FAMILY = {"decomposition": "decomp", "stacked": "decomp",
+           "scatter": "rel", "pearson": "rel", "heatmap": "surf"}
+
+
+def _blank_meta(spec) -> None:
+    """Embed mode: drop the family chart's own subtitle/source/footer — the infographic frames it."""
+    for f in ("subtitle", "source", "footer"):
+        if hasattr(spec, f):
+            setattr(spec, f, "")
+
+
+def chart_png_family(run: dict, chart_id: str) -> tuple[str | None, str]:
+    """Render a persona chart through its POLISHED ACS structure-family (decomposition / surface /
+    relationship) in embed mode. Returns (base64_png, insight_caption); (None, insight) to fall back."""
+    chart = next((c for c in (run.get("charts") or []) if c.get("id") == chart_id), None)
+    if chart is None:
+        return None, ""
+    insight = " ".join((chart.get("insight") or "").split())
+    fam = _FAMILY.get((chart.get("data_contract", {}) or {}).get("kind", ""))
+    if not fam or not run.get("history"):
+        return None, insight
+    model = run.get("meta") or {}
+    out = os.path.join(tempfile.gettempdir(), f"ais_fam_{abs(hash((model.get('model_id'), chart_id)))}.png")
+    try:
+        if fam == "decomp":
+            built = _dc.spec_from_run(model, run, chart_id)
+            if not built:
+                return None, insight
+            df, spec = built; _blank_meta(spec); _dc.render_decomposition(df, spec, out)
+        elif fam == "rel":
+            built = _rel.spec_from_run(model, run, chart_id)
+            if not built:
+                return None, insight
+            df, spec = built; _blank_meta(spec); _rel.render_relationship(df, spec, out)
+        else:  # surf
+            built = _surf.spec_from_run(model, run, chart_id)
+            if not built:
+                return None, insight
+            dates, mat, spec = built; _blank_meta(spec); _surf.render_surface(dates, mat, spec, out)
+        b = base64.b64encode(Path(out).read_bytes()).decode()
+        return b, insight
+    except Exception:
+        return None, insight
+    finally:
+        try:
+            os.remove(out)
+        except OSError:
+            pass
 
 GRAPH_DIR = Path(__file__).resolve().parents[2] / "catalog" / "graph"
 _PLACE = re.compile(r"\{([a-z0-9_]+)\.([a-z0-9_]+)\}")
@@ -164,6 +219,27 @@ def chart_png(run: dict, chart_id: str, figsize=(6.4, 3.9)) -> str | None:
         return None
     finally:
         plt.close(fig)
+
+
+def hero_charts(p: dict, runs: dict, n: int = 1) -> list[tuple[str, str]]:
+    """The best polished charts for a persona: family-routing charts, the author's stub picks first,
+    then any other family chart across the models. Returns [(base64_png, insight_caption), …]."""
+    seen: set[tuple] = set()
+    candidates: list[tuple[str, str]] = []
+    for mid, cid in p.get("stub_charts", []):              # author's picks first
+        candidates.append((mid, cid)); seen.add((mid, cid))
+    for mid in p.get("models", []):                        # then any other model chart
+        for c in (runs.get(mid, {}).get("charts") or []):
+            if (mid, c["id"]) not in seen:
+                candidates.append((mid, c["id"])); seen.add((mid, c["id"]))
+    out: list[tuple[str, str]] = []
+    for mid, cid in candidates:
+        if len(out) >= n:
+            break
+        png, cap = chart_png_family(runs.get(mid, {}), cid)
+        if png:
+            out.append((png, cap))
+    return out
 
 
 def first_sentence(text: str) -> str:

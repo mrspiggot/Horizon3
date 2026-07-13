@@ -35,7 +35,7 @@ personas:
     models: [term_premium_surface, term_premium_decomposition, term_premium_curve, expectations_path]
     stub_charts:
       - [term_premium_surface, "Term-premium surface (tenor x time)"]
-      - [term_premium_surface, "The term-premium curve: now vs 3 months ago"]
+      - [term_premium_decomposition, "Term-premium share of the yield"]
       - [term_premium_decomposition, "The 10Y, split: expectations + term premium"]
       - [expectations_path, "Expectations-curve slope (10Y - 2Y)"]
     summary_template: >
@@ -43,8 +43,10 @@ personas:
       The ACM decomposition splits today's {term_premium_decomposition.fitted_yield_pct}% fitted 10-year
       into {term_premium_decomposition.expectations_pct}% of expected average short rate and just
       {term_premium_decomposition.term_premium_pct}pp of term premium — only
-      {term_premium_decomposition.tp_share} of the yield is compensation for duration risk. That
-      premium is thin: the market is being paid little to own the long end. Across tenors the
+      {term_premium_decomposition.tp_share} of the yield is compensation for duration risk. That share
+      is the story of the era: the fat, positive term premium of the 2000s — more than half the yield —
+      bled away through the QE years and turned outright negative after 2015, so for a stretch investors
+      paid to lend long rather than being paid; it has only partly rebuilt. Across tenors the
       term-premium curve slope (10s minus 2s) is {term_premium_curve.slope}pp, while the expectations
       curve slope is {expectations_path.slope}pp — the shape of the path the market prices. Duration
       here is an expectations bet, not a risk-premium one; the trade is in the path, not the premium.
@@ -125,24 +127,27 @@ personas:
   commodity_analyst:
     name: "Commodity analyst"
     decision: "Position across the commodity complex (energy / metals / ags)."
-    title: "What the commodity complex is saying about growth and inflation"
-    models: [energy_complex, copper_gold_growth, commodity_momentum]
+    title: "What the energy complex says about growth and inflation"
+    # Refocused to the energy leg: WTI/Brent/Henry Hub have deep FRED history (2000+); the metals/ags
+    # legs (copper/gold/corn) are ~1yr in the DB after the Yahoo 429 and await the deferred infra fix
+    # that unblocks their deep backfill. Restore [copper_gold_growth, commodity_momentum] then.
+    models: [energy_complex, commodity_momentum]
     stub_charts:
-      - [commodity_momentum, "The momentum surface (commodity x time)"]
-      - [commodity_momentum, "Momentum breadth (net share trending up)"]
-      - [copper_gold_growth, "The copper/gold ratio (growth signal)"]
-      - [commodity_momentum, "Momentum across the complex today"]
+      - [energy_complex, "Crude oil: nominal price vs real (inflation-stripped)"]
+      - [energy_complex, "The Brent-WTI location spread over time"]
+      - [energy_complex, "Oil-to-gas ratio (crude vs gas relative value)"]
+      - [energy_complex, "Crude oil momentum (12-month trailing return)"]
     summary_template: >
-      Commodities are the economy's cleanest real-time read on growth and inflation, and the two
-      published fundamentals of futures returns are momentum and the futures basis (Gorton-Hayashi-
-      Rouwenhorst). Time-series momentum (Moskowitz-Ooi-Pedersen 2012) — a commodity's own 12-month
-      trailing return — has the complex at {commodity_momentum.avg_mom}% on average, with breadth of
-      {commodity_momentum.breadth}: that net share of energy, metals, precious and ags trending together
-      is the regime read, positive in reflations and sharply negative through the 2014-16 oil crash and
-      2020 demand shock. Copper leads the cyclical signal at {commodity_momentum.copper_mom}% against
-      gold's {commodity_momentum.gold_mom}%, and the copper/gold ratio — cyclical demand against safety —
-      sits at {copper_gold_growth.ratio}. One reading: trade the complex by the sign of each leg's trend,
-      long the uptrends and short the downtrends, and treat broad breadth as the macro growth-inflation dial.
+      Commodities are the economy's cleanest real-time read on growth and inflation, and the energy
+      complex rewards analysis over the quoted price. Deflate WTI by CPI and today's ${energy_complex.crude}
+      is about ${energy_complex.real_wti} in current money — barely a third of its June-2008 real peak near
+      $206; in real terms, energy is cheap. The Brent-WTI location spread, which blew out past $27 in 2011
+      as landlocked US shale glutted the Gulf, has collapsed to essentially zero ({energy_complex.brent_wti_spread}):
+      export capacity caught up and the decade-long infrastructure trade is over. Crude now costs
+      {energy_complex.oil_gas_ratio} times Henry Hub gas, far above the 8-to-10x energy-equivalent parity of
+      the 2000s — the shale gas glut, not oil strength. And 12-month momentum, positive now, is the regime
+      dial: its -81% trough in April 2020 marked the demand collapse. One reading: real energy is cheap, the
+      location arbitrage is dead, and gas is the value leg of the complex.
 
   corporate_treasurer:
     name: "Corporate treasurer"
