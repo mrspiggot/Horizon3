@@ -65,9 +65,11 @@ def lint_infographic(spec: InfographicSpec, html: str,
     # ── DOM verification (the H2 test) ─────────────────────────────────────────
     soup = BeautifulSoup(html, "html.parser")
     spans = soup.select("span.num")
-    placed = len(spec.all_numbers())
-    if len(spans) != placed:
-        p.append(f"{len(spans)} rendered numbers but {placed} NumberObjects (drop/leak)")
+    # every NumberObject must be rendered at least once (no silent drop); a token cited twice is fine
+    rendered_srcs = {s.get("data-src", "") for s in spans}
+    for n in spec.all_numbers():
+        if n.source not in rendered_srcs:
+            p.append(f"NumberObject {n.source!r} was dropped (never rendered)")
     for s in spans:
         dv, fmt = s.get("data-val"), s.get("data-fmt", "{:+.2f}")
         src, txt = s.get("data-src", ""), s.get_text().strip()

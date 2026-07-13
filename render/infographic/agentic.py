@@ -158,7 +158,10 @@ def run_agentic(persona_id: str, conn, out_png: str, *, max_iter: int = 3) -> di
         html = render_html(spec)
         problems = lint_infographic(spec, html, valid)          # tier-1: deterministic firewall
         if problems and iters < max_iter:                       # LLM typed a digit / hedged / bad token
-            nar = narrate(mat, toks, menu, feedback="; ".join(problems)); continue
+            fb = ("REMOVE any figure that is not in the numbers list above — do not compute, derive, or "
+                  "invent numbers (ratios, sums, differences). Only cite the listed values verbatim. "
+                  "Fix: " + "; ".join(problems))
+            nar = narrate(mat, toks, menu, feedback=fb); continue
         if problems:                                            # out of budget → refuse (never ship bad)
             return {"persona": persona_id, "ok": False, "stage": "tier1", "problems": problems, "iters": iters}
         html_to_png(html, out_png)
