@@ -7,7 +7,7 @@ method: published
 method_note: "ACM term-premium tenor curve"
 spec:
   equations: "tp_slope = tp(10y) - tp(2y) — the steepness of the term-premium curve"
-history: {start: "2025-07-10", end: "2026-07-09", cadence: weekly}
+history: {start: "2000-01", end: "2026-07", cadence: monthly}
 inputs:
   - {id: tp02, series_id: ACMTP02, db_source: nyfed_acm, state: level, context_window: 120}
   - {id: tp05, series_id: ACMTP05, db_source: nyfed_acm, state: level, context_window: 120}
@@ -24,14 +24,14 @@ interpretations:
 charts:
   - id: "Term premium by tenor (2s / 5s / 10s)"
     role: input
-    chart_type: series
-    color_job: sequential
-    insight: "the whole term-premium curve moving through time"
+    chart_type: heatmap
+    color_job: diverging
+    insight: "the whole term-premium curve through time — where and when each tenor's duration risk was priced, and when it turned negative"
     data_contract:
-      kind: series
-      ylabel: "term premium (pp)"
-      zero_line: true
-      series:
+      kind: heatmap
+      title: "The term-premium curve, by tenor and through time"
+      cbar_label: "term premium (pp)"
+      rows:
         - {label: "2Y", from: "input:tp02.level"}
         - {label: "5Y", from: "input:tp05.level"}
         - {label: "10Y", from: "input:tp10.level"}

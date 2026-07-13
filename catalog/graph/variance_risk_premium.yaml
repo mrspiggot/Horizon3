@@ -26,15 +26,18 @@ interpretations:
 charts:
   - id: "Implied (VIX) vs realized vol"
     role: input
-    chart_type: series
-    color_job: categorical
-    insight: "the gap between implied and realized IS the variance risk premium"
+    chart_type: scatter
+    color_job: sequential
+    insight: "each point is one day — trailing realized vol (x) against the VIX implied vol (y). Implied usually sits above realized: that vertical gap is the variance risk premium a seller is paid, and it fans out in stress"
     data_contract:
-      kind: series
-      ylabel: "annualized vol (%)"
-      series:
-        - {label: "implied (VIX)", from: "output:implied_vol_pct"}
-        - {label: "realized (SPX 21d)", from: "output:realized_vol_pct"}
+      kind: scatter
+      title: "What the option seller is paid: implied vs realized vol"
+      xlabel: "realized vol, SPX 21d (%)"
+      ylabel: "implied vol, VIX (%)"
+      x: "output:realized_vol_pct"
+      y: "output:implied_vol_pct"
+      fit: true
+      time_colour: true
   - id: "The variance risk premium"
     role: outcome
     chart_type: gap_series

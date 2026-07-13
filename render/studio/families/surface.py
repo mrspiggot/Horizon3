@@ -143,7 +143,11 @@ def spec_from_run(model: dict, run: dict, chart_id: str, persona_name: str = "")
     if len(dates) < 3:
         return None
     mat = np.array(cols).T   # (n_items, n_dates)
-    signed = bool(np.nanmin(mat) < -1e-9)
+    # authored `diverging` wins; else auto-detect from the data's sign
+    if "diverging" in dc:
+        signed = bool(dc["diverging"])
+    else:
+        signed = bool(np.nanmin(mat) < -1e-9)
 
     insight = " ".join((chart.get("insight") or "").split())
     spec = SurfaceSpec(

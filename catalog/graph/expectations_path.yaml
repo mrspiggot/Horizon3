@@ -7,7 +7,7 @@ method: published
 method_note: "ACM risk-neutral (expectations) yields"
 spec:
   equations: "ACMRNY(n) = expected average short rate over n years (risk-neutral); slope = 10y - 2y"
-history: {start: "2025-07-10", end: "2026-07-09", cadence: weekly}
+history: {start: "2000-01", end: "2026-07", cadence: monthly}
 inputs:
   - {id: rny02, series_id: ACMRNY02, db_source: nyfed_acm, state: level, context_window: 120}
   - {id: rny05, series_id: ACMRNY05, db_source: nyfed_acm, state: level, context_window: 120}
@@ -24,13 +24,15 @@ interpretations:
 charts:
   - id: "The market-implied path (2s / 5s / 10s expectations)"
     role: input
-    chart_type: series
+    chart_type: heatmap
     color_job: sequential
-    insight: "the risk-neutral (expectations) yields by tenor — what path the market prices, through time"
+    insight: "the risk-neutral (expectations) yield by tenor through time — the whole expected-rate path in one view, where the market priced hikes and cuts"
     data_contract:
-      kind: series
-      ylabel: "expected avg short rate (%)"
-      series:
+      kind: heatmap
+      title: "The market's expected-rate path, by tenor and through time"
+      cbar_label: "expected average short rate (%)"
+      diverging: false
+      rows:
         - {label: "2Y", from: "input:rny02.level"}
         - {label: "5Y", from: "input:rny05.level"}
         - {label: "10Y", from: "input:rny10.level"}

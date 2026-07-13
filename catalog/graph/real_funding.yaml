@@ -37,15 +37,20 @@ interpretations:
 charts:
   - id: "Nominal funding vs expected inflation"
     role: input
-    chart_type: series
-    color_job: categorical
-    insight: "the two Fisher components — the nominal risk-free cost against 10y breakeven inflation; their wedge is the real cost"
+    chart_type: decomposition
+    color_job: diverging
+    insight: "the Fisher decomposition — the risk-free rate plus the Baa credit spread, less 10y breakeven inflation, nets to the real cost of debt; high inflation compensation is what keeps the real cost low"
     data_contract:
-      kind: series
-      ylabel: "%"
-      series:
-        - {label: "risk-free (5Y)", from: "input:rf.level"}
-        - {label: "10y breakeven", from: "input:breakeven.level"}
+      kind: decomposition
+      title: "The real cost of debt, decomposed (Fisher)"
+      subtitle: "A treasurer's all-in funding — the 5-year risk-free rate plus the Baa credit spread — less the 10-year\nbreakeven inflation that erodes it. What remains (the dashed line) is the real cost of debt actually borne."
+      ylabel: "Contribution to the real cost of debt  (%)"
+      unit: "%"
+      components:
+        - {label: "Risk-free rate  (5Y)", from: "input:rf.level", tone: neutral}
+        - {label: "Credit spread  (Baa)", from: "input:ig.level", tone: amber}
+        - {label: "Less: expected inflation  (10y breakeven)", from: "input:breakeven.level", tone: warm, sign: -1}
+      net: {label: "Real cost of debt", from: "output:real_funding"}
   - id: "The real cost of debt over time"
     role: outcome
     chart_type: series

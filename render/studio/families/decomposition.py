@@ -206,8 +206,9 @@ def spec_from_run(model: dict, run: dict, chart_id: str,
     if dc.get("kind") != "decomposition":
         return None
 
-    comps = [(c["label"], _parse_ref(c["from"]), c.get("tone")) for c in dc.get("components", [])]
-    comps = [(lab, rf, tone) for lab, rf, tone in comps if rf]
+    comps = [(c["label"], _parse_ref(c["from"]), c.get("tone"), float(c.get("sign", 1)))
+             for c in dc.get("components", [])]
+    comps = [(lab, rf, tone, sign) for lab, rf, tone, sign in comps if rf]
     net_ref = _parse_ref((dc.get("net") or {}).get("from", ""))
     ref = dc.get("reference") or {}
     ref_ref = _parse_ref(ref.get("from", "")) if ref else None
@@ -217,19 +218,20 @@ def spec_from_run(model: dict, run: dict, chart_id: str,
     rows = []
     for r in history:
         row = {"date": pd.Timestamp(str(r.as_of)[:10])}
-        for lab, rf, _ in comps:
-            row[lab] = _value(r, *rf)
+        for lab, rf, _tone, sign in comps:
+            v = _value(r, *rf)
+            row[lab] = (sign * v) if v is not None else None    # subtractive terms via sign=-1
         row["__net__"] = _value(r, *net_ref)
         if ref_ref:
             row["__ref__"] = _value(r, *ref_ref)
         rows.append(row)
     df = pd.DataFrame(rows).set_index("date")
-    need = [lab for lab, _, _ in comps] + ["__net__"]
+    need = [lab for lab, _rf, _tone, _sign in comps] + ["__net__"]
     df = df.dropna(subset=need).astype(float, errors="ignore")
     if len(df) < 3:
         return None
 
-    components = [Component(lab, lab, _tone_color(tone, i)) for i, (lab, _, tone) in enumerate(comps)]
+    components = [Component(lab, lab, _tone_color(tone, i)) for i, (lab, _rf, tone, _sign) in enumerate(comps)]
 
     # y-limits: authored, else auto from the signed envelope with padding
     spec_stub = DecompSpec("", "", "Year", dc.get("ylabel", ""), components, "__net__", "", None, None,
