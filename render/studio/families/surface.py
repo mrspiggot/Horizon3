@@ -68,7 +68,8 @@ def render_surface(dates: list, mat: np.ndarray, spec: SurfaceSpec, out: str) ->
         "xtick.color": "#55555c", "ytick.color": "#55555c",
     })
     fig, ax = plt.subplots(figsize=(12.6, 5.6 + 0.3 * len(spec.items)), dpi=200)
-    fig.subplots_adjust(left=0.10, right=0.995, top=0.80, bottom=0.13)
+    # leave room on the right for the colour bar AND its rotated label (right=0.995 clipped it)
+    fig.subplots_adjust(left=0.10, right=0.90, top=0.80, bottom=0.13)
 
     x = mdates.date2num(pd.to_datetime(dates).to_pydatetime())
     # cell edges (midpoints; extrapolate ends) so pcolormesh aligns cells to dates
@@ -116,7 +117,8 @@ def render_surface(dates: list, mat: np.ndarray, spec: SurfaceSpec, out: str) ->
     fig.text(0.10, 0.875, sub, fontsize=10.8, color="#4a4a52", linespacing=1.32, va="top")
     fig.text(0.10, 0.035, spec.source, fontsize=8.2, color="#8a8a93")
     fig.text(0.10, 0.012, spec.footer, fontsize=8.2, color="#8a8a93", style="italic")
-    fig.savefig(out, dpi=200, facecolor="white"); plt.close(fig)
+    # bbox_inches="tight" guarantees the colour-key on the right is never clipped
+    fig.savefig(out, dpi=200, facecolor="white", bbox_inches="tight"); plt.close(fig)
     return out
 
 

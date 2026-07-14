@@ -16,6 +16,10 @@ knowledge/digests/notify.log.jsonl
 knowledge/.curate_state.json
 knowledge/candidates.yaml
 
+# generated article/illustration artifacts (regenerated, not source)
+output/
+render/illustration/.cache/
+
 # editor
 .idea/
 ~$*
