@@ -43,8 +43,10 @@ def lint_infographic(spec: InfographicSpec, html: str,
     if not spec.blocks_of("thesis_callout"):
         p.append("no thesis_callout block")
     tiles = spec.blocks_of("kpi_tile")
-    if len(tiles) < 3:
-        p.append(f"needs ≥3 KPI tiles, has {len(tiles)}")
+    ladder_rungs = sum(len(b.numbers) for b in spec.blocks_of("ranked_table"))
+    # the page needs a quantitative spine: ≥3 KPI tiles, OR a ranked table of ≥3 rungs (ladder family)
+    if len(tiles) < 3 and ladder_rungs < 3:
+        p.append(f"needs ≥3 KPI tiles or a ≥3-rung ranked table, has {len(tiles)} tiles / {ladder_rungs} rungs")
     if not spec.blocks_of("chart_embed"):
         p.append("no chart embedded")
     if not spec.blocks_of("source"):

@@ -48,6 +48,20 @@ def _chart(b: Block) -> str:
     return f'<figure class="chart">{img}<figcaption>{cap}</figcaption></figure>'
 
 
+def _ranked_table(b: Block) -> str:
+    """A ranked ladder: rows carry {label} + a NumberObject name; the value cell is a verified span.
+    `b.rows` = [{"label": str, "name": <NumberObject.name>, "note": str?}, …] in ranked order."""
+    body = []
+    for i, r in enumerate(b.rows, 1):
+        n = b.num(r.get("name", ""))
+        val = _num_span(n) if n else ""
+        note = f'<span class="tnote">{_html.escape(r.get("note", ""))}</span>' if r.get("note") else ""
+        body.append(f'<tr><td class="rk">{i}</td><td class="lbl">{_html.escape(r.get("label", ""))}{note}</td>'
+                    f'<td class="val">{val}</td></tr>')
+    head = f'<div class="thead">{_html.escape(b.title)}</div>' if b.title else ""
+    return f'<div class="ladder">{head}<table>{"".join(body)}</table></div>'
+
+
 def _render_blocks(spec: InfographicSpec) -> str:
     html, i, blocks = [], 0, spec.blocks
     while i < len(blocks):
@@ -62,11 +76,21 @@ def _render_blocks(spec: InfographicSpec) -> str:
             while i < len(blocks) and blocks[i].type == "chart_embed":
                 run.append(_chart(blocks[i])); i += 1
             html.append('<div class="charts">' + "".join(run) + "</div>"); continue
+        if b.type == "state_badge":                    # group a run of regime pills
+            run = []
+            while i < len(blocks) and blocks[i].type == "state_badge":
+                bb = blocks[i]
+                run.append(f'<span class="pill {bb.tone}">{_html.escape(bb.title)} '
+                           f'{_fill(bb.text, bb.numbers)}</span>')
+                i += 1
+            html.append('<div class="badges">' + "".join(run) + "</div>"); continue
         if b.type == "thesis_callout":
             html.append(f'<div class="callout">{_fill(b.text, b.numbers)}</div>')
         elif b.type == "note":
             html.append(f'<div class="note"><h3>{_html.escape(b.title)}</h3>'
                         f'<p>{_fill(b.text, b.numbers)}</p></div>')
+        elif b.type == "ranked_table":
+            html.append(_ranked_table(b))
         elif b.type == "state_badge":
             html.append(f'<span class="pill {b.tone}">{_html.escape(b.title)} '
                         f'{_fill(b.text, b.numbers)}</span>')
@@ -112,9 +136,24 @@ h1{font:600 33px/1.12 var(--serif);margin:12px 0 8px;letter-spacing:-.01em;}
 .note{border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:0 0 20px;}
 .note h3{font:600 12px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin:0 0 8px;}
 .note p{font:400 14px/1.55 var(--sans);color:var(--ink);margin:0;}
-.pill{display:inline-block;font:600 12px/1 var(--sans);padding:6px 10px;border-radius:999px;
-  border:1px solid var(--line);margin:0 8px 8px 0;}
-.pill.up{color:var(--up);border-color:var(--up);} .pill.dn{color:var(--dn);border-color:var(--dn);}
+.badges{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 22px;}
+.pill{display:inline-block;font:600 12.5px/1.2 var(--sans);padding:7px 13px;border-radius:999px;
+  border:1px solid var(--line);margin:0;color:var(--muted);}
+.pill.up{color:var(--up);border-color:color-mix(in srgb,var(--up) 55%,var(--line));
+  background:color-mix(in srgb,var(--up) 7%,transparent);}
+.pill.dn{color:var(--dn);border-color:color-mix(in srgb,var(--dn) 55%,var(--line));
+  background:color-mix(in srgb,var(--dn) 7%,transparent);}
+.ladder{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin:0 0 22px;}
+.ladder .thead{font:600 11px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;
+  color:var(--muted);padding:13px 16px;border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--accent) 4%,transparent);}
+.ladder table{width:100%;border-collapse:collapse;}
+.ladder td{padding:11px 16px;border-bottom:1px solid var(--line);vertical-align:baseline;}
+.ladder tr:last-child td{border-bottom:none;}
+.ladder tr:hover td{background:color-mix(in srgb,var(--accent) 3%,transparent);}
+.ladder .rk{width:2.2em;font:600 13px/1 var(--mono);color:var(--muted);}
+.ladder .lbl{font:500 14.5px/1.35 var(--sans);color:var(--ink);}
+.ladder .lbl .tnote{display:block;font:400 12px/1.3 var(--sans);color:var(--muted);margin-top:2px;}
+.ladder .val{text-align:right;white-space:nowrap;font-size:16px;}
 .num{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600;color:var(--accent);}
 .callout .num,.note .num{color:var(--ink);}
 .prov{font:400 10.5px/1.5 var(--mono);color:var(--muted);border-top:1px solid var(--line);padding-top:14px;margin-top:6px;}

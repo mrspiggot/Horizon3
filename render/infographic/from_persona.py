@@ -154,7 +154,15 @@ def reader_takeaway(summary: str) -> str:
     return ""
 
 
-def persona_material(persona_id: str, conn) -> dict:
+_MATERIAL_CACHE: dict[str, dict] = {}
+
+
+def persona_material(persona_id: str, conn, *, use_cache: bool = True) -> dict:
+    """Executed material for a persona. Process-level memoised by persona_id (the data is fixed for a
+    run) so multi-family harnesses don't re-execute every model four times; pass use_cache=False to
+    force a fresh execution."""
+    if use_cache and persona_id in _MATERIAL_CACHE:
+        return _MATERIAL_CACHE[persona_id]
     p = yaml.safe_load((GRAPH_DIR / "personas.yaml").read_text())["personas"][persona_id]
     runs: dict[str, dict] = {}
     numbers: dict[str, NumberObject] = {}
@@ -199,10 +207,13 @@ def persona_material(persona_id: str, conn) -> dict:
         if k in numbers and k not in salient:
             salient.append(k)
     source_labels = sorted({_SOURCE_LABEL.get(s, s) for s in sources})
-    return {"id": persona_id, "p": p, "runs": runs, "numbers": numbers, "meanings": meanings,
-            "salient": salient, "papers": sorted(papers), "sources": sorted(sources),
-            "source_labels": source_labels, "model_names": model_names,
-            "as_of": max((n.as_of for n in numbers.values()), default="")}
+    mat = {"id": persona_id, "p": p, "runs": runs, "numbers": numbers, "meanings": meanings,
+           "salient": salient, "papers": sorted(papers), "sources": sorted(sources),
+           "source_labels": source_labels, "model_names": model_names,
+           "as_of": max((n.as_of for n in numbers.values()), default="")}
+    if use_cache:
+        _MATERIAL_CACHE[persona_id] = mat
+    return mat
 
 
 def chart_png(run: dict, chart_id: str, figsize=(6.4, 3.9)) -> str | None:
