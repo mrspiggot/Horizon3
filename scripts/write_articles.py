@@ -22,14 +22,13 @@ import yaml      # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from render.writer import build_article_full  # noqa: E402
+from render.output_paths import article_dir, run_root  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
-OUT = REPO / "output" / "articles"
 GRAPH_DIR = REPO / "catalog" / "graph"
 
 
 def main() -> None:
-    OUT.mkdir(parents=True, exist_ok=True)
     backend = os.environ.get("VANGOGH_BACKEND", "auto")
     conn = psycopg2.connect(host="localhost", port=5434, dbname="unified_market_data",
                             user="postgres", password="devpassword")
@@ -38,7 +37,7 @@ def main() -> None:
     rows = []
     for pid in personas:
         try:
-            r = build_article_full(pid, conn, OUT / pid, backend=backend)
+            r = build_article_full(pid, conn, article_dir(pid), backend=backend)
             rows.append(r)
             note = (" | " + "; ".join(r["reasons"])) if r["reasons"] else ""
             print(f"PASS  {pid:26} {r['words']}w  {r['sections']}sec  charts={r['n_charts']}  "
@@ -50,11 +49,12 @@ def main() -> None:
 
     ok = sum(1 for r in rows if r.get("critic_ok"))
     print(f"\n{len(rows)}/{len(personas)} articles   critic-clean: {ok}/{len(rows)}")
-    (OUT / "_summary.txt").write_text("\n".join(
+    summary = run_root() / "articles" / "_summary.txt"
+    summary.write_text("\n".join(
         f"{r['persona']:26} {r['words']}w {r['sections']}sec charts={r['n_charts']} "
         f"critic_ok={r['critic_ok']} gist={r.get('gist_src','')} "
         f"“{r['headline']}”  {'; '.join(r['reasons'])}" for r in rows))
-    print(f"summary → {OUT / '_summary.txt'}")
+    print(f"summary → {summary}")
 
 
 if __name__ == "__main__":

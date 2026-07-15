@@ -22,14 +22,13 @@ import yaml      # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from render.article import build_article  # noqa: E402
+from render.output_paths import brief_dir  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
-OUT = REPO / "output" / "skeleton_articles"
 GRAPH_DIR = REPO / "catalog" / "graph"
 
 
 def main() -> None:
-    OUT.mkdir(parents=True, exist_ok=True)
     backend = os.environ.get("VANGOGH_BACKEND", "auto")
     conn = psycopg2.connect(host="localhost", port=5434, dbname="unified_market_data",
                             user="postgres", password="devpassword")
@@ -38,7 +37,7 @@ def main() -> None:
     rows, families = [], set()
     for pid in personas:
         try:
-            r = build_article(pid, conn, OUT / pid, backend=backend)
+            r = build_article(pid, conn, brief_dir(pid), backend=backend)
             families.add(r["family"])
             rows.append(r)
             note = (" | " + "; ".join(r["reasons"])) if r["reasons"] else ""
@@ -50,7 +49,7 @@ def main() -> None:
             traceback.print_exc()
 
     print(f"\n{len(rows)}/{len(personas)} articles   families={sorted(families)}")
-    summary = OUT / "_summary.txt"
+    summary = brief_dir("_summary").parent / "_summary.txt"   # output/<date>/briefs/_summary.txt
     summary.write_text("\n".join(
         f"{r['persona']:26} model={r['model']:24} family={r['family']:20} "
         f"gist={r['gist_words']}w({r['gist_src']}) charts={r['n_charts']} illus=“{r['caption']}” "
