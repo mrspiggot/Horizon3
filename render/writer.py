@@ -222,7 +222,10 @@ _VOICE = (
     "  • Plain and concrete over ornate. No purple metaphor, no bodily/sensory overwriting, no throat-"
     "clearing ('it is worth noting', 'in today's market', 'make no mistake').\n"
     "  • CITE FIGURES ONLY as the {n} tokens provided, written exactly. Never type, invent, round, or "
-    "derive a number of your own.")
+    "derive a number of your own. Each token ALREADY carries its unit (a token may render as "
+    "'4.55 vol pts' or '14%') — write the token alone and NEVER restate the unit after it (never "
+    "'{n} vol points', never '{n} percent'). And use real terms: never a garbled or invented phrase "
+    "(write 'at-the-money', never a mangled substitute).")
 
 
 def plan_arc(brief: dict, feedback: str = "") -> Outline:
@@ -283,6 +286,16 @@ def write_article(brief: dict, outline: Outline, feedback: str = "") -> Article:
 
 
 # ── firewall + slop lint ───────────────────────────────────────────────────────────────────────────
+def _render_for_prose(no) -> str:
+    """A NumberObject's value for running prose: like rendered(), but a multi-word unit ('vol pts') gets
+    a space off the number ('4.55 vol pts', not '4.55vol pts'); tight units (%, pp, bp, σ) stay glued."""
+    r = no.rendered()
+    u = (no.unit or "").strip()
+    if u and " " in u and r.endswith(u):
+        return r[: -len(u)].rstrip() + " " + u
+    return r
+
+
 def _finalize_text(text: str, toks: dict) -> tuple[str, str | None]:
     """Tokenise any typed value that matches an executed number, leak-check the non-token remainder, then
     substitute verified values. Returns (filled_text, leak_or_None)."""
@@ -290,7 +303,14 @@ def _finalize_text(text: str, toks: dict) -> tuple[str, str | None]:
     stripped = _TOKLEFT.sub(" ", t)
     leak = _LEAK.search(stripped)
     for tok, no in toks.items():
-        t = t.replace("{" + tok + "}", no.rendered())
+        t = t.replace("{" + tok + "}", _render_for_prose(no))
+    # belt-and-suspenders: strip a unit the writer restated right after a token expansion, e.g.
+    # "4.55 vol pts vol points" -> "4.55 vol pts" (the prompt tells it not to, this catches slips).
+    for no in toks.values():
+        u = (no.unit or "").strip()
+        if u and " " in u:                                  # word unit like "vol pts"
+            head = re.escape(u.split()[0])                  # "vol"
+            t = re.sub(rf"({re.escape(u)})\s+{head}\s+\w+", r"\1", t, flags=re.I)
     return t, (leak.group() if leak else None)
 
 
@@ -406,7 +426,9 @@ def critique_article(full_text: str, title: str) -> Critique:
         "filler, throat-clearing, or a section that merely restates a number without a point; (7) the "
         "foreshadowing is PROSAIC or MECHANICAL — a table-of-contents recital ('you will see X, you will "
         "see Y'), or it narrates the article's own structure ('this piece', 'the charts that follow'), "
-        "instead of the confident, implicit nut-graf foreshadowing a top paper would run. If it reads "
+        "instead of the confident, implicit nut-graf foreshadowing a top paper would run; (8) any "
+        "GARBLED or non-English phrase, a mangled term ('at-metric-of-the-moment' for 'at-the-money'), "
+        "or a unit restated after a figure ('4.55 vol pts vol points'). If it reads "
         "like a real desk strategist wrote it — specific, confident, arced, honest about the open risk — "
         "set ok=true. Give concrete fixes.\n\nDRAFT:\n" + full_text[:9000])
     return _invoke(llm, prompt)
