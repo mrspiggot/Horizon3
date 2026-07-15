@@ -56,7 +56,7 @@ _SLOP = re.compile(
     # meta-scaffolding: narrating the article's own machinery instead of writing it (a clumsy AI tell —
     # address the reader about the SUBJECT, never describe 'this piece' or announce 'you will see')
     r"you will see|we will see|as we(?:'| wi)ll see|this piece|this article|the charts that follow|"
-    r"the pivot of this|in the pages that follow|read on\b|as this piece|the sections that follow)\b",
+    r"the pivot of this|in the pages that follow|read on(?=[.,;:!?])|as this piece|the sections that follow)\b",
     re.I)
 
 
@@ -166,12 +166,27 @@ def build_brief(mat: dict, *, limit: int = 24) -> dict:
             "outputs": outs, "charts": charts,
             "regime": _active_says(meta, run.get("latest")),
         })
+    # The data boundary: the earliest observation any of this persona's models actually holds. The writer
+    # must NOT name a market episode before this (the data cannot show it) — the firewall for HISTORY.
+    starts = [str((run.get("history") or [{}])[0].as_of)[:10]
+              for mid in mat["p"].get("models", [])
+              if (run := mat["runs"].get(mid)) and run.get("history")]
+    data_start = min(starts) if starts else ""
     return {"mat": mat, "toks": toks, "menu": menu, "models": models,
-            "chart_index": chart_index, "papers": mat.get("papers", []), "as_of": mat.get("as_of", "")}
+            "chart_index": chart_index, "papers": mat.get("papers", []),
+            "as_of": mat.get("as_of", ""), "data_start": data_start}
 
 
 def _brief_text(brief: dict) -> str:
     lines = ["THE EVIDENCE (every figure is executed on real data; cite ONLY via the {n} tokens):", ""]
+    ds = brief.get("data_start", "")
+    if ds:
+        yr = ds[:4]
+        lines.append(f"⚠ DATA WINDOW: every chart begins {ds}. You may name ONLY market episodes that fall "
+                     f"on or after {yr} (e.g. events the data actually shows). You MUST NOT reference any "
+                     f"episode before {yr} — the 2008 GFC, 2011, the taper tantrum, etc. are NOT in this "
+                     f"data and claiming a chart 'prints' them is a fabrication. Name only what the data spans.")
+        lines.append("")
     lines.append("Citable figures:")
     lines.append(brief["menu"])
     lines.append("")
@@ -198,8 +213,9 @@ _VOICE = (
     "think. Lay out the evidence and trust the reader to draw the conclusion.\n"
     "  • FORESHADOW then delay. Open with a hook that promises what the reader will understand by the "
     "end; do not resolve it in the first paragraph. Build tension across the piece.\n"
-    "  • Name the SPECIFIC episodes the data shows (2008, 2011, 2020, 2022, the taper tantrum, COVID) — "
-    "specificity is the mark of a human writer; vague allusion is the mark of a machine.\n"
+    "  • Name the SPECIFIC episodes THE DATA ACTUALLY SPANS (see the DATA WINDOW above) — specificity is "
+    "the mark of a human writer, vague allusion the mark of a machine. But NEVER name an episode that "
+    "predates the data window: if the series starts in 2016, the 2008 crisis is not yours to cite.\n"
     "  • Address the reader where it earns its place ('you are being paid…'). Do not write as if no one "
     "is watching.\n"
     "  • End on the genuine unresolved risk, NOT a tidy bow. Sit with the ambiguity.\n"
@@ -304,6 +320,29 @@ def _slop_lint(text: str) -> list[str]:
     return sorted({m.group(0) for m in _SLOP.finditer(text)})
 
 
+_YEAR = re.compile(r"\b(199\d|20\d\d)\b")   # market-episode years 1990–2099 (pre-1990 = academic cites, ignored)
+
+
+def _episode_leaks(text: str, data_start: str) -> list[str]:
+    """Deterministic HISTORY firewall: any year named in the prose that predates the data window is a
+    fabricated episode (the charts cannot show it). Returns the offending years. The 1990 floor lets
+    genuine pre-1990 academic citations (GARCH 1986, etc.) through — market crises are all post-1990."""
+    if not data_start:
+        return []
+    start = int(data_start[:4])
+    bad = []
+    for m in _YEAR.finditer(text):
+        y = int(m.group(0))
+        if not (1990 <= y < start):
+            continue
+        # skip a lone parenthesised year — that's an academic citation ("Taylor (1993)"), not a market
+        # episode the chart claims to show. A crisis LIST reads "(2008, 2011, …)" — comma after → flagged.
+        if text[m.start() - 1:m.start()] == "(" and text[m.end():m.end() + 1] == ")":
+            continue
+        bad.append(y)
+    return [str(y) for y in sorted(set(bad))]
+
+
 # ── further reading: resolve grounding slugs → real citations (title + summary + url) ───────────────
 _REG_PATH = Path(__file__).resolve().parents[1] / "knowledge" / "registry.yaml"
 
@@ -362,7 +401,7 @@ def critique_article(full_text: str, title: str) -> Critique:
         "Judge it ONLY against the marks of real journalism vs AI slop. FAIL it for any of: (1) it "
         "over-explains or moralizes / states 'the takeaway' / tells the reader what to think; (2) it "
         "resolves into a tidy bow instead of ending on a real open risk; (3) it is vague where it should "
-        "name a specific episode (2008/2020/etc.); (4) the standfirst does not foreshadow, or the lede "
+        "name a specific episode the data actually spans; (4) the standfirst does not foreshadow, or the lede "
         "resolves everything at once; (5) purple or overwritten prose, bodily/sensory padding; (6) generic "
         "filler, throat-clearing, or a section that merely restates a number without a point; (7) the "
         "foreshadowing is PROSAIC or MECHANICAL — a table-of-contents recital ('you will see X, you will "
@@ -506,7 +545,8 @@ def build_article_full(persona_id: str, conn, out_dir, *, backend: str = "auto",
         full_text, standfirst, exec_summary, filled_sections, leak = _finalize_article(article, brief["toks"])
         slop = _slop_lint(full_text)
         stray = re.search(r"\{[^}]*\}", full_text)          # an invented figure marker / bad token
-        if leak or slop or stray:
+        epi = _episode_leaks(full_text, brief.get("data_start", ""))
+        if leak or slop or stray or epi:
             bits = []
             if leak:
                 bits.append(f"REMOVE the untraced figure '{leak}' — cite only the listed {{n}} tokens.")
@@ -516,8 +556,14 @@ def build_article_full(persona_id: str, conn, out_dir, *, backend: str = "auto",
             if slop:
                 bits.append("DELETE these AI-slop phrases and rewrite the sentence plainly: "
                             + ", ".join(f"'{s}'" for s in slop))
+            if epi:
+                sy = brief.get("data_start", "")[:4]
+                bits.append(f"REMOVE every reference to {', '.join(epi)}: the data begins {sy}, so no chart "
+                            f"shows those years — naming them fabricates history. Rewrite using ONLY episodes "
+                            f"on or after {sy} (e.g. what the series actually spans).")
             feedback = " ".join(bits)
-            reasons.append(f"iter{it}: {'leak ' if leak else ''}{'stray ' if stray else ''}{'slop' if slop else ''}".strip())
+            reasons.append(f"iter{it}: {'leak ' if leak else ''}{'stray ' if stray else ''}"
+                           f"{'slop ' if slop else ''}{'episode' if epi else ''}".strip())
             continue
         crit = critique_article(full_text, headline)
         if crit.ok:

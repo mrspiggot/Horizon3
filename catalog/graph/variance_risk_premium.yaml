@@ -7,11 +7,13 @@ method: published
 method_note: "Carr-Wu VRP = implied - realized variance"
 spec:
   equations: "VRP = implied vol (VIX) - realized vol; realized = 21d annualized log-return vol of SPX"
-history: {start: "2025-07-14", end: "2026-07-10", cadence: weekly}
+# VIX from Cboe (deep); realized vol from FRED SP500 (real S&P index, 2016+). Widened from a
+# 1yr Yahoo snapshot to the full SP500 span — covers 2018 Volmageddon, 2020 COVID, 2022.
+history: {start: "2016-08-01", end: "2026-07-10", cadence: weekly}
 inputs:
-  - {id: vix, series_id: "^VIX", db_source: yahoo, state: level, context_window: 63}
-  - {id: realized, series_id: "^GSPC", db_source: yahoo, transform: realized_vol, state: level, context_window: 63}
-  - {id: vix9d, series_id: "^VIX9D", db_source: yahoo, state: level, context_window: 63}
+  - {id: vix, series_id: "VIX", db_source: cboe, state: level, context_window: 63}
+  - {id: realized, series_id: "SP500", db_source: fred, transform: realized_vol, state: level, context_window: 63}
+  - {id: vix9d, series_id: "VIX9D", db_source: cboe, state: level, context_window: 63}
 execution:
   implemented_by: unified_market_data.analysis.vol_analytics.variance_risk_premium
   args: {implied_vol_pct: vix.level, realized_vol_pct: realized.level}

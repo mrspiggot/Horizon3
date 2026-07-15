@@ -17,11 +17,13 @@ spec:
     Returns r_t = 100 * dlog(P_t). Zero-mean GARCH(1,1): sigma_t^2 = omega + alpha*r_{t-1}^2
     + beta*sigma_{t-1}^2, fit by MLE. Annualized conditional vol = sigma_t * sqrt(252).
     Model premium = implied(VIX) - GARCH forecast; forecast error = GARCH - trailing realized.
-history: {start: "2010-01", end: "2026-07", cadence: monthly}
+# GARCH on daily S&P returns from FRED SP500 (2016+); realized/implied likewise. Was 2010+ but
+# starved (Yahoo ^GSPC held only 1yr). Cboe VIX supplies the implied leg deep.
+history: {start: "2016-08", end: "2026-07", cadence: monthly}
 inputs:
-  - {id: garch, series_id: "^GSPC", db_source: yahoo, transform: garch_vol, state: level, context_window: 252}
-  - {id: implied, series_id: "^VIX", db_source: yahoo, state: level, context_window: 252}
-  - {id: realized, series_id: "^GSPC", db_source: yahoo, transform: realized_vol, state: level, context_window: 252}
+  - {id: garch, series_id: "SP500", db_source: fred, transform: garch_vol, state: level, context_window: 252}
+  - {id: implied, series_id: "VIX", db_source: cboe, state: level, context_window: 252}
+  - {id: realized, series_id: "SP500", db_source: fred, transform: realized_vol, state: level, context_window: 252}
 execution:
   implemented_by: unified_market_data.analysis.vol_analytics.vol_forecast
   args:
@@ -75,7 +77,7 @@ charts:
     chart_type: gap_series
     color_job: diverging
     interpretation: rich_vol
-    insight: "positive = options priced above GARCH's forecast (the short-vol edge); negative = protection cheap vs the model. The GFC, COVID and 2022 print as sharp negatives when realized outran the price of vol"
+    insight: "positive = options priced above GARCH's forecast (the short-vol edge); negative = protection cheap vs the model. COVID in 2020 and the 2022 repricing print as sharp negatives when realized outran the price of vol"
     data_contract:
       kind: gap_series
       ylabel: "vol points"

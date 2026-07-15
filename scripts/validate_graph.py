@@ -76,11 +76,25 @@ def main() -> int:
             errs.append(f"implemented_by unresolved: {impl}")
         if not d.get("outputs"):
             errs.append("no outputs")
+        # HISTORY firewall (warn): an authored insight must not name a market-episode year before the
+        # model's own history window — the chart cannot show it. Lone "(YYYY)" = academic cite, skipped.
+        stale = set()
+        hm = re.match(r"(\d{4})", str((d.get("history") or {}).get("start", "")))
+        if hm:
+            sy = int(hm.group(1))
+            for ch in charts:
+                t = str(ch.get("insight", ""))
+                for ym in re.finditer(r"\b(199\d|20\d\d)\b", t):
+                    y = int(ym.group(0))
+                    if 1990 <= y < sy and not (t[ym.start()-1:ym.start()] == "(" and t[ym.end():ym.end()+1] == ")"):
+                        stale.add(str(y))
         exc = " [low-dim exception]" if d.get("low_dimensional_exception") else ""
         status = OK if not errs else FAIL
         failures += bool(errs)
         print(f"  {status}  {mid:28} vars={n_var} charts={len(charts)} papers={grounded}{exc}"
-              + ("" if not errs else "\n         " + "; ".join(errs)))
+              + ("" if not errs else "\n         " + "; ".join(errs))
+              + (f"\n         {c('33','WARN')} insight names pre-history episode(s) {sorted(stale)} "
+                 f"(data starts {hm.group(1)})" if stale else ""))
 
     print("\nPERSONAS")
     for pid, p in personas.items():

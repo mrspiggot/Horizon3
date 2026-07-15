@@ -12,10 +12,12 @@ method_note: >
   moments are NOT constant — the distribution fattens into crises, which is the risk the vol book carries.
 spec:
   equations: "β1 = skew(r)²; β2 = kurtosis(r) (Normal = 3); excess kurtosis = β2 - 3. r = daily log returns over 252d."
-history: {start: "2007-01", end: "2026-07", cadence: monthly}
+# Skew/kurtosis of daily S&P returns from FRED SP500 (2016+); the ~252d rolling window means
+# the first valid point is ~2017. Was configured 2007+ but starved (Yahoo ^GSPC held only 1yr).
+history: {start: "2016-08", end: "2026-07", cadence: monthly}
 inputs:
-  - {id: skew, series_id: "^GSPC", db_source: yahoo, transform: roll_skew, state: level, context_window: 60}
-  - {id: kurt, series_id: "^GSPC", db_source: yahoo, transform: roll_kurt, state: level, context_window: 60}
+  - {id: skew, series_id: "SP500", db_source: fred, transform: roll_skew, state: level, context_window: 60}
+  - {id: kurt, series_id: "SP500", db_source: fred, transform: roll_kurt, state: level, context_window: 60}
 execution:
   implemented_by: unified_market_data.analysis.vol_analytics.pearson_distribution
   args: {skewness: skew.level, kurtosis: kurt.level}
@@ -30,7 +32,7 @@ interpretations:
     says: >
       The return distribution is markedly fat-tailed — kurtosis well above the Normal's 3. Large moves
       are far more likely than a Gaussian VaR assumes; the short-vol book is most exposed exactly here.
-      These readings cluster around the crises (2008, 2011, 2020, 2022).
+      These readings cluster around the stress episodes the data spans (the 2018 vol spike, 2020, 2022).
   - id: crash_skew
     when: "skewness < -0.5"
     says: >
@@ -42,10 +44,10 @@ charts:
     chart_type: pearson
     color_job: sequential
     interpretation: fat_tailed
-    insight: "the return distribution's shape, tracked through time — each point a rolling window shaded 2007→2026. The cloud sits ABOVE the Normal (0,3): equity returns are persistently fat-tailed, drifting up-and-right in crises"
+    insight: "the return distribution's shape, tracked through time — each point a rolling window, shaded early-to-late. The cloud sits ABOVE the Normal (0,3): equity returns are persistently fat-tailed, drifting up-and-right in crises"
     data_contract:
       kind: pearson
-      cbar_label: "2007 → 2026"
+      cbar_label: "observation date"
       x: "output:skew_sq"
       y: "output:kurtosis"
   - id: "Fat tails over time (excess kurtosis)"
@@ -55,7 +57,7 @@ charts:
     interpretation: fat_tailed
     pos_label: "fatter tails than Normal"
     neg_label: "thinner than Normal"
-    insight: "kurtosis minus the Normal's 3 — how much fatter the tails are than a Gaussian assumes; it spikes at every stress (2008, 2011, 2020, 2022), exactly when a naive VaR fails"
+    insight: "kurtosis minus the Normal's 3 — how much fatter the tails are than a Gaussian assumes; it spikes at every stress (2018, 2020, 2022), exactly when a naive VaR fails"
     data_contract:
       kind: gap_series
       ylabel: "excess kurtosis (β2 - 3)"

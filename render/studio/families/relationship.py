@@ -135,11 +135,14 @@ def render_relationship(df: pd.DataFrame, spec: RelationshipSpec, out: str) -> s
     ax.margins(0.06)
 
     cbar = fig.colorbar(sc, ax=ax, pad=0.02, fraction=0.045)
-    if len(years) > 1:
-        cbar.set_ticks([order[0], order[len(order) // 2], order[-1]])
-        cbar.set_ticklabels([str(years[0]), str(years[len(years) // 2]), str(years[-1])])
+    if "date" in d and len(order) > 1:
+        dts = pd.to_datetime(d["date"]).reset_index(drop=True)
+        n = len(order)
+        pos = sorted({int(round(t * (n - 1))) for t in (0.0, 0.25, 0.5, 0.75, 1.0)})
+        cbar.set_ticks([order[i] for i in pos])
+        cbar.set_ticklabels([dts.iloc[i].strftime("%b %Y") for i in pos])   # month+year, never bare/duplicate years
     cbar.set_label(spec.cbar_label, fontsize=10)
-    cbar.ax.tick_params(labelsize=9)
+    cbar.ax.tick_params(labelsize=8.5)
 
     fig.text(0.085, 0.945, spec.title, fontsize=18, fontweight="bold", color=INK)
     sub = "\n".join(textwrap.wrap(spec.subtitle.replace("→", "–"), width=104)[:2])
@@ -172,7 +175,13 @@ def spec_from_run(model: dict, run: dict, chart_id: str, persona_name: str = "")
     if len(rows) < 10:
         return None
     df = pd.DataFrame(rows)
-    yrs = pd.to_datetime(df["date"]).dt.year
+    dts = pd.to_datetime(df["date"]).sort_values()
+    gap = dts.diff().dt.days.median() if len(dts) > 1 else None
+    cadence = ("daily" if gap and gap <= 3 else "weekly" if gap and gap <= 10
+               else "monthly" if gap and gap <= 45 else "quarterly" if gap and gap <= 110
+               else "annual" if gap else "")
+    span = f"{dts.iloc[0]:%b %Y}–{dts.iloc[-1]:%b %Y}"
+    cbar_label = f"observation date ({cadence + ', ' if cadence else ''}{span})"
     mode = "path" if dc.get("path") else "fit"
     insight = " ".join((chart.get("insight") or "").split())
     subtitle = insight if len(insight) <= 200 else insight[:197] + "…"
@@ -181,7 +190,7 @@ def spec_from_run(model: dict, run: dict, chart_id: str, persona_name: str = "")
         subtitle=dc.get("subtitle") or subtitle,
         xlabel=dc.get("xlabel", xcol), ylabel=dc.get("ylabel", ycol),
         x_key=xcol, y_key=ycol, mode=mode,
-        cbar_label=f"observation year  ({yrs.min()}–{yrs.max()})",
+        cbar_label=cbar_label,
         source=dc.get("source", f"Model: {model.get('name', model.get('model_id', ''))}. "
                                 f"Source: {', '.join(sorted({i.get('db_source','') for i in model.get('inputs', []) if i.get('db_source')}))}."),
         footer="Every value is executed on data — nothing on this chart is authored by the model.",

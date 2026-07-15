@@ -12,6 +12,9 @@ method_note: >
   runs 2023-present (the post-repricing credit cycle) rather than back to the GFC.
 spec:
   equations: "ig_all_in = DGS5 + BAMLC0A0CM; hy_all_in = DGS5 + BAMLH0A0HYM2; quality premium = hy - ig."
+# CURRENT-REGIME ONLY. ICE BofA OAS (BAML*) is source-capped at ~3yr — FRED serves only from
+# 2023-08 (ICE licensing). Do NOT widen: nothing exists before it. Cross-cycle credit → GZ/EBP
+# (credit_excess_bond_premium, deep to 1973).
 history: {start: "2023-08", end: "2026-07", cadence: monthly}
 inputs:
   - {id: rf, series_id: DGS5, db_source: fred, state: level, context_window: 60}

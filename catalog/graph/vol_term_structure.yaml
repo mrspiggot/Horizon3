@@ -7,12 +7,14 @@ method: data-direct
 method_note: "the published VIX term-structure curve"
 spec:
   equations: "the VIX curve (9d/1m/3m/6m); slope = VIX6M - VIX1M (>0 contango, <0 backwardation)"
-history: {start: "2025-07-14", end: "2026-07-10", cadence: weekly}
+# Vol complex sourced from Cboe (deep, un-throttled) — not Yahoo. All four legs exist from
+# 2009-10 (VIX3M is the shortest history, from 2009-09-18). Widened from a 1yr Yahoo snapshot.
+history: {start: "2009-10-01", end: "2026-07-10", cadence: weekly}
 inputs:
-  - {id: vix9d, series_id: "^VIX9D", db_source: yahoo, state: level, context_window: 63}
-  - {id: vix, series_id: "^VIX", db_source: yahoo, state: level, context_window: 63}
-  - {id: vix3m, series_id: "^VIX3M", db_source: yahoo, state: level, context_window: 63}
-  - {id: vix6m, series_id: "^VIX6M", db_source: yahoo, state: level, context_window: 63}
+  - {id: vix9d, series_id: "VIX9D", db_source: cboe, state: level, context_window: 63}
+  - {id: vix, series_id: "VIX", db_source: cboe, state: level, context_window: 63}
+  - {id: vix3m, series_id: "VIX3M", db_source: cboe, state: level, context_window: 63}
+  - {id: vix6m, series_id: "VIX6M", db_source: cboe, state: level, context_window: 63}
 execution:
   implemented_by: unified_market_data.analysis.vol_analytics.vol_term
   args: {v9d: vix9d.level, v1m: vix.level, v3m: vix3m.level, v6m: vix6m.level}

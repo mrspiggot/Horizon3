@@ -14,7 +14,10 @@ spec:
     gz_spread = expected_default_component + ebp. expected_default = gz_spread - ebp. EBP > 0 =
     risk aversion elevated / credit supply tightening (a leading indicator of slowdowns); EBP < 0 =
     unusually easy risk appetite. def_prob = the GZ model's estimated 1y default probability.
-history: {start: "2005-01", end: "2026-06", cadence: monthly}
+# The GZ/EBP series (fed_ebp) run to 1973 — this is the credit persona's DEEP cross-cycle backbone,
+# chosen over the ICE BofA OAS ladder because FRED now serves only ~3yr of the OAS indices (ICE
+# licensing). Widened to 1973 to carry the Volcker-era and 1990s credit cycles alongside 2008/2020/2022.
+history: {start: "1973-01", end: "2026-06", cadence: monthly}
 inputs:
   - {id: gz,      series_id: "GZSPREAD",  db_source: fed_ebp, state: level, context_window: 60}
   - {id: ebp,     series_id: "EBP",       db_source: fed_ebp, state: level, context_window: 60}

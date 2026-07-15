@@ -7,7 +7,10 @@ method: data-direct
 method_note: "the published ICE BofA OAS quality ladder"
 spec:
   equations: "the OAS compensation ladder across quality; HY-IG = the down-in-quality premium"
-history: {start: "2025-07-10", end: "2026-07-09", cadence: weekly}
+# CURRENT-REGIME ONLY. The ICE BofA OAS indices (BAML*) are source-capped at ~3yr — FRED serves
+# only from 2023-07 (ICE licensing). Do NOT widen this start: FRED returns nothing before it. For a
+# cross-cycle credit story (2008/2020/2022) use credit_excess_bond_premium (GZ/EBP, deep to 1973).
+history: {start: "2023-07", end: "2026-07", cadence: monthly}
 inputs:
   - {id: ig, series_id: BAMLC0A0CM, db_source: fred, state: level, context_window: 120}
   - {id: hy, series_id: BAMLH0A0HYM2, db_source: fred, state: level, context_window: 120}

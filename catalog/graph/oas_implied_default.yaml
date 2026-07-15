@@ -7,7 +7,10 @@ method: published
 method_note: "credit triangle spread=PD*LGD (Longstaff-Mithal-Neis)"
 spec:
   equations: "spread = PD x LGD (credit triangle); implied PD from HY OAS at 40% recovery"
-history: {start: "2025-07-10", end: "2026-07-09", cadence: weekly}
+# CURRENT-REGIME ONLY. ICE BofA OAS (BAML*) is source-capped at ~3yr — FRED serves only from
+# 2023-07 (ICE licensing). Do NOT widen: nothing exists before it. Cross-cycle credit → GZ/EBP
+# (credit_excess_bond_premium, deep to 1973).
+history: {start: "2023-07", end: "2026-07", cadence: monthly}
 inputs:
   - {id: hy, series_id: BAMLH0A0HYM2, db_source: fred, state: level, context_window: 120}
   - {id: ig, series_id: BAMLC0A0CM, db_source: fred, state: level, context_window: 120}

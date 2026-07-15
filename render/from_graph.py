@@ -21,6 +21,20 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 from . import charts  # noqa: E402
 
+# A relationship (scatter/pearson) IS the cloud of points. Below this many valid pairs there is no
+# cloud — a 1- or 2-dot "scatter" is worse than no chart (it reads as a finished figure but says
+# nothing, and mislabels its own time ramp). The polished relationship family already refuses under
+# this floor; the raw fallback must refuse too, so a data-starved relationship is OMITTED everywhere
+# rather than shipped broken. Matches families/relationship.py's `< 10` lint. (Owner-flagged: the
+# return_distribution Pearson diagram had 2 points because ^GSPC has only ~1yr of history — task #49.)
+_MIN_REL_POINTS = 10
+
+
+def _n_valid_pairs(xs, ys) -> int:
+    return sum(1 for x, y in zip(xs, ys)
+               if isinstance(x, (int, float)) and isinstance(y, (int, float))
+               and x == x and y == y)   # x==x screens NaN
+
 
 def _val(run, ref):
     if not isinstance(ref, str):
@@ -53,8 +67,9 @@ def render_chart(ax, chart: dict, history: list, *, fig=None) -> None:
     dc = chart["data_contract"]
     kind = dc["kind"]
     latest = history[-1]
-    role = chart.get("role")
-    title = (f"{role.upper()}  ·  {chart.get('id')}" if role else chart.get("id"))
+    # The chart's `id` is the human title. The ontology `role`
+    # (OUTCOME/INPUT/CONSEQUENCE) is internal metadata — never rendered.
+    title = chart.get("id")
     cj = chart.get("color_job", "diverging")
 
     if kind == "named_values":
@@ -118,14 +133,21 @@ def render_chart(ax, chart: dict, history: list, *, fig=None) -> None:
         # the Pearson β1-β2 diagram — the return distribution's rolling (skew², kurtosis) over time
         xs = _hist(history, dc["x"])
         ys = _hist(history, dc["y"])
+        if _n_valid_pairs(xs, ys) < _MIN_REL_POINTS:
+            raise ValueError(f"pearson {title!r}: only {_n_valid_pairs(xs, ys)} valid points "
+                             f"(< {_MIN_REL_POINTS}) — refusing a data-starved diagram")
+        dates = [r.as_of for r in history]   # real observation dates → month+year colorbar ticks
         charts.pearson_diagram(ax, xs, ys, title=title, fig=fig,
-                               cbar_label=dc.get("cbar_label", "time"))
+                               cbar_label=dc.get("cbar_label", "time"), dates=dates)
 
     elif kind == "scatter":
         # a two-variable RELATIONSHIP across history (Phillips, Okun, CAPM SML, Beveridge) — the
         # message is the fit, not the time axis; points shade early->late, path draws the loops.
         xs = _hist(history, dc["x"])
         ys = _hist(history, dc["y"])
+        if _n_valid_pairs(xs, ys) < _MIN_REL_POINTS:
+            raise ValueError(f"scatter {title!r}: only {_n_valid_pairs(xs, ys)} valid points "
+                             f"(< {_MIN_REL_POINTS}) — refusing a data-starved cloud")
         charts.scatter_fit(ax, xs, ys, title=title,
                            xlabel=dc.get("xlabel", "x"), ylabel=dc.get("ylabel", "y"),
                            fit=dc.get("fit", True), path=dc.get("path", False),

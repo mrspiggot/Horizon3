@@ -8,6 +8,7 @@ forms map 1:1 onto the `form`/`color_job`/`dim` a model declares in its visualiz
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 
 from . import theme
 
@@ -233,7 +234,35 @@ def vol_smile(ax, smiles, *, title=None, xlabel="moneyness", ylabel="implied vol
     ax.legend(fontsize=6.5, ncol=2, framealpha=0.9)
 
 
-def pearson_diagram(ax, skew_sq, kurt, *, title=None, fig=None, cbar_label="time"):
+def scatter_compare(ax, groups, *, title=None, xlabel="x", ylabel="y", fit=True):
+    """One relationship, several jurisdictions on one axis — the global comparison chart. `groups` =
+    list of (label, xs, ys); each is a country/regime, given a categorical identity colour, its own
+    OLS fit line and a legend entry with the slope. The insight is the DIVERGENCE between the fits —
+    the same canonical model (Phillips, Okun, Taylor) reading differently across the Fed, ECB, BoE, BoJ."""
+    theme.use_theme()
+    for i, (label, xs, ys) in enumerate(groups):
+        x = np.asarray(xs, dtype=float); y = np.asarray(ys, dtype=float)
+        ok = np.isfinite(x) & np.isfinite(y)
+        x, y = x[ok], y[ok]
+        if not len(x):
+            continue
+        col = theme.cat(i)
+        slope_txt = ""
+        if fit and len(x) >= 3:
+            b, a = np.polyfit(x, y, 1)
+            xr = np.array([x.min(), x.max()])
+            ax.plot(xr, a + b * xr, color=col, lw=2.2, zorder=5)
+            slope_txt = f"  (slope {b:+.2f})"
+        ax.scatter(x, y, color=col, s=26, alpha=0.55, zorder=3, edgecolors="none",
+                   label=f"{label}{slope_txt}")
+    ax.set_xlabel(xlabel); ax.set_ylabel(ylabel)
+    if title:
+        ax.set_title(title)
+    theme.style_axes(ax, grid_axis="both")
+    ax.legend(loc="best", fontsize=8.5, framealpha=0.9)
+
+
+def pearson_diagram(ax, skew_sq, kurt, *, title=None, fig=None, cbar_label="time", dates=None):
     """The Pearson β₁–β₂ diagram — the distribution's shape on one plane. x = β₁ = skewness²,
     y = β₂ = kurtosis (normal = 3). Every distribution family occupies a region; the line β₂ = β₁ + 1
     is a hard lower bound (no distribution exists below it). We plot the asset's ROLLING moments over
@@ -263,7 +292,14 @@ def pearson_diagram(ax, skew_sq, kurt, *, title=None, fig=None, cbar_label="time
         sc = ax.scatter(x, y, c=range(n), cmap=cmap, s=40, zorder=4, edgecolors="white", linewidths=0.4)
         if fig is not None:
             cb = fig.colorbar(sc, ax=ax, fraction=0.045, pad=0.02)
-            cb.set_label(cbar_label, fontsize=8); cb.ax.tick_params(labelsize=7); cb.set_ticks([0, n - 1])
+            cb.ax.tick_params(labelsize=7)
+            if dates is not None:  # real month+year ticks (self-updating), not the raw row index
+                d = pd.to_datetime(np.asarray(list(dates))[ok])
+                pos = sorted({int(round(t * (n - 1))) for t in (0.0, 0.25, 0.5, 0.75, 1.0)})
+                cb.set_ticks(pos); cb.set_ticklabels([d[i].strftime("%b %Y") for i in pos])
+                cb.set_label(f"observation date ({d[0]:%b %Y}–{d[-1]:%b %Y})", fontsize=8)
+            else:
+                cb.set_ticks([0, n - 1]); cb.set_label(cbar_label, fontsize=8)
     ax.set_xlim(-xmax * 0.03, xmax)
     ax.set_ylim(0, ymax)
     ax.set_xlabel("β₁ = skewness²")
