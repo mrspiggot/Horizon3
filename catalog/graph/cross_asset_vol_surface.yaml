@@ -1,0 +1,103 @@
+model_id: cross_asset_vol_surface
+name: "Cross-asset volatility surface (asset class x time)"
+family: cross_asset
+persona: equity_multiasset_pm
+grounded_in: [hatzius-fci]
+method: derived
+method_note: "each asset class's option-implied vol, standardized vs its own history, on one comparable scale"
+spec:
+  equations: "z_i = (IV_i - mean(IV_i)) / std(IV_i) over a 1y window, for i in {equity(SPX/NDX/RUT), rates(TLT), oil, gold, EM}; breadth = share of z_i > 1; the surface is z_i x time"
+# All seven legs exist from 2011-04 (VXEEM is the shortest, from 2011-03). The Cboe vol complex is
+# deep and un-throttled; this is the option-market analogue of a Financial Conditions Index.
+history: {start: "2011-04", end: "2026-07", cadence: monthly}
+inputs:
+  - {id: vix,   series_id: VIX,   db_source: cboe, state: level, context_window: 252}
+  - {id: vxn,   series_id: VXN,   db_source: cboe, state: level, context_window: 252}
+  - {id: rvx,   series_id: RVX,   db_source: cboe, state: level, context_window: 252}
+  - {id: vxtlt, series_id: VXTLT, db_source: cboe, state: level, context_window: 252}
+  - {id: ovx,   series_id: OVX,   db_source: cboe, state: level, context_window: 252}
+  - {id: gvz,   series_id: GVZ,   db_source: cboe, state: level, context_window: 252}
+  - {id: vxeem, series_id: VXEEM, db_source: cboe, state: level, context_window: 252}
+execution:
+  implemented_by: unified_market_data.analysis.cross_asset.vol_regime_map
+  args:
+    vix_z: vix.zscore
+    vxn_z: vxn.zscore
+    rvx_z: rvx.zscore
+    vxtlt_z: vxtlt.zscore
+    ovx_z: ovx.zscore
+    gvz_z: gvz.zscore
+    vxeem_z: vxeem.zscore
+outputs:
+  - {name: vix_z,             unit: "sigma", meaning: "S&P 500 implied vol (VIX), standardized"}
+  - {name: vxn_z,             unit: "sigma", meaning: "Nasdaq-100 implied vol (VXN), standardized"}
+  - {name: rvx_z,             unit: "sigma", meaning: "Russell 2000 / small-cap implied vol (RVX), standardized"}
+  - {name: vxtlt_z,           unit: "sigma", meaning: "20y+ Treasury bond implied vol (VXTLT), standardized"}
+  - {name: ovx_z,             unit: "sigma", meaning: "crude-oil implied vol (OVX), standardized"}
+  - {name: gvz_z,             unit: "sigma", meaning: "gold implied vol (GVZ), standardized"}
+  - {name: vxeem_z,           unit: "sigma", meaning: "EM equity implied vol (VXEEM), standardized"}
+  - {name: breadth_of_stress, unit: "share", meaning: "fraction of the 7 asset-class vols > +1σ (systemic when high)"}
+  - {name: max_z,             unit: "sigma", meaning: "the most-stressed asset class's vol z (dominant driver)"}
+  - {name: dispersion,        unit: "sigma", meaning: "cross-sectional spread of the 7 z's (rotation when high)"}
+interpretations:
+  - id: systemic
+    when: "breadth_of_stress >= 0.6"
+    says: "This is a systemic risk-off: implied vol is more than 1σ elevated across most of the cross-asset complex at once — the regime where diversification fails just when it is needed."
+  - id: concentrated
+    when: "max_z >= 2.0 and breadth_of_stress <= 0.3"
+    says: "The stress is concentrated in a single market: one asset class is 2σ+ stressed while the rest of the complex stays calm — a localized shock, not a broad de-risking."
+  - id: calm
+    when: "max_z < 1.0"
+    says: "The whole volatility surface is quiet — no asset class is more than 1σ above its own norm."
+charts:
+  - id: "The cross-asset volatility surface (asset class x time)"
+    role: outcome
+    chart_type: heatmap
+    color_job: diverging
+    interpretation: systemic
+    insight: "every asset class's option-implied vol, standardized and stacked — where and when risk was priced. A single lit row is a local shock; the whole surface lit at once is systemic (2015-16, 2018, 2020, 2022)"
+    data_contract:
+      kind: heatmap
+      cbar_label: "implied vol (σ vs own 1y history)"
+      rows:
+        - {label: "S&P (VIX)",        from: "output:vix_z"}
+        - {label: "Nasdaq (VXN)",     from: "output:vxn_z"}
+        - {label: "small-cap (RVX)",  from: "output:rvx_z"}
+        - {label: "bonds (VXTLT)",    from: "output:vxtlt_z"}
+        - {label: "oil (OVX)",        from: "output:ovx_z"}
+        - {label: "gold (GVZ)",       from: "output:gvz_z"}
+        - {label: "EM (VXEEM)",       from: "output:vxeem_z"}
+  - id: "Breadth of stress — how much of the complex is lit"
+    role: consequence
+    chart_type: series
+    color_job: sequential
+    interpretation: systemic
+    insight: "the share of the seven asset classes with implied vol above +1σ — the single line that separates a systemic risk-off from a one-market shock"
+    data_contract:
+      kind: series
+      ylabel: "fraction of asset classes > +1σ"
+      series:
+        - {label: "breadth of stress", from: "output:breadth_of_stress"}
+  - id: "Where the stress sits today"
+    role: consequence
+    chart_type: bar
+    color_job: diverging
+    insight: "today's cross-asset vol z-scores side by side — which markets are priced for risk right now, and which are calm"
+    data_contract:
+      kind: named_values
+      ylabel: "implied vol (σ vs own history)"
+      labels: ["S&P", "Nasdaq", "small-cap", "bonds", "oil", "gold", "EM"]
+      values: ["output:vix_z", "output:vxn_z", "output:rvx_z", "output:vxtlt_z", "output:ovx_z", "output:gvz_z", "output:vxeem_z"]
+  - id: "Equity vs rates vs commodity vol"
+    role: input
+    chart_type: series
+    color_job: categorical
+    insight: "three asset classes' implied-vol z through time — do equity, bond and oil vol rise together (correlated stress) or rotate (a repricing that spares the rest)"
+    data_contract:
+      kind: series
+      ylabel: "implied vol (σ vs own history)"
+      zero_line: true
+      series:
+        - {label: "equity (VIX)",  from: "output:vix_z"}
+        - {label: "bonds (VXTLT)", from: "output:vxtlt_z"}
+        - {label: "oil (OVX)",     from: "output:ovx_z"}

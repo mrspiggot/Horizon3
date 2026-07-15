@@ -105,8 +105,9 @@ personas:
     name: "Equity / multi-asset PM"
     decision: "Set cross-asset risk exposure."
     title: "Reading the whole tape: are financial conditions really as easy as they feel?"
-    models: [financial_conditions, risk_premia_ff89, gold_real_yield]
+    models: [financial_conditions, risk_premia_ff89, gold_real_yield, cross_asset_vol_surface]
     stub_charts:
+      - [cross_asset_vol_surface, "The cross-asset volatility surface (asset class x time)"]
       - [financial_conditions, "The subindices as a heatmap (component x time)"]
       - [risk_premia_ff89, "The yield curve as a recession signal"]
       - [gold_real_yield, "Gold's dislocation from the real-yield model"]
