@@ -11,7 +11,7 @@ method_note: >
   terms. Observed inputs, published identity.
 spec:
   equations: "real_funding = (DGS5 + BAA10Y) - T10YIE  (Fisher: real = nominal - expected inflation)"
-history: {start: "2007-01", end: "2026-07", cadence: monthly}
+history: {start: "2003-01", end: "2026-07", cadence: monthly}
 inputs:
   - {id: rf, series_id: DGS5, db_source: fred, state: level, context_window: 60}
   - {id: ig, series_id: BAA10Y, db_source: fred, state: level, context_window: 60}

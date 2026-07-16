@@ -7,7 +7,7 @@ method: published
 method_note: "consumes the published Chicago Fed NFCI + subindices directly"
 spec:
   equations: "the PUBLISHED NFCI (Brave-Butters/Hatzius: first factor of a 105-indicator panel via Kalman filter) and its risk/credit/leverage subindices; >0 = tighter than average"
-history: {start: "2023-01-06", end: "2026-07-03", cadence: weekly}
+history: {start: "1971-01", end: "2026-07-03", cadence: weekly}
 inputs:
   - {id: risk, series_id: NFCIRISK, db_source: fred, state: level, context_window: 200}
   - {id: credit, series_id: NFCICREDIT, db_source: fred, state: level, context_window: 200}

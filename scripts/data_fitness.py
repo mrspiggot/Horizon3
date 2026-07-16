@@ -27,6 +27,7 @@ Three verdicts, and the distinction between the last two is the point:
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -63,22 +64,41 @@ def _fmt_years(months: int) -> str:
     return f"{months / 12:.1f}y"
 
 
+_COV_CACHE: dict[tuple[str, str | None], dict] = {}
+
+
 def series_coverage(cur, sid: str, source: str | None) -> dict:
-    """Interrogate UMD for one series: extent, count, cadence and holes. Read-only."""
-    if source:
-        cur.execute("SELECT timestamp::date FROM observations WHERE series_id=%s AND source=%s "
-                    "ORDER BY timestamp", (sid, source))
-    else:
-        cur.execute("SELECT timestamp::date FROM observations WHERE series_id=%s ORDER BY timestamp", (sid,))
-    dates = [str(r[0]) for r in cur.fetchall()]
-    if not dates:
-        return {"sid": sid, "n": 0, "first": None, "last": None, "cadence_m": None, "holes": []}
-    keys = sorted({d[:7] for d in dates})
+    """Interrogate UMD for one series: extent, count, cadence and holes. Read-only.
+
+    Aggregates in SQL and returns DISTINCT months, not rows. The obvious version — pull every
+    timestamp and reduce in Python — moved ~16k rows per series (and grows every time the estate
+    deepens), which made a full sweep minutes long. A pre-flight nobody will wait for is a
+    pre-flight nobody runs, and this has to be cheap enough to gate every render. Months are
+    bounded (~950 for the deepest series) regardless of cadence, so daily and monthly series cost
+    the same. Cached per (series, source) — series are shared across models.
+    """
+    key = (sid, source)
+    if key in _COV_CACHE:
+        return _COV_CACHE[key]
+    src_clause = "AND source=%s" if source else ""
+    params = (sid, source) if source else (sid,)
+    cur.execute(f"SELECT count(*), min(timestamp)::date, max(timestamp)::date "
+                f"FROM observations WHERE series_id=%s {src_clause}", params)
+    n, first_d, last_d = cur.fetchone()
+    if not n:
+        out = {"sid": sid, "n": 0, "first": None, "last": None, "cadence_m": None, "holes": []}
+        _COV_CACHE[key] = out
+        return out
+    cur.execute(f"SELECT DISTINCT to_char(timestamp, 'YYYY-MM') FROM observations "
+                f"WHERE series_id=%s {src_clause} ORDER BY 1", params)
+    keys = [r[0] for r in cur.fetchall()]
     gaps = sorted(_m(b) - _m(a) for a, b in zip(keys, keys[1:]))
     cadence = gaps[len(gaps) // 2] if gaps else 1
     holes = [f"{a} → {b}" for a, b in zip(keys, keys[1:]) if (_m(b) - _m(a)) > max(cadence, 1)]
-    return {"sid": sid, "n": len(dates), "first": keys[0], "last": keys[-1],
-            "cadence_m": cadence, "holes": holes}
+    out = {"sid": sid, "n": n, "first": keys[0], "last": keys[-1],
+           "cadence_m": cadence, "holes": holes}
+    _COV_CACHE[key] = out
+    return out
 
 
 def assess_model(model_id: str, cur, conn, execute: bool) -> dict:
@@ -191,10 +211,50 @@ def _reads_input(chart: dict, input_id: str | None) -> bool:
     return f"input:{input_id}" in blob
 
 
+_HISTORY_RE = re.compile(r'^history:\s*\{([^}]*)\}\s*$', re.M)
+
+
+def apply_under_asked(rows: list[dict], *, dry_run: bool) -> int:
+    """Widen `history.start` for every UNDER-ASKED model, in one pass.
+
+    The report already knows the answer — it computed `available_first` from UMD itself. Making a
+    human retype that into 29 YAML files is how a one-line fix becomes death by a thousand cuts, and
+    hand-edits drift the moment the estate deepens again. This re-runs instead.
+
+    Only ever WIDENS (earlier start). It will not narrow a window, and it does not touch `end` —
+    vintage is a separate problem with a separate fix.
+    """
+    n = 0
+    for r in sorted(rows, key=lambda r: r["model_id"]):
+        if not any(v[0] == "UNDER-ASKED" for v in r["verdicts"]):
+            continue
+        new_start, path = r["available_first"], GRAPH_DIR / f"{r['model_id']}.yaml"
+        if not new_start or _m(new_start) >= _m(r["req_start"]):
+            continue
+        text = path.read_text()
+        mt = _HISTORY_RE.search(text)
+        if not mt:
+            print(f"  {RED}skip{OFF} {r['model_id']:30} could not locate a one-line history: block")
+            continue
+        body = re.sub(r'start:\s*"?[0-9-]+"?', f'start: "{new_start}"', mt.group(1), count=1)
+        gained = _fmt_years(_m(r["req_start"]) - _m(new_start))
+        print(f"  {GREEN}widen{OFF} {r['model_id']:30} {r['req_start']} → {new_start}  (+{gained}) "
+              f"bound by {r['binding_start']['sid'] if r['binding_start'] else '?'}")
+        if not dry_run:
+            path.write_text(text[:mt.start()] + f"history: {{{body}}}" + text[mt.end():])
+        n += 1
+    if n and dry_run:
+        print(f"\n  {AMBER}dry run — re-run with --apply-under-asked to write{OFF}")
+    return n
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--fast", action="store_true", help="metadata only — skip model execution")
     ap.add_argument("--model", help="assess one model")
+    ap.add_argument("--apply-under-asked", action="store_true",
+                    help="widen history.start for every UNDER-ASKED model (writes YAML)")
+    ap.add_argument("--dry-run", action="store_true", help="with --apply-under-asked: show, don't write")
     args = ap.parse_args()
 
     conn = psycopg2.connect(host="localhost", port=5434, dbname="unified_market_data",
@@ -204,12 +264,22 @@ def main() -> None:
     ids = [args.model] if args.model else sorted(
         p.stem for p in GRAPH_DIR.glob("*.yaml") if p.stem not in ("personas", "vision"))
 
+    if args.apply_under_asked:
+        args.fast = True                      # widening needs metadata only; execution is wasted here
+
     rows, failed = [], []
     for mid in ids:
         try:
             rows.append(assess_model(mid, cur, conn, execute=not args.fast))
         except Exception as exc:
             failed.append((mid, f"{type(exc).__name__}: {exc}"))
+
+    if args.apply_under_asked:
+        print(f"\n{BOLD}WIDENING UNDER-ASKED WINDOWS — the depth is already in UMD, nobody asked for it{OFF}")
+        n = apply_under_asked(rows, dry_run=args.dry_run)
+        print(f"\n{n} model(s) {'would be' if args.dry_run else ''} widened."
+              f"{'' if args.dry_run else '  Review with: git diff catalog/graph/'}\n")
+        return
 
     print(f"\n{BOLD}DATA FITNESS — can UMD support what the catalog asks for?{OFF}")
     print(f"{'model':32} {'requested':22} {'delivered':>11}  verdict")

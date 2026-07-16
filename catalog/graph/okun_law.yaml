@@ -12,7 +12,7 @@ method_note: >
   slope (the Okun coefficient), read as a scatter with an OLS fit.
 spec:
   equations: "ΔU_yoy ≈ -c·(g_yoy - g*), g = real GDP growth (YoY %), ΔU = year-on-year change in the unemployment rate (pp)."
-history: {start: "1962-01", end: "2026-01", cadence: quarterly}
+history: {start: "1949-01", end: "2026-01", cadence: quarterly}
 inputs:
   - {id: g,  series_id: GDPC1,  db_source: fred, transform: yoy,      state: level, context_window: 40}
   - {id: du, series_id: UNRATE, db_source: fred, transform: yoy_diff, state: level, context_window: 40}

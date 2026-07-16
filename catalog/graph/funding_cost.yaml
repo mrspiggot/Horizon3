@@ -12,7 +12,7 @@ method_note: >
   ZIRP and the 2022 repricing. A definitional decomposition of two observed market rates.
 spec:
   equations: "all_in = DGS5 (5Y risk-free) + BAA10Y (Baa credit spread). Decompose to see rates vs credit."
-history: {start: "2007-01", end: "2026-07", cadence: monthly}
+history: {start: "1986-01", end: "2026-07", cadence: monthly}
 inputs:
   - {id: rf, series_id: DGS5, db_source: fred, state: level, context_window: 60}
   - {id: ig, series_id: BAA10Y, db_source: fred, state: level, context_window: 60}

@@ -15,7 +15,7 @@ spec:
     Per commodity, momentum m_t = (P_t / P_{t-252} - 1) * 100  (12-month trailing total return).
     breadth = (1/N) * sum_i sign(m_i,t) in [-1, +1]; avg_mom = (1/N) * sum_i m_i,t.
     TSMOM rule: hold long where m>0, short where m<0.
-history: {start: "2010-01", end: "2026-07", cadence: monthly}
+history: {start: "2001-08", end: "2026-07", cadence: monthly}
 inputs:
   - {id: crude,  series_id: "CL=F", db_source: yahoo, transform: momentum, state: level, context_window: 36}
   - {id: copper, series_id: "HG=F", db_source: yahoo, transform: momentum, state: level, context_window: 36}

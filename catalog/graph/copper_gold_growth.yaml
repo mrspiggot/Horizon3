@@ -12,7 +12,7 @@ method_note: >
   not a fitted model and not a z-average.
 spec:
   equations: "copper/gold x1000. Rising = cyclical growth priced over safety; historically tracks the 10y yield."
-history: {start: "2010-01", end: "2026-07", cadence: monthly}
+history: {start: "2000-08", end: "2026-07", cadence: monthly}
 inputs:
   - {id: copper, series_id: "HG=F", db_source: yahoo, state: level, context_window: 252}
   - {id: gold, series_id: "GC=F", db_source: yahoo, state: level, context_window: 252}

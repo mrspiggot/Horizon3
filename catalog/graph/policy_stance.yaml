@@ -11,7 +11,7 @@ method_note: >
   below (Laubach-Williams 2003; Holston-Laubach-Williams 2017).
 spec:
   equations: "real_exante = fed_funds - E[pi]; stance = real_exante - r*(HLW). >0 restrictive, <0 accommodative."
-history: {start: "2010-01", end: "2026-05", cadence: monthly}
+history: {start: "2003-01", end: "2026-05", cadence: monthly}
 inputs:
   - {id: policy, series_id: FEDFUNDS, db_source: fred, state: level}
   - {id: cpi, series_id: PCEPILFE, db_source: fred, transform: yoy, state: level, context_window: 36}

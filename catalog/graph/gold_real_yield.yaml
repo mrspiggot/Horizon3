@@ -14,7 +14,7 @@ spec:
     Standardize each series to z vs its trailing window. Model-implied gold level = -z(real_yield).
     Dislocation = z(gold) - (-z(real_yield)) = z(gold) + z(real_yield). Positive = gold dearer than
     real yields justify (a safe-haven / flow premium); negative = cheap. Dollar is the second driver.
-history: {start: "2010-01", end: "2026-07", cadence: monthly}
+history: {start: "2006-01", end: "2026-07", cadence: monthly}
 inputs:
   - {id: gold,       series_id: "GC=F",    db_source: yahoo, state: level, context_window: 252}
   - {id: real_yield, series_id: "DFII10",  db_source: fred,  state: level, context_window: 252}

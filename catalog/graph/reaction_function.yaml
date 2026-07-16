@@ -8,7 +8,7 @@ method_note: "Taylor (1993) rule variants — the actual equation"
 spec:
   equations: "i* = r* + pi + 0.5(pi - pi*) + 0.5*gap ; inertial i_t = rho*i_{t-1} + (1-rho)*i*"
   params: {r_star_pct: 0.7, inflation_target_pct: 2.0}
-history: {start: "2021-01", end: "2026-05"}
+history: {start: "1960-01", end: "2026-05"}
 inputs:
   - {id: cpi, series_id: PCEPILFE, db_source: fred, transform: yoy, state: level, context_window: 36}
   - {id: real_gdp, series_id: GDPC1, db_source: fred, state: level}
