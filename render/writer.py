@@ -117,18 +117,34 @@ class Critique(BaseModel):
 
 # ── the brief ────────────────────────────────────────────────────────────────────────────────────
 def _active_says(meta: dict, latest) -> list[str]:
-    """The interpretations whose `when` guard is TRUE on the latest outputs — the model's live regime call."""
+    """The interpretations whose `when` guard is TRUE on the latest run — the model's live regime call.
+
+    The scope is INPUTS + OUTPUTS. It used to be outputs only, and guards legitimately reference
+    inputs: reaction_function's `behind_the_curve` is `taylor_1993 - policy.level > 1.0`, where
+    `policy` is an input. That raised NameError, the bare `except: continue` below swallowed it, and
+    the interpretation had NEVER fired — while being TRUE (the gap is 1.68pp). An article headlined
+    "how far behind the curve?" was never told by its own model that the Fed is behind the curve.
+    Inputs are §10 State objects, so `policy.level` resolves once they are in scope; outputs win a
+    name collision, being the model's product.
+
+    A guard that RAISES is now loud. A silent failure here is indistinguishable from "the condition
+    is false", which is exactly how this hid: 34 of 46 guards are legitimately false today, so one
+    that could never fire looked like all the others.
+    """
     if latest is None:
         return []
-    out = dict(getattr(latest, "outputs", {}) or {})
+    scope = {**(getattr(latest, "inputs", {}) or {}), **(getattr(latest, "outputs", {}) or {})}
     says = []
     for interp in (meta.get("interpretations") or []):
         when = interp.get("when")
-        try:
-            if when and eval(when, {"__builtins__": {}}, out):    # noqa: S307 — trusted catalog exprs, no builtins
-                says.append(" ".join(str(interp.get("says", "")).split()))
-        except Exception:
+        if not when:
             continue
+        try:
+            if eval(when, {"__builtins__": {}}, scope):    # noqa: S307 — trusted catalog exprs, no builtins
+                says.append(" ".join(str(interp.get("says", "")).split()))
+        except Exception as exc:
+            print(f"INTERPRETATION BROKEN — {meta.get('model_id')}/{interp.get('id')}: "
+                  f"`{when}` raised {type(exc).__name__}: {exc}", file=sys.stderr)
     return says
 
 

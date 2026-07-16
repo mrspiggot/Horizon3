@@ -51,6 +51,28 @@ def _blank_meta(spec) -> None:
             setattr(spec, f, "")
 
 
+def _refuse_if_starved(run: dict, chart_id: str) -> None:
+    """The coverage gate, on the family path too.
+
+    It was written into from_graph.render_chart — the RAW path — and then _FAMILY was widened so that
+    73% of charts stopped going through the raw path. The gate got WEAKER as the rendering got better,
+    and nothing said so: a full-estate sweep showed risk_premia_ff89 drawing 3 charts through the
+    family at 19% coverage while the gate caught only the 4th, which happened to fall back to raw.
+    A gate guarding a quarter of the surface is not a gate.
+
+    Both render paths now refuse the same way, for the same reason: a starved window drawn as though
+    it were a deliberate choice is the defect (7/8 reviews). The gap itself is an acquisition task —
+    scripts/data_fitness.py turns the named reason into a plan.
+    """
+    cov = run.get("coverage") or {}
+    if cov.get("starved"):
+        raise ValueError(
+            f"DATA STARVED — refusing to draw {chart_id!r}: asked for {cov['requested']} as-of dates "
+            f"from {cov['asked_from']}, the executor delivered {cov['delivered']} "
+            f"({cov['ratio']:.0%}, {cov['first']} → {cov['last']}). This chart would read as a "
+            f"deliberate window. Run `python scripts/data_fitness.py` for the binding series.")
+
+
 def chart_png_family(run: dict, chart_id: str) -> tuple[str | None, str]:
     """Render a persona chart through its POLISHED ACS structure-family (decomposition / surface /
     relationship) in embed mode. Returns (base64_png, insight_caption); (None, insight) to fall back."""
@@ -61,6 +83,9 @@ def chart_png_family(run: dict, chart_id: str) -> tuple[str | None, str]:
     fam = _FAMILY.get((chart.get("data_contract", {}) or {}).get("kind", ""))
     if not fam or not run.get("history"):
         return None, insight
+    # Gate BEFORE the try below — its `except Exception: return None` would turn a starvation refusal
+    # into a silent fallback to the raw renderer, i.e. the starved chart ships anyway, unpolished.
+    _refuse_if_starved(run, chart_id)
     model = run.get("meta") or {}
     out = os.path.join(tempfile.gettempdir(), f"ais_fam_{abs(hash((model.get('model_id'), chart_id)))}.png")
     try:
