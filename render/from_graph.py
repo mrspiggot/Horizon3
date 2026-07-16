@@ -63,9 +63,29 @@ def _xlabels(history):
     return [str(r.as_of)[:7] if r.as_of else "" for r in history]
 
 
-def render_chart(ax, chart: dict, history: list, *, fig=None) -> None:
+def render_chart(ax, chart: dict, history: list, *, fig=None, coverage: dict | None = None) -> None:
     dc = chart["data_contract"]
     kind = dc["kind"]
+
+    # THE COVERAGE GATE. `coverage` comes from graph_corpus.run_model, which has always known both
+    # numbers — how many as-of dates were requested, and how many the executor actually delivered —
+    # and threw the first away. run_history skips any date where an input is thin; honest per point,
+    # invisible in aggregate. That is how reaction_function shipped an 8-point chart captioned
+    # "through the tightening cycle" out of 65 requested, with every gate green.
+    #
+    # Refusing here is NOT the answer to a data gap — a refusal that ends there is just the failure
+    # wearing the costume of rigour (directive #1). It is the answer to a MISLEADING CHART: the
+    # reader must never be shown a starved window drawn as though it were a choice. The gap itself is
+    # an acquisition task, and the named reason below is what routes it there —
+    # scripts/data_fitness.py turns it into a plan.
+    if coverage and coverage.get("starved"):
+        raise ValueError(
+            f"DATA STARVED — refusing to draw {chart.get('id')!r}: asked for "
+            f"{coverage['requested']} as-of dates from {coverage['asked_from']}, the executor "
+            f"delivered {coverage['delivered']} ({coverage['ratio']:.0%}, {coverage['first']} → "
+            f"{coverage['last']}). This chart would read as a deliberate window. "
+            f"Run `python scripts/data_fitness.py` for the binding series and the remedy.")
+
     latest = history[-1]
     # The chart's `id` is the human title. The ontology `role`
     # (OUTCOME/INPUT/CONSEQUENCE) is internal metadata — never rendered.

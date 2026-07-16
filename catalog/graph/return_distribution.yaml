@@ -14,7 +14,10 @@ spec:
   equations: "β1 = skew(r)²; β2 = kurtosis(r) (Normal = 3); excess kurtosis = β2 - 3. r = daily log returns over 252d."
 # Skew/kurtosis of daily S&P returns from FRED SP500 (2016+); the ~252d rolling window means
 # the first valid point is ~2017. Was configured 2007+ but starved (Yahoo ^GSPC held only 1yr).
-history: {start: "2016-08", end: "2026-07", cadence: monthly}
+# history.start narrowed 2016-08 -> 2017-07 (2026-07-16, audit `covered` axis): SP500 begins 2016-07 and the 252d rolling skew/kurtosis window needs a year first.
+# Asking for history that cannot exist is not ambition, it is a chart that will be
+# narrated with a window it cannot show.
+history: {start: "2017-07", end: "2026-07", cadence: monthly}
 inputs:
   - {id: skew, series_id: "SP500", db_source: fred, transform: roll_skew, state: level, context_window: 60}
   - {id: kurt, series_id: "SP500", db_source: fred, transform: roll_kurt, state: level, context_window: 60}

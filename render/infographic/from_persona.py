@@ -11,6 +11,7 @@ import base64
 import io
 import os
 import re
+import sys
 import tempfile
 from pathlib import Path
 
@@ -240,11 +241,19 @@ def chart_png(run: dict, chart_id: str, figsize=(6.4, 3.9)) -> str | None:
         return None
     fig, ax = plt.subplots(figsize=figsize, dpi=150)
     try:
-        from_graph.render_chart(ax, chart, run["history"], fig=fig)
+        from_graph.render_chart(ax, chart, run["history"], fig=fig, coverage=run.get("coverage"))
         buf = io.BytesIO()
         fig.savefig(buf, format="png", bbox_inches="tight", facecolor="white")
         return base64.b64encode(buf.getvalue()).decode()
-    except Exception:
+    except Exception as exc:
+        # A refusal that nobody hears is not a gate. This bare except returning None is why a chart
+        # could vanish, or fall back to the raw renderer, with no trace — the same silence that let
+        # an 8-of-65 window ship as though it were a choice. Every refusal is now named on stderr,
+        # and a coverage refusal is re-raised: the article build must FAIL rather than quietly omit
+        # the exhibit its prose is about to describe.
+        print(f"CHART REFUSED — {chart_id!r}: {exc}", file=sys.stderr)
+        if isinstance(exc, ValueError) and "DATA STARVED" in str(exc):
+            raise
         return None
     finally:
         plt.close(fig)

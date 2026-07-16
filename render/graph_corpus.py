@@ -28,17 +28,50 @@ from unified_market_data.analysis.executor import (  # noqa: E402
 from . import from_graph  # noqa: E402
 
 GRAPH_DIR = Path(__file__).resolve().parents[1] / "catalog" / "graph"
+CATALOG_DIR = GRAPH_DIR.parent
 _INPUT_FIELDS = {f.name for f in fields(InputSpec)}
+_JUR_CACHE: dict | None = None
 
 
-def _load_model(model_id: str) -> dict:
+def _jurisdictions() -> dict:
+    """Load the jurisdiction axis (catalog/jurisdictions.yaml): {id: {meta, bindings{role:(ref,source)}}}."""
+    global _JUR_CACHE
+    if _JUR_CACHE is None:
+        d = yaml.safe_load((CATALOG_DIR / "jurisdictions.yaml").read_text())
+        out = {}
+        for j in d.get("jurisdictions", []):
+            b = {}
+            for role, binding in (j.get("bindings") or {}).items():
+                if isinstance(binding, dict) and binding.get("ref"):
+                    b[role] = (binding["ref"], binding.get("source"))
+            out[j["id"]] = {"meta": j, "bindings": b}
+        _JUR_CACHE = out
+    return _JUR_CACHE
+
+
+def _load_model(model_id: str, instance: str | None = None) -> dict:
+    """Deserialize a model. Inputs may be jurisdiction-generic (carry a `role`) or legacy (a concrete
+    `series_id`). For a role-based model, roles are resolved to that jurisdiction's series via the
+    jurisdiction axis — `instance` defaults to the model's first declared instance, so the US is one
+    instance among the Fed/ECB/BoE/BoJ, never the definition."""
     d = yaml.safe_load((GRAPH_DIR / f"{model_id}.yaml").read_text())
+    instances = d.get("instances") or ["US"]
+    inst = instance or instances[0]
+    jbind = _jurisdictions().get(inst, {}).get("bindings", {})
     db_sources: dict[str, str] = {}
     inputs = []
     for i in d["inputs"]:
-        if i.get("db_source") and i.get("series_id"):
+        ii = dict(i)
+        if i.get("role"):                                   # jurisdiction-generic: resolve role -> series
+            if i["role"] not in jbind:
+                raise KeyError(f"{model_id}: role '{i['role']}' has no binding for jurisdiction '{inst}'")
+            sid, src = jbind[i["role"]]
+            ii["series_id"] = sid
+            if src and src != "observations":
+                db_sources[sid] = src
+        elif i.get("db_source") and i.get("series_id"):     # legacy concrete series
             db_sources[i["series_id"]] = i["db_source"]
-        inputs.append(InputSpec(**{k: v for k, v in i.items() if k in _INPUT_FIELDS}))
+        inputs.append(InputSpec(**{k: v for k, v in ii.items() if k in _INPUT_FIELDS}))
     spec = ModelSpec(
         model_id=d["model_id"],
         inputs=inputs,
@@ -46,7 +79,27 @@ def _load_model(model_id: str) -> dict:
         outputs=[OutputSpec(**o) for o in d["outputs"]],
         params=(d.get("spec") or {}).get("params", {}) or {})
     return {"spec": spec, "charts": d.get("charts", []), "db_sources": db_sources,
-            "history": d.get("history", {}), "meta": d}
+            "history": d.get("history", {}), "meta": d, "instance": inst, "instances": instances}
+
+
+def run_model_instances(model_id: str, conn) -> dict:
+    """Run a jurisdiction-generic model across ALL its declared instances (the Fed, ECB, BoE, BoJ…),
+    each resolving its own roles→series. Returns {instance_id: {history, latest, cb, ccy}} — the raw
+    material for the cross-jurisdiction comparison where the DIVERGENCE is the insight."""
+    d = yaml.safe_load((GRAPH_DIR / f"{model_id}.yaml").read_text())
+    instances = d.get("instances") or ["US"]
+    jur = _jurisdictions()
+    hist = d.get("history", {})
+    out = {}
+    for jid in instances:
+        m = _load_model(model_id, instance=jid)
+        ex = Executor(_fetch_factory(conn, m["db_sources"]))
+        dates = _dates(hist.get("start", "2021-01"), hist.get("end", "2026-05"), hist.get("cadence", "monthly"))
+        h = ex.run_history(m["spec"], dates)
+        meta = jur.get(jid, {}).get("meta", {})
+        out[jid] = {"history": h, "latest": h[-1] if h else None,
+                    "cb": meta.get("central_bank", jid), "ccy": meta.get("ccy", "")}
+    return {"meta": d, "charts": d.get("charts", []), "instances": out}
 
 
 def _dates(start: str, end: str, cadence: str = "monthly") -> list[str]:
@@ -59,13 +112,14 @@ def _dates(start: str, end: str, cadence: str = "monthly") -> list[str]:
             out.append(d.strftime("%Y-%m-%d"))
             d += timedelta(days=7)
         return out
+    step = 3 if cadence == "quarterly" else 1
     (ys, ms), (ye, me) = (int(x) for x in start.split("-")), (int(x) for x in end.split("-"))
     out, y, m = [], ys, ms
     while (y, m) <= (ye, me):
         out.append(f"{y}-{m:02d}-28")
-        m += 1
-        if m > 12:
-            y, m = y + 1, 1
+        m += step
+        while m > 12:
+            y, m = y + 1, m - 12
     return out
 
 
@@ -87,13 +141,33 @@ def _fetch_factory(conn, db_sources: dict[str, str]):
     return fetch
 
 
+# A model may deliver less than it asked for: run_history skips any as-of where an input is thin
+# (executor.py "honest skip, not a fabricated point"). Honest per point — INVISIBLE in aggregate,
+# because nothing ever compared delivered to requested. On 2026-07-14 reaction_function asked for 65
+# monthly points, got 8, and shipped a chart captioned "through the tightening cycle". Nothing
+# raised. It later RECOVERED silently via backfill — nobody could tell in either direction. That is
+# the whole argument for measuring it: both numbers are already in hand here and one was thrown away.
+_COVERAGE_FLOOR = 0.80
+
+
+def _coverage(requested: list[str], history: list) -> dict:
+    n_req, n_got = len(requested), len(history)
+    ratio = (n_got / n_req) if n_req else 0.0
+    return {"requested": n_req, "delivered": n_got, "ratio": ratio,
+            "starved": ratio < _COVERAGE_FLOOR,
+            "first": history[0].as_of if history else None,
+            "last": history[-1].as_of if history else None,
+            "asked_from": requested[0] if requested else None}
+
+
 def run_model(model_id: str, conn) -> dict:
     m = _load_model(model_id)
     ex = Executor(_fetch_factory(conn, m["db_sources"]))
     dates = _dates(m["history"].get("start", "2021-01"), m["history"].get("end", "2026-05"),
                    m["history"].get("cadence", "monthly"))
     history = ex.run_history(m["spec"], dates)
-    return {**m, "history": history, "latest": history[-1] if history else None}
+    return {**m, "history": history, "latest": history[-1] if history else None,
+            "dates": dates, "coverage": _coverage(dates, history)}
 
 
 def render_selected(items: list, out_path: str, *, suptitle: str | None = None) -> str:

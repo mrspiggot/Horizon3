@@ -9,7 +9,13 @@ spec:
   equations: "the VIX curve (9d/1m/3m/6m); slope = VIX6M - VIX1M (>0 contango, <0 backwardation)"
 # Vol complex sourced from Cboe (deep, un-throttled) — not Yahoo. All four legs exist from
 # 2009-10 (VIX3M is the shortest history, from 2009-09-18). Widened from a 1yr Yahoo snapshot.
-history: {start: "2009-10-01", end: "2026-07-10", cadence: weekly}
+# history.start narrowed 2009-10-01 -> 2011-01-03 (2026-07-16, audit `covered` axis): VIX9D begins
+# 2011-01 and the model needs all four tenors, so the curve genuinely cannot start earlier — VIX3M
+# (2009-09), VIX6M (2008-01) and VIX (1990) reach further back but cannot make a curve alone.
+# This ask was also poisoning the writer: writer.py computes its HISTORY-firewall boundary as
+# min(starts) across a persona's models, so "2009-10" told the LLM every volatility_trader chart
+# began in 2009 — licensing prose about episodes that were never on them.
+history: {start: "2011-01-03", end: "2026-07-10", cadence: weekly}
 inputs:
   - {id: vix9d, series_id: "VIX9D", db_source: cboe, state: level, context_window: 63}
   - {id: vix, series_id: "VIX", db_source: cboe, state: level, context_window: 63}
