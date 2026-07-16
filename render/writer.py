@@ -15,8 +15,10 @@ worst tells, and an LLM editor scored on the StoryScope checklist runs a bounded
 from __future__ import annotations
 
 import base64
+import collections
 import difflib
 import re
+import sys
 from functools import lru_cache
 from pathlib import Path
 
@@ -29,6 +31,7 @@ from .infographic.agentic import _citable, _tokenize
 from .infographic.families import decision_brief
 from .infographic.from_persona import chart_png, chart_png_family, decisive, persona_material
 from .infographic.gate import _LEAK
+from .studio.from_model import _refs
 from .studio.llm import get_llm
 
 _TOKLEFT = re.compile(r"\{n\d+\}")
@@ -156,7 +159,13 @@ def build_brief(mat: dict, *, limit: int = 24) -> dict:
             cid, ins = c.get("id", ""), " ".join((c.get("insight") or "").split())
             if cid:
                 charts.append((cid, ins))
-                chart_index[cid] = {"model_id": mid, "insight": ins}
+                # `role` (input/outcome/consequence) and `refs` feed the exhibit contract: role drives
+                # diversity when filling to the floor, refs identify near-duplicates. Both were already
+                # in the catalog and neither was read.
+                chart_index[cid] = {
+                    "model_id": mid, "insight": ins, "role": c.get("role"),
+                    "refs": frozenset(_refs(c.get("data_contract") or {})),
+                }
         outs = "; ".join(f"{o['name']} ({o.get('unit','')}) — {o.get('meaning','')}"
                          for o in (meta.get("outputs") or []))
         models.append({
@@ -435,6 +444,101 @@ def critique_article(full_text: str, title: str) -> Critique:
 
 
 # ── docx assembly ──────────────────────────────────────────────────────────────────────────────────
+# ── the exhibit contract ─────────────────────────────────────────────────────────────────────────
+# The charts ARE the argument — every section is a chart read aloud — so the exhibit count is not the
+# LLM's to decide. It was, and it swung wildly: the 2026-07-14 run shipped 10 charts (reviewers: "twelve
+# exhibits is two or three too many"); the 2026-07-16 run shipped ONE, from the same pipeline, with the
+# same 13 charts offered to the planner. _place_charts's only safety net fired at ZERO
+# (`if sum(...) == 0`), so a single chart sailed through as though it were a choice.
+#
+# So: the planner still chooses WHICH charts (it saw the index; that judgement is worth having). This
+# decides HOW MANY. LLM proposes, arithmetic disposes — the same rule as every other gate here.
+#
+# 4-6 charts + the illustration + the infographic = 6-8 exhibits, which is what the editorial reviews
+# asked for ("the target titles would run six to eight").
+_CHART_FLOOR, _CHART_CEILING = 4, 6
+# No more than this many charts from one model. "Four charts for the funding split" was the
+# treasurer review's complaint; the credit piece showed the EBP twice. A persona with 2 models can
+# still reach the floor (2x2=4); the cap RELAXES rather than let an article ship under the floor,
+# because too few charts is the worse failure.
+_MAX_PER_MODEL = 2
+
+
+def _chart_key(cid: str, ci: dict) -> tuple:
+    """Near-duplicate identity: the same model drawing the same refs is the same exhibit twice.
+    This is the `redundant-exhibits` defect (6/8 reviews) — the credit piece showed the EBP twice, the
+    treasurer four views of one decomposition — and the signal was always here, unused."""
+    e = ci.get(cid) or {}
+    return (e.get("model_id"), e.get("refs"))
+
+
+def _greedy_diverse(chosen: list[str], pool: list[str], ci: dict, target: int) -> list[str]:
+    """Take from `pool` until `chosen` reaches `target`, each step preferring the LEAST-used model,
+    then the least-used role, then the earliest candidate.
+
+    Counts, not membership. A set-membership test ("is this model already present?") stops
+    discriminating the moment every model appears once, and then falls back to catalog order — which
+    clumps, because a model's charts are adjacent in the index. That reproduced the exact defect:
+    6 charts of which 4 were one model. Counting keeps balancing all the way to the ceiling, which is
+    what "don't show four views of one decomposition" (6/8 reviews) actually requires.
+    """
+    order = list(ci)
+    pool = list(pool)
+    while len(chosen) < target and pool:
+        rc = collections.Counter((ci[c] or {}).get("role") for c in chosen)
+        mc = collections.Counter((ci[c] or {}).get("model_id") for c in chosen)
+        pool.sort(key=lambda c: (mc[(ci[c] or {}).get("model_id")],
+                                 rc[(ci[c] or {}).get("role")],
+                                 order.index(c)))
+        chosen.append(pool.pop(0))
+    return chosen
+
+
+def _exhibit_contract(picked: list[str], ci: dict) -> list[str]:
+    """Return between _CHART_FLOOR and _CHART_CEILING chart ids. Deterministic.
+
+    Three cases, all diversity-aware:
+      within band  -> take the planner's picks as they are; that judgement is worth keeping
+      over ceiling -> choose from ITS picks, maximising role then model diversity. Blind truncation
+                      would take the first N, which are typically all one model — reproducing the
+                      `redundant-exhibits` defect (6/8 reviews; the treasurer piece ran four charts of
+                      one decomposition) while nominally obeying the ceiling.
+      under floor  -> keep every pick, fill from the rest the same way.
+    Near-duplicates (same model, same refs) are dropped throughout.
+    """
+    chosen: list[str] = []
+    seen: set = set()
+    per_model: collections.Counter = collections.Counter()
+    for cid in [c for c in picked if c in ci]:            # planner's picks: dedupe + cap per model
+        k, mid = _chart_key(cid, ci), (ci[cid] or {}).get("model_id")
+        if k in seen or per_model[mid] >= _MAX_PER_MODEL:
+            continue
+        seen.add(k)
+        per_model[mid] += 1
+        chosen.append(cid)
+
+    if len(chosen) > _CHART_CEILING:
+        return _greedy_diverse([], chosen, ci, _CHART_CEILING)
+
+    def _pool(cap: int | None) -> list[str]:
+        out, s, pm = [], set(seen), collections.Counter(per_model)
+        for c in ci:
+            k, mid = _chart_key(c, ci), (ci[c] or {}).get("model_id")
+            if k in s or (cap is not None and pm[mid] >= cap):
+                continue
+            s.add(k)
+            pm[mid] += 1
+            out.append(c)
+        return out
+
+    chosen = _greedy_diverse(chosen, _pool(_MAX_PER_MODEL), ci, _CHART_FLOOR)
+    if len(chosen) < _CHART_FLOOR:                        # relax the cap rather than ship under floor
+        already = {_chart_key(c, ci) for c in chosen}
+        chosen = _greedy_diverse(chosen, [c for c in ci if _chart_key(c, ci) not in already],
+                                 ci, _CHART_FLOOR)
+    return chosen
+
+
 def _resolve_chart_id(cid: str, chart_index: dict) -> str | None:
     """Map a planner's chart reference to a real chart id — exact, else substring, else closest match.
     The planner sometimes paraphrases the id ('the funding stack' vs the exact title); recover it rather
@@ -542,22 +646,38 @@ def build_article_full(persona_id: str, conn, out_dir, *, backend: str = "auto",
     outline = plan_arc(brief)
 
     def _place_charts(secs: list[SectionDraft]) -> None:
-        """Chart placement is the PLANNER's call (it saw the chart index); resolve its ids (fuzzily —
-        it sometimes paraphrases) and attach them to the written sections by order. The writer's own
-        chart_ids are ignored. A safety net guarantees no article ships chartless."""
+        """Resolve the planner's chart picks, then ENFORCE the exhibit contract and spread the result
+        one-per-section.
+
+        The planner chooses which charts (it saw the index). It does not choose how many: it picked 10
+        on 2026-07-14 and 1 on 2026-07-16 from the same 13, and the old net only caught zero. In an app
+        whose every section is a chart read aloud, an article with one chart is a failure, not variance.
+        """
         ci = brief["chart_index"]
-        for i, s in enumerate(secs):
-            ids = outline.sections[i].chart_ids if i < len(outline.sections) else s.chart_ids
-            resolved: list[str] = []
+        if not ci:
+            return
+
+        picked: list[str] = []                            # the planner's intent, in its order
+        for i, _s in enumerate(secs):
+            ids = outline.sections[i].chart_ids if i < len(outline.sections) else _s.chart_ids
             for c in ids:
                 r = _resolve_chart_id(c, ci)
-                if r and r not in resolved:
-                    resolved.append(r)
-            s.chart_ids = resolved
-        if sum(len(s.chart_ids) for s in secs) == 0 and ci:   # never chartless: spread a few
-            for i, s in enumerate(secs):
-                if i < len(ci):
-                    s.chart_ids = [list(ci)[i]]
+                if r and r not in picked:
+                    picked.append(r)
+
+        final = _exhibit_contract(picked, ci)
+        if len(final) != len(picked):
+            print(f"EXHIBIT CONTRACT — planner picked {len(picked)}, shipping {len(final)} "
+                  f"(floor {_CHART_FLOOR}, ceiling {_CHART_CEILING})", file=sys.stderr)
+
+        # Spread one per section, in section order, so the argument stays chart-led rather than
+        # clumping every exhibit under one heading.
+        for s in secs:
+            s.chart_ids = []
+        if not secs:
+            return
+        for i, cid in enumerate(final):
+            secs[i % len(secs)].chart_ids.append(cid)
 
     feedback, reasons, crit_ok = "", [], False
     filled_sections, headline = [], outline.headline
