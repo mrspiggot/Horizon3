@@ -28,6 +28,10 @@ roles:
   pm_implied_rate:          {kind: event,        optional: true, desc: "Prediction-market implied policy rate. Kalshi = US-only."}
   equity_vol:               {kind: observations, optional: true, desc: "Equity vol index for structural-premium terms."}
   credit_oas:               {kind: observations, optional: true, desc: "Investment-grade corporate OAS (option-adjusted spread over govt, bps) — the treasurer's credit funding leg. US = ICE BofA IG (BAMLC0A0CM). HY/EM are separate indices; euro/sterling IG OAS not yet ingested."}
+  # ── macro roles (labour + prices + long rate) — jurisdiction-generic, bound below per CB ──
+  unemployment_rate:        {kind: observations, desc: "Harmonised unemployment rate (%). The Phillips/Okun/Beveridge/Sahm slack variable."}
+  headline_cpi:             {kind: observations, desc: "Headline CPI index (yoy computed = headline inflation). The Phillips-curve price variable."}
+  long_yield_10y:           {kind: observations, desc: "10y government benchmark yield (%). US=Treasury, EU=Bund, GB=Gilt, JP=JGB."}
 
 # ---------------------------------------------------------------------------------------------
 # Jurisdictions. `scope: major` = the G7-ish OIS majors we instantiate first (user priority:
@@ -56,6 +60,9 @@ jurisdictions:
       pm_implied_rate:          {ref: "KXFED_implied_rate", source: event}
       equity_vol:               {ref: "^VIX",               source: observations}
       credit_oas:               {ref: "BAMLC0A0CM",         source: observations, note: "ICE BofA US IG corporate OAS (bps). HY=BAMLH0A0HYM2, EM=BAMLEMCBPIOAS also ingested."}
+      unemployment_rate:        {ref: "UNRATE",             source: fred, note: "US civilian unemployment, monthly from 1948."}
+      headline_cpi:             {ref: "CPIAUCSL",           source: fred, note: "US CPI-U index; yoy = headline inflation, from 1947."}
+      long_yield_10y:           {ref: "IRLTLT01USM156N",    source: fred, note: "US 10y Treasury benchmark (OECD-harmonised), from 1953."}
 
   - id: EU
     central_bank: "European Central Bank"
@@ -71,6 +78,15 @@ jurisdictions:
       rate_futures_strip:       null   # no ESTR futures strip ingested (Euribor/bund futures only)
       pm_implied_rate:          null   # no ECB prediction market
       equity_vol:               null   # V2X not ingested yet
+      # Rebound 2026-07-16 off LRHUTTTTEZM156S: OECD DISCONTINUED the euro-area harmonised series —
+      # FRED itself serves it only to 2023-01. It was not our staleness; the source is dead. (Germany,
+      # LRHUTTTTDEM156S, is still live — it is the euro-AREA aggregate that ended.) phillips_curve x EU
+      # was therefore capped at 2023-01: a live capability cell running on three-year-old data, with
+      # nothing to say so. ECB_UNEMPLOYMENT is the live replacement, already collected by our own ecb
+      # adapter, 2000-01 -> current, and never used.
+      unemployment_rate:        {ref: "ECB_UNEMPLOYMENT",   source: ecb, note: "Euro-area unemployment (ECB SDW), from 2000, live. Replaces the discontinued OECD LRHUTTTTEZM156S (dead 2023-01)."}
+      headline_cpi:             {ref: "CP0000EZ19M086NEST", source: fred, note: "Euro-area HICP (Eurostat), from 1996; yoy = HICP inflation."}
+      long_yield_10y:           {ref: "IRLTLT01DEM156N",    source: fred, note: "German 10y Bund (the euro-area risk-free benchmark), from 1956."}
 
   - id: GB
     central_bank: "Bank of England"
@@ -85,6 +101,9 @@ jurisdictions:
       rate_futures_strip:       null   # no SONIA futures strip ingested
       pm_implied_rate:          null
       equity_vol:               null
+      unemployment_rate:        {ref: "LRHUTTTTGBM156S",    source: fred, note: "UK harmonised unemployment (OECD), from 1983."}
+      headline_cpi:             {ref: "GBRCPIALLMINMEI",    source: fred, note: "UK CPI (OECD), from 1955; yoy = headline inflation."}
+      long_yield_10y:           {ref: "IRLTLT01GBM156N",    source: fred, note: "UK 10y gilt benchmark (OECD-harmonised), from 1960."}
 
   - id: JP
     central_bank: "Bank of Japan"
@@ -99,6 +118,9 @@ jurisdictions:
       rate_futures_strip:       null
       pm_implied_rate:          null
       equity_vol:               null
+      unemployment_rate:        {ref: "LRUN64TTJPM156S",    source: fred, note: "Japan harmonised unemployment (OECD), from 1970."}
+      headline_cpi:             {ref: "JPNCPIALLMINMEI",    source: fred, note: "Japan CPI (OECD), from 1955; yoy = headline inflation."}
+      long_yield_10y:           {ref: "IRLTLT01JPM156N",    source: fred, note: "Japan 10y JGB benchmark (OECD-harmonised), from 1989."}
 
   - id: CH
     central_bank: "Swiss National Bank"
