@@ -9,7 +9,13 @@ low_dimensional_exception: true   # canonical single-input model (the owner-agre
 spec:
   equations: "P(recession in 12m) = Phi(a + b * spread), spread = 10y - 3m ; a=-0.5333, b=-0.6330 (NY Fed)"
   params: {a: -0.5333, b: -0.6330}
-history: {start: "2021-01", end: "2026-05"}
+# Widened 2021-01 -> 1982-01 (2026-07-16). The editorial review of "The Fed versus its own rulebook"
+# flagged that the prose cites the curve "before 2008 and before 2020" while the probit and spread
+# charts started in 2021 — the precedents the argument rests on were off-chart. That was never a data
+# limit: T10Y3M runs from 1982-01-04 (11,135 obs). It was the FRED backfill floor (start_date
+# 2000-01-01, since fixed) plus this window never being widened afterwards. 1982 now carries the 1990,
+# 2001, 2008 and 2020 recessions — the probit's whole evidential basis.
+history: {start: "1982-01", end: "2026-07"}
 inputs:
   - {id: spread, series_id: T10Y3M, db_source: fred, state: level, context_window: 60}
 execution:

@@ -1,0 +1,369 @@
+# DEFECT TAXONOMY — induced from human editorial review, not guessed.
+#
+# ALL EIGHT articles reviewed against docs/editorial/rubric.md by the owner (2026-07-16). Set complete.
+#
+# The rule this file exists to enforce: a defect is only worth a code change if it recurs. Each entry
+# names ONE root cause, the articles it was observed in, and the SINGLE change that kills it estate-wide.
+# If a fix is per-article, it does not belong here — that is whack-a-mole, and it is how Horizon2 died.
+#
+# `articles:` is the evidence. Rank work by len(articles), not by how annoying the defect looks.
+# A new review folds in by appending to `articles:` — never by adding a new bespoke fix.
+#
+# The 8th review (commodity_analyst) tested that rule and it held: it produced ONE new entry
+# (wrong-chart-for-the-question), ONE promotion earned on frequency (label-number-unbound, which the
+# 7-review file had explicitly flagged as "watch for it in commodity_analyst"), and appends elsewhere.
+# No redesign.
+#
+# scores (composite /10): economist_forecaster 7.2 · credit_investor 7.2 · volatility_trader 7.0 ·
+#   central_bank_policymaker 6.7 · macro_rates_trader 6.7 · equity_multiasset_pm 6.5 ·
+#   corporate_treasurer 6.5 · commodity_analyst 6.5        mean 6.79
+#
+# mean by dimension, n=8:
+#   readability 7.1 · insight 8.0 · charts 5.3 · linking 5.1 · foreshadowing 8.0 · actionable 7.1
+#
+# THE HEADLINE OF ALL EIGHT REVIEWS: insight and foreshadowing scored EXACTLY 8 on every single
+# article — 8/8, no variance. Charts and linking never once exceeded 6. The thinking and the structure
+# are uniformly AT the FT/Economist bar; the rendering of evidence is uniformly below it. The gap is
+# not talent, taste or subject — it is mechanical, and it is the same nine mechanisms every time.
+# Every entry below is therefore a chart-or-evidence defect. NOT ONE is a prose defect.
+
+defects:
+
+  - id: two-visual-systems
+    articles: [central_bank_policymaker, volatility_trader, macro_rates_trader, equity_multiasset_pm,
+               economist_forecaster, credit_investor, corporate_treasurer, commodity_analyst]   # 8/8
+    dimension: charts
+    evidence: >
+      Every reviewer independently reached the same split: "polished dashboard; the rest
+      default-matplotlib with generic titles and redundant legends."
+    root_cause: >
+      render/infographic/from_persona.py:29-30 — the _FAMILY dict routes only 5 of 9
+      data_contract.kind values to a studio family. `series` (45 charts) and `gap_series` (22) match
+      nothing, so 96 of 115 authored charts fall back to raw charts.py primitives. The infographic
+      embeds ONLY family charts, so it silently skips exactly the charts the article must show.
+      Compounded by theme.base_rc() setting no `font.family` -> stock DejaVu Sans, the loudest
+      "default matplotlib" tell; and by three unreconciled style systems (theme.py, families'
+      hardcoded rcParams, infographic CSS) over a global, stateful rcParams.
+    single_change: "Widen _FAMILY to cover series + gap_series; one style module; set font.family."
+    status: proposed
+
+  - id: no-sizing-no-trigger
+    articles: [central_bank_policymaker, volatility_trader, macro_rates_trader, equity_multiasset_pm,
+               economist_forecaster, credit_investor, corporate_treasurer, commodity_analyst]   # 8/8
+    dimension: actionable
+    evidence: >
+      Every single review used the same formula: "stops short of a 9 for want of sizing or a trigger."
+      The pieces that scored 8 (volatility_trader, credit_investor) did so purely because their models
+      handed them a trigger or a binary for free (9-day through 1-month; buy-carry vs step-up-in-quality).
+      commodity_analyst (6, the lowest) is the extreme case: its pivotal section "Which legs are
+      leading" teaches the decision tree and then never says which branch we are on — the writer builds
+      toward a resolution and does not state it.
+    root_cause: >
+      The writer has no actionability contract; it is actionable only when the model volunteers one.
+      It is never required to land the call it has set up.
+    single_change: "Require instrument + horizon + risk case + what would flip the call, as a gated section."
+    status: proposed
+
+  - id: prose-contradicts-chart
+    articles: [central_bank_policymaker, volatility_trader, equity_multiasset_pm, economist_forecaster,
+               credit_investor, corporate_treasurer, commodity_analyst]   # 7/8
+    dimension: linking
+    evidence: >
+      commodity (the cleanest proof of the mechanism): the prose says the oil-gas ratio's spikes are
+      "2012 and 2020" while the chart's largest recent spike is 2023-24 (~60x), and narrates Brent-WTI
+      as a gradual late-2010s compression while the chart shows a 2025-26 spike to ~$20 and an abrupt
+      collapse to parity at the right edge. BOTH sentences are the catalog `insight` recited verbatim:
+      energy_complex.yaml:73 says "(the 2012 and 2020 spikes are gas collapsing, not oil soaring)" and
+      :63 says "the 2011-2014 shale glut blew it out past $20, then US export capacity and the 2020
+      shock compressed it back toward parity". The writer is not mis-reading the chart — it never saw
+      the chart. It is reading a hand-authored string that was true when written and has since aged.
+      CB: "+0.18pp, the most restrictive since the GFC" (chart peaks +2.2pp in 2024); "the signal is an
+        inversion" (chart shows +0.75pp, re-steepened); r* "more recently up" (chart shows it down).
+      vol: "2018, 2020, 2022" stress triplet pasted across three charts; kurtosis is LOW through 2022
+        and its biggest spike (2025-26, ~20) goes unmentioned.
+      equity: heatmap colour key described backwards ("blue marks tightening" — chart says the opposite).
+      forecaster: Okun recession corner named "bottom-right"; recessions are top-left.
+      credit: EBP caption calls 2011 a US recession.
+      treasurer: "how little the curve has moved" beside a chart showing ~0.3pp compression.
+    root_cause: >
+      render/writer.py:180-204 — per chart the LLM receives exactly two strings: the chart's title and a
+      static hand-authored catalog `insight`. Plus latest-value scalars (from_persona.py:187-201). No
+      min, max, percentile, prior value, direction or window. The writer is STRUCTURALLY INCAPABLE of
+      knowing a slope's sign, so every shape claim is authored from the model's priors — it recites the
+      textbook story (r* fell in the 2010s; inversions precede recessions) instead of reading the series.
+      The HISTORY firewall (92b0ade) is a year-regex: "since the GFC" has no digits and passes. Its
+      boundary is min(starts) across ALL a persona's models (writer.py:170-174), so for credit_investor
+      it announces "every chart begins 1973-01" when two of three begin 2023-07 — it LICENSES the claim
+      it exists to stop. The tier-1 gate checks that a prose NUMBER matches an executed number; nothing
+      checks the truth of the sentence around it.
+    single_change: >
+      Series Fact Sheet (deterministic §10 state per plotted series) as the writer's only source of
+      shape claims + a claim-check gate. LLM extracts typed claims (language problem); arithmetic
+      adjudicates against the Fact Sheet (never the LLM — an LLM judge would have certified the wrong
+      CPI). Regex is a backstop for bare years only.
+    status: proposed
+
+  - id: legend-junk-above-below
+    articles: [central_bank_policymaker, volatility_trader, equity_multiasset_pm, economist_forecaster,
+               credit_investor, corporate_treasurer]   # 6/7
+    dimension: charts
+    evidence: >
+      A "below" swatch printed on series that are structurally one-signed (the misery index is
+      unemployment + inflation; it cannot be negative). Reviewers read it as "visual noise that signals
+      a template, not a decision."
+    root_cause: >
+      TWO independent bugs. (1) from_graph.py:98-99 reads pos_label/neg_label from inside
+      `data_contract`, but 14 of 15 catalogs author them one level up, as siblings of data_contract —
+      so ~20 CORRECT authored labels ("restrictive (real rate > r*)") are written and dropped on the
+      floor. The intent was there; the plumbing discarded it. (2) charts.py:203-217 labels both fills
+      unconditionally — fill_between registers a labelled handle even when its `where` mask is all-False.
+    single_change: "Read chart-level then dc; gate each label on (yv>=0).any() / (yv<0).any()."
+    status: proposed
+
+  - id: crises-off-chart
+    articles: [equity_multiasset_pm, credit_investor, corporate_treasurer, central_bank_policymaker,
+               volatility_trader, macro_rates_trader, commodity_analyst]   # 7/8
+    dimension: linking
+    evidence: >
+      commodity — a fully traced instance of the min() firewall inversion, on a fresh article. The prose
+        says breadth "swings hard to fully short in 2008"; the breadth chart starts 2010 and the momentum
+        surface starts 2011. The persona loads energy_complex (asks 2000-01) and commodity_momentum (asks
+        2010-01), so writer.py:170-174 computes data_start = min(...) = 2000-01 and the banner tells the
+        LLM "every chart begins 2000-01" — LICENSING the 2008 claim against a 2010 chart. The "2008"
+        itself is energy_complex.yaml:85's insight, legitimate for ITS window, applied to the other
+        model's charts. _episode_leaks only flags years < 2000, so it passes clean.
+        AND the fix is free: data_fitness.py reports commodity_momentum as UNDER-ASKED — UMD already
+        holds the deeper history; the catalog simply asked for 2010.
+      equity (worst case): "The HY OAS chart is described as spiking 2011... 2016... 2020. The chart
+        starts in July 2023. None of them is on it." Same for the Fama-French premia chart.
+      credit: down-in-quality premium + implied default windowed 2023-on, yet the prose says "thin by
+        the standard of its own history".
+      treasurer: quality premium 2023-on, yet "the regime that precedes a widening" is asserted.
+      CB: 8-month charts captioned "through the tightening cycle"; probit/spread start 2021 while the
+        prose cites 2008 and 2020 precedents.
+    root_cause: >
+      NOT one cause but three, and they need different fixes — which is why the pre-flight must
+      distinguish them:
+        (a) ACQUISITION — the series itself is capped. ICE-BofA OAS on the FRED free feed holds only
+            3 years (BAMLC0A0CM / BAMLH0A0HYM2 / BAMLEMCBPIOAS all start 2023-07, n~790). This ONE
+            source limit blocks 16 charts across 3 personas and is the top complaint in 3 reviews.
+        (b) CO-TENANT DRAG — the executor resolves every input at every as-of, so one shallow series
+            truncates charts that never plot it. risk_premia_ff89 holds BAA10Y and T10Y2Y from 2000-01
+            but is dragged to 2023-07 by an HY input the Fama-French chart does not use: 26 years of
+            available history discarded for nothing. FREE fix.
+        (c) UNDER-ASKED — the catalog simply asks for less than UMD holds (financial_conditions asks
+            2023-01; NFCI is far deeper). FREE fix, one YAML line.
+      Underneath all three: executor.py:284-293 silently drops any as-of where an input is thin, and
+      nothing compares delivered to requested. On 2026-07-14 reaction_function asked for 65 points, got
+      8, and shipped. It has since silently RECOVERED via backfill — nobody could tell in either
+      direction. That is the whole argument for a pre-flight.
+    single_change: "scripts/data_fitness.py — pre-flight fitness from graph + UMD, wired into render as a refusal."
+    status: built-advisory   # BUILT 2026-07-16; NOT yet wired into the render path. Advisory != enforced.
+
+  - id: redundant-exhibits
+    articles: [macro_rates_trader, credit_investor, corporate_treasurer, economist_forecaster,
+               central_bank_policymaker, commodity_analyst]   # 6/8
+    dimension: charts
+    evidence: >
+      treasurer (worst): "ten exhibits for about four ideas" — the funding split shown 4x.
+      credit: EBP shown twice; ladder heatmap in both dashboard and body.
+      rates: Fig 4 is an exact duplicate of the dashboard's embedded chart.
+      forecaster: two Sahm charts, same series.
+      CB: Figs 6/7 are the difference and the components of one idea.
+    root_cause: >
+      Only exact-id dedupe exists (writer.py:151-153, :458; from_persona.py:238-245). The signal for a
+      real check is present and unused: chart_index (writer.py:159) holds every chart's data_contract,
+      so overlap in the output:/input: refs two charts read is directly computable. Same refs + same
+      kind = near-duplicate. Currently only a soft prompt instruction backs it.
+    single_change: "Dedupe on data_contract ref-overlap; enforce a 6-8 exhibit budget."
+    status: proposed
+
+  - id: jargon-and-caps-in-images
+    articles: [volatility_trader, economist_forecaster, credit_investor, macro_rates_trader,
+               corporate_treasurer]   # 5/7  (+ CB for §10)
+    dimension: charts
+    evidence: >
+      "the slope IS the economic coefficient", "the SHIFT", "OUTWARD", "ARE the recessions",
+      "the ENTIRE term structure" baked into the PNGs; "§10 STATES" and "state_tuple (step=3m)"
+      printed on the dashboard for readers.
+    root_cause: >
+      Catalog `insight:` strings are rendered verbatim as captions, hard-cut at 160 chars
+      (writer.py:463-470) — hence truncation mid-word ("...outran the funds r"). §10 jargon is
+      hardcoded in regime_dashboard.py:85-89 and authored into a catalog chart TITLE
+      (reaction_function.yaml:46). Titles are the catalog `id`, which doubles as the primary key
+      (personas.yaml, writer.py:159,438-452), so retitling silently breaks references.
+    single_change: >
+      Split the insight contract: `insight:` = why the chart exists (durable, authored); captions and
+      shape claims derive from the Fact Sheet. Add `display_title:`. Lint reader-facing vocabulary.
+    status: proposed
+
+  - id: heatmaps-wash-out
+    articles: [volatility_trader, macro_rates_trader, equity_multiasset_pm, credit_investor,
+               commodity_analyst]   # 5/8
+    dimension: charts
+    evidence: >
+      vol: implied-vol surface scaled to 100 while almost every value is under 25 — "a flat wash of
+        dark blue with one bright COVID stripe", and nothing in the copy reads it.
+      credit: ladder heatmap — "the between-row LEVEL swamps the within-row timing", so it shows only
+        the ordering the reader already knows (HY > EM > IG), not the "where and when stress hit".
+      rates: two tenor-x-time heatmaps attached to sections whose claims (an inverted curve; a
+        re-steepening) are exactly what a heatmap flattens.
+      commodity: the momentum surface runs to ±400% to fit ONE 2021 crude outlier, washing the rest
+        pale — so "the vertical stripes where every leg shares one sign", the pattern the caption tells
+        the reader to look for, is invisible. A single outlier destroys the whole panel.
+    root_cause: >
+      Colour scaled by absolute level across the whole grid: no per-row normalisation, no percentile
+      clip. Two distinct failures with one fix — between-row level swamping within-row timing (credit),
+      and a lone outlier setting the scale for everything (commodity).
+    single_change: "z-score/percentile-normalise each row against its own history; percentile-clip the scale."
+    status: proposed
+
+  - id: recycled-dashboard-scatter
+    articles: [central_bank_policymaker, equity_multiasset_pm, economist_forecaster]   # 3/7
+    dimension: linking
+    evidence: >
+      "It is the same scatter, with the same numbers, that appears in the Fed-rulebook article... this
+      article is about the NFCI, credit spreads, HY OAS and gold — none of which appear in the scatter."
+      Its one overlapping variable disagrees with the body (unemployment 4.2% vs 4.30%).
+    root_cause: >
+      regime_dashboard.py:60 — `def macro_regime_png(conn)` takes NO persona argument; _VARS is a
+      module constant. All three regime personas get a byte-identical chart. Nothing in the writer ever
+      reads it, yet writer.py:504-505 captions it "every reading, priced and traced" — a hardcoded
+      claim the panel violates. Worse, regime_dashboard.py:47-57 re-queries `observations` with raw SQL
+      (no model, no as-of), so its 24 figures never pass the model layer; being rasterised into a PNG,
+      they also bypass gate.py:68-88, which only checks span.num in the DOM. This breaks the contract
+      schema.py:1-7 states outright and violates hard rule #2 directly.
+    single_change: "Make it persona-derived from executed mat['numbers'] (which returns it to the gate), or cut it."
+    status: proposed
+
+  - id: dashboard-read-contradicts-body
+    articles: [macro_rates_trader, corporate_treasurer, commodity_analyst]   # 3/8
+    dimension: linking
+    evidence: >
+      rates: THE READ says "the trade is in the path, not the premium"; the body concludes the premium
+        spread IS the live trade — opposite instructions.
+      treasurer: THE READ says "the real cost is moderate"; the body argues it is "the heaviest since
+        before the GFC".
+      commodity: THE READ declares "the location arbitrage is dead" where the body insists the parity is
+        two-sided and gives "no early warning of which" — the read resolves a tension the piece is
+        deliberately, and correctly, refusing to resolve.
+    root_cause: >
+      The read line is generated without reference to the article's concluded thesis — the writer and the
+      dashboard reach the reader's eye from two paths that never meet.
+    single_change: "Derive THE READ from the written conclusion, or gate the two for consistency."
+    status: proposed
+
+  - id: label-number-unbound
+    articles: [corporate_treasurer, commodity_analyst, central_bank_policymaker]   # 3/8 — PROMOTED
+    dimension: linking
+    evidence: >
+      treasurer: "the all-in cost is 5.88% in the body but ~5.07% in the IG-vs-HY chart, because the
+        credit spread is defined three different ways (OAS / Baa / IG OAS). The whole argument is a
+        decomposition of one number, and the number isn't stable."
+      commodity: the dashboard tile reads "REAL WTI $66.69" — but $66.69 is the NOMINAL price, and the
+        article's entire opening section is the nominal/real distinction. The label inverts the piece's
+        founding point. A second tile reads "WTI 21.2x" for what is the crude-to-GAS RATIO.
+      CB: dashboard CPI 4.2 / unemployment 4.2 against a body saying 2.83 / 4.30.
+    root_cause: >
+      Nothing binds a rendered LABEL to the executed quantity it names. The tier-1 gate (gate.py:68-88)
+      checks that a rendered NUMBER equals a NumberObject — it never checks that the words beside it
+      describe that object. So a correct number can ship under the wrong name, and one concept can be
+      bound to different series in different exhibits with no reconciliation.
+    single_change: "Bind label -> NumberObject -> series as one contract; reconcile a concept across exhibits."
+    status: proposed
+    note: >
+      PROMOTED from 1/7 to 3/8. The 7-review file retained this on severity alone and wrote: "Watch for
+      it in commodity_analyst before generalising further." It appeared there — as the worst instance of
+      the three. The rule worked: frequency earned the promotion, not intuition.
+
+  - id: wrong-chart-for-the-question
+    articles: [commodity_analyst, macro_rates_trader, volatility_trader]   # 3/8 — NEW at review 8
+    dimension: linking
+    evidence: >
+      commodity: "Which legs are leading" is the pivot of the argument. It gets Fig 5 — a 16-year tangle
+        of four volatile lines "from which the CURRENT leadership cannot be read". The reviewer asks for
+        "a current-snapshot bar of each leg's 12m return". THE CATALOG ALREADY AUTHORS THAT CHART:
+        commodity_momentum's "Momentum across the complex today" (kind: named_values). The system built
+        the exact answer to its own pivotal question and deleted it.
+      rates: the inversion and re-steepening claims are illustrated by tenor-x-time heatmaps that flatten
+        exactly those signals, while Fig 7 ("the term-premium curve: now vs 3 months ago") proves the
+        thesis in one picture and is stranded LAST, in the sizing section.
+      vol: Fig 6 plots VIX9D and VIX as two overlapping noisy decade-long series when the tripwire is
+        their DIFFERENCE — which Fig 5 already does for the 6m-1m slope. Levels in one place, differences
+        in another, for the same kind of signal.
+    root_cause: >
+      writer.py:131-136 + :151-153 — `_is_snapshot` classes any named_values/bar chart as redundant and
+      `keep = rich if rich else raw` DROPS it whenever any time-series exists for that model. Its
+      docstring reasons "the series shows the snapshot AND its change; the bar only the snapshot" — true
+      of one clean line, false of a 4-line 16-year tangle, which shows the snapshot nowhere. Every model
+      authors a "today" chart ("The ladder today", "The vol curve today", "The risk premia today",
+      "Where the economy sits today", "Recession odds now"...) and ALL are systematically suppressed.
+      Chart choice is a blanket "prefer the richest", never "prefer the chart that answers this section".
+      Compounded by _place_charts (writer.py:544-560) binding charts to sections POSITIONALLY, which is
+      why the rates piece's best exhibit sits under the wrong heading.
+    single_change: >
+      Choose the chart by the question the section asks (now-state -> snapshot/now-vs-then; trend ->
+      series; regime -> difference), not by richness. Delete the blanket _is_snapshot suppression.
+    status: proposed
+
+# ── data-layer defects (fix FIRST — the charter's §09 gate and hard rule #5) ────────────────────────
+# These are not chart defects. They are why the numbers are wrong, and no verification means anything
+# until they are closed. A claim-check built on today's data layer would have CERTIFIED the wrong CPI.
+
+data_defects:
+
+  - id: row-lag-yoy
+    severity: critical
+    evidence: >
+      CPIAUCSL is missing 2025-10 (the Oct-2025 BLS shutdown — never published; UNRATE has the same
+      hole). executor.py:103-117 differenced by ROW POSITION, so from 2026-01 the base landed on
+      2024-12: a 13-month change printed as "headline CPI inflation, YoY".
+      Shipped 2.8287% -> true 2.3912%. misery_index 7.13% -> 6.69%. okun unemployment_change_pp
+      +0.20pp -> +0.30pp. All three appeared in articles as executed fact and passed the tier-1 gate,
+      because the gate only asks whether the prose number matches the executed number.
+    root_cause: "Row-position lag, not calendar lag. Does not raise — returns a plausible wrong number."
+    status: FIXED   # 2026-07-16, UMD executor.py: _shift_months/_median_gap_months; yoy/pct_change/
+                    # yoy_diff/sahm now address the base by calendar date. Base absent -> point dropped,
+                    # never rebased. 8 tests in tests/analysis/test_executor_transforms.py pin it
+                    # against a series with the real hole; verified they fail on the old algorithm.
+                    # Full suite green (396 + 47).
+
+  - id: staleness-masked
+    severity: high
+    evidence: >
+      Exposed BY the row-lag fix. sahm_rule now reports sahm_gap_pp = 0.2333 at as_of 2026-06-28 — a
+      2025-09 reading, NINE MONTHS stale, silently. Its 15-month window cannot span the shutdown hole,
+      so the Sahm rule is genuinely uncomputable 2025-10 -> 2027-01. Before the fix it returned a wrong
+      number; now it returns a stale one. Both are "clipped and shipped".
+    root_cause: >
+      _resolve_input (executor.py:243-274) refuses on missing data, empty window and NaN level — but
+      never on a state whose last observation is far behind the as-of.
+    single_change: >
+      Refuse a state more than N of the series' OWN cadence periods behind the as-of (quarterly GDP is
+      legitimately ~5 months behind; monthly CPI is not). Interacts with coverage: run_history swallows
+      ValueError, so refusals surface as shorter charts — which the pre-flight must catch.
+    status: proposed
+    note: "That the shutdown blinded the Sahm rule for 15 months is itself editorially interesting."
+
+  - id: vintage-divergence
+    severity: high
+    evidence: >
+      The catalog holds FIVE hardcoded `end:` dates (2026-01/05/06/07). phillips_curve pins 2026-01
+      while its siblings pin 2026-05, so the CB dashboard reads CPI 4.2 / unemployment 4.2 against a
+      body saying 2.83 / 4.30. forecaster: Okun 2026-01, Beveridge 2026-05, data as of 2026-06-28.
+      vol: 15.84 vs 15.57. Every article is also permanently ~2 months stale until someone edits YAML.
+    root_cause: "Per-model hardcoded `end:`; no run-level as-of; no per-exhibit vintage stamp."
+    single_change: "Resolve `end:` at run time; stamp every exhibit; reconcile one concept across surfaces."
+    status: proposed
+
+  - id: ice-bofa-oas-capped
+    severity: high
+    evidence: >
+      BAMLC0A0CM / BAMLH0A0HYM2 / BAMLEMCBPIOAS all start 2023-07 (n~790) — the FRED free feed's 3-year
+      cap. Confirmed by scripts/data_fitness.py: this ONE source limit makes credit_quality_ladder,
+      oas_implied_default, funding_quality and risk_premia_ff89 SHALLOW, blocking 16 charts across 3
+      personas — and it is the top complaint in the credit_investor, corporate_treasurer and
+      equity_multiasset_pm reviews.
+    root_cause: "Data acquisition, not code. No source currently holds the deep OAS history."
+    single_change: "ACQUISITION TASK: find a pre-2023 OAS source (or backfill). Highest blast radius in the estate."
+    status: open-acquisition
