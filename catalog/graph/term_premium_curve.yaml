@@ -41,6 +41,8 @@ charts:
     color_job: diverging
     interpretation: tp_steep
     insight: "how much extra term premium the long end carries vs the front"
+    pos_label: "term premium rises with tenor (normal)"
+    neg_label: "inverted — the long end pays less than the front"
     data_contract:
       kind: gap_series
       ylabel: "percentage points"

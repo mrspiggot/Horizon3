@@ -75,6 +75,8 @@ charts:
     color_job: diverging
     interpretation: behind_the_curve
     insight: "the prescription-minus-actual gap IS the trade: a Fed running below the rule is the case to be short duration"
+    pos_label: "Fed BELOW its own rule (easier than prescribed)"
+    neg_label: "Fed ABOVE its own rule (tighter than prescribed)"
     data_contract:
       kind: gap_series
       ylabel: "percentage points"

@@ -23,11 +23,24 @@ from .. import from_graph, graph_corpus  # noqa: E402
 from ..studio.families import decomposition as _dc  # noqa: E402
 from ..studio.families import relationship as _rel  # noqa: E402
 from ..studio.families import surface as _surf      # noqa: E402
+from ..studio.families import timeseries as _ts     # noqa: E402
 from .schema import NumberObject                     # noqa: E402
 
-# authored data_contract.kind → the polished ACS structure-family renderer
+# authored data_contract.kind → the polished ACS structure-family renderer.
+#
+# Anything absent here falls through to the raw charts.py primitives, whose defaults were never
+# meant to ship. Until 2026-07-16 this covered 5 of 9 kinds: `series` (45 charts) and `gap_series`
+# (22) matched nothing, so 96 of 115 authored charts — 83% — rendered in stock matplotlib beside a
+# polished dashboard. All eight editorial reviews independently reported that split as their chart
+# complaint. It was this dict.
+#
+# Still unrouted: `named_values` (26) and `curve_snapshot` (3). named_values are the per-model
+# "today" snapshots that writer.py's _is_snapshot drops before the writer ever sees them (see
+# defects.yaml: wrong-chart-for-the-question) — routing them is pointless until that suppression is
+# fixed. curve_snapshot is next; two of them are the best exhibits in the batch per the reviews.
 _FAMILY = {"decomposition": "decomp", "stacked": "decomp",
-           "scatter": "rel", "pearson": "rel", "heatmap": "surf"}
+           "scatter": "rel", "pearson": "rel", "heatmap": "surf",
+           "series": "ts", "gap_series": "ts"}
 
 
 def _blank_meta(spec) -> None:
@@ -55,6 +68,11 @@ def chart_png_family(run: dict, chart_id: str) -> tuple[str | None, str]:
             if not built:
                 return None, insight
             df, spec = built; _blank_meta(spec); _dc.render_decomposition(df, spec, out)
+        elif fam == "ts":
+            built = _ts.spec_from_run(model, run, chart_id)
+            if not built:
+                return None, insight
+            df, spec = built; _blank_meta(spec); _ts.render_timeseries(df, spec, out)
         elif fam == "rel":
             built = _rel.spec_from_run(model, run, chart_id)
             if not built:

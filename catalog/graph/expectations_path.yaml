@@ -42,6 +42,8 @@ charts:
     color_job: diverging
     interpretation: path_inverted
     insight: "cuts vs hikes priced: an inverted expectations curve prices a falling short rate"
+    pos_label: "upward — the market prices a rising short rate"
+    neg_label: "inverted — the market prices cuts"
     data_contract:
       kind: gap_series
       ylabel: "percentage points"

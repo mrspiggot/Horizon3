@@ -52,6 +52,14 @@ def _value(run_point, kind: str, field: str, state: str | None):
     obj = run_point.inputs.get(field)
     if obj is None:
         return None
+    if isinstance(obj, (int, float)):
+        # A `source: derived` input resolves to a plain scalar, not a §10 State — there is no
+        # component to index into. Without this, getattr(float, "level") returns None and EVERY
+        # value silently becomes NaN, so any chart reading a derived input (reaction_function's
+        # output gap, for one) dropped out of its family and fell back to the raw renderer. All
+        # four families share this helper, so all four were blind to derived inputs.
+        # from_graph._val has always had this branch; this is the studio path catching up.
+        return obj
     return getattr(obj, state or "level", None)
 
 

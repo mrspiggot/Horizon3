@@ -63,6 +63,8 @@ charts:
     color_job: diverging
     interpretation: backwardation
     insight: "contango (calm) vs backwardation (stress) through time"
+    pos_label: "contango — carry-friendly for a seller"
+    neg_label: "backwardation — the stress signal"
     data_contract:
       kind: gap_series
       ylabel: "vol points"

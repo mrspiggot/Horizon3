@@ -61,6 +61,7 @@ charts:
     color_job: diverging
     interpretation: quality_compressed
     insight: "how much extra spread HY pays over IG — the risk-appetite gauge"
+    pos_label: "extra spread paid for dropping to high yield"
     data_contract:
       kind: gap_series
       ylabel: "percentage points"

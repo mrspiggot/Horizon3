@@ -46,6 +46,8 @@ charts:
     color_job: diverging
     interpretation: rich_vol
     insight: "implied minus realized through time — positive = vol sellers paid"
+    pos_label: "seller paid — implied above realized"
+    neg_label: "seller under water — realized outran implied"
     data_contract:
       kind: gap_series
       ylabel: "vol points"
