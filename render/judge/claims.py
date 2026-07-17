@@ -178,16 +178,31 @@ def adjudicate(claim: Claim, series: list[tuple[date, float]]) -> Verdict:
         return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=ok,
                        detail=f"latest {claim.output}={latest_v:+.2f} ({latest_d}); claim says {p} (now)")
 
-    # direction
-    months = claim.window_months or 36
-    cutoff = date(latest_d.year - months // 12, latest_d.month, 1)
-    prior = [(d, v) for d, v in pts if d <= cutoff]
-    if not prior:
+    # direction. "More recently up" is VAGUE, and the judge must not resolve that vagueness with an
+    # arbitrary default and then call the prose a liar. r_star_pct is +0.15 over 12m and -0.03 over
+    # 36m: an early version defaulted to 36m and failed "down through the 2010s, and more recently up"
+    # — a claim that is TRUE (r* bottomed at +0.56 in 2014-01 and has risen to +1.06 since). Only
+    # convict when EVERY plausible reading agrees against the claim; when the windows disagree, the
+    # sentence is ambiguous, not false, and that is the writer's business rather than the judge's.
+    windows = [claim.window_months] if claim.window_months else [12, 36, 60]
+    reads: list[tuple[int, float]] = []
+    for m in windows:
+        cutoff = date(latest_d.year - m // 12, latest_d.month, 1)
+        prior = [(d, v) for d, v in pts if d <= cutoff]
+        if prior:
+            reads.append((m, latest_v - prior[-1][1]))
+    if not reads:
         return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=False,
-                       detail=f"no {claim.output} data {months}m before {latest_d} to compare against")
-    then_d, then_v = prior[-1]
-    delta = latest_v - then_v
-    ok = (delta > 0) if claim.expect == "up" else (delta < 0)
-    return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=ok,
-                   detail=(f"{claim.output} {then_v:+.2f} ({then_d}) -> {latest_v:+.2f} ({latest_d}) "
-                           f"= {delta:+.2f} over {months}m; claim says {claim.expect}"))
+                       detail=f"no {claim.output} history before {latest_d} to compare against")
+    agree = [(m, d) for m, d in reads if ((d > 0) if claim.expect == "up" else (d < 0))]
+    shown = " · ".join(f"{m}m {d:+.2f}" for m, d in reads)
+    if len(agree) == len(reads):
+        return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=True,
+                       detail=f"{claim.output} {shown}; claim says {claim.expect} — every window agrees")
+    if not agree:
+        return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=False,
+                       detail=f"{claim.output} {shown}; claim says {claim.expect} — no window supports it")
+    return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=True,
+                   detail=(f"{claim.output} {shown}; claim says {claim.expect} — AMBIGUOUS, windows "
+                           f"disagree. Not convicted: the claim holds on "
+                           f"{', '.join(f'{m}m' for m, _ in agree)}"))

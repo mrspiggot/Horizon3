@@ -56,7 +56,12 @@ Extract only these three kinds:
                 genuinely about today.
   direction   — the text asserts which way the series has moved lately.
                 e.g. "r* has drifted down through the 2010s, and more recently up" -> the operative
-                claim is the RECENT one: kind=direction, output=r_star_pct, expect=up, window_months=36
+                claim is the RECENT one: kind=direction, output=r_star_pct, expect=up
+                SET `window_months` ONLY IF THE TEXT NAMES A PERIOD ("over the past year" -> 12).
+                Vague words — "recently", "lately", "of late" — are NOT a period: leave window_months
+                unset and several readings will be tried. Inventing a window is how a judge convicts a
+                true sentence: r* is +0.15 over 12m and -0.03 over 36m, so a guessed 36 turns a
+                defensible claim into a contradiction.
 
 RULES
 - `output` MUST be one of the offered outputs below, exactly. Never invent a name. If a sentence makes
