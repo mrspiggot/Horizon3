@@ -5,7 +5,7 @@ import sys
 
 from ..model_store import output_series
 from ..studio.llm import get_llm
-from .claims import EPISODES, Claim, Claims, Verdict, adjudicate
+from .claims import EPISODES, Claims, Verdict, adjudicate
 from .state import JudgeState
 
 REASONING_MODEL = "claude-opus-4-8"
