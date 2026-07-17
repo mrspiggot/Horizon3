@@ -37,14 +37,35 @@ _EXTRACT = """You are the claim EXTRACTOR for a financial article's fact-check. 
 Your only job is to find every sentence that makes a CHECKABLE ASSERTION ABOUT AN EXECUTED MODEL
 OUTPUT, and express it as a typed claim. Arithmetic will settle it afterwards.
 
-Extract only these three kinds:
+Extract only these five kinds:
 
-  superlative — the text asserts the CURRENT value is the highest/lowest/most/least since some point.
+  percentile  — the text places the CURRENT value at a percentile of its history.
+                e.g. "Unemployment stands at 4.30%, high in its own post-1948 history at the 78th
+                percentile" -> kind=percentile, output=unemployment_pct, pct=78, scope=full
+                e.g. "back in the 22nd percentile of their own history" -> pct=22, scope=full
+                e.g. "an eighth-percentile reading" -> pct=8
+                `scope`: use "full" when the text ties it to the whole record ("since 1948",
+                "post-war", "of its own history", "ever printed"); "recent" only when the text
+                explicitly says the last few years. A percentile sentence is NOT a superlative —
+                "near the low end" is not "the lowest". Do not emit it as one.
+
+  superlative — the text asserts THE CURRENT VALUE is the highest/lowest/most/least since some point.
                 e.g. "the most restrictive setting relative to the natural rate since the financial
                 crisis" -> kind=superlative, op=max, output=stance_pct, since="the financial crisis"
-                NOT a superlative: "its peaks near twenty percent in 1975 and 1980" — that DESCRIBES
-                past peaks, it does not claim today is the extreme. Do not emit it. A superlative is
-                only a superlative when the claim is about NOW being the most/least since a date.
+                The test is: is the claim about NOW? If the sentence is about a PAST high or low, it is
+                an `episode`, not a superlative. Getting this backwards convicts true prose.
+  episode     — the text places a peak/trough AT A TIME. The claim is WHEN the extreme happened, not
+                that today is extreme.
+                e.g. "a decisive reversal from the trough it reached in mid-2023, the most inverted
+                point the probit has read" -> kind=episode, op=min, output=term_spread_pp, at="mid-2023"
+                ONLY emit this when the text asserts THE ONE extreme of the whole series — "the most
+                inverted point it has read", "its record high", "the deepest trough". The adjudicator
+                answers exactly one question: is the series' global high/low inside that period?
+                DO NOT emit it for a local bump, or when the sentence names SEVERAL highs. "its 1975
+                and 1980 peaks near twenty, the benign 2015-19 trough, and the 2022 spike" describes
+                the SHAPE of a curve; it does not claim 1975 or 2022 holds the record, and treating it
+                as if it did convicts an accurate sentence. If the prose lists more than one peak, or
+                calls it "a" spike rather than "the" peak, SKIP IT.
   regime      — the text asserts where the series sits relative to zero, NOW or in a stated PAST
                 period. THIS DISTINCTION IS CRITICAL — get it wrong and a true sentence is called a
                 contradiction.

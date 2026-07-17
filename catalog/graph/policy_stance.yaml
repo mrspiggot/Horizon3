@@ -61,7 +61,11 @@ charts:
     interpretation: restrictive
     pos_label: "restrictive (real rate > r*)"
     neg_label: "accommodative (real rate < r*)"
-    insight: "the stance itself — accommodative through the 2010s, then the sharp swing to the most restrictive setting relative to r* since the GFC"
+    # DATE THE SUPERLATIVE. Undated, this read as a claim about NOW — and the writer lifted it into
+    # the prose as one, beside a stance of +0.18pp against a 2024 peak of +2.27pp. The peak really was
+    # the most restrictive since the GFC; it is two years old, and a caption that does not say so is a
+    # caption a language model will repeat in the present tense.
+    insight: "the stance itself — accommodative through the 2010s, the 2024 swing to the most restrictive setting relative to r* since the GFC, and the fade back toward neutral since"
     data_contract:
       kind: gap_series
       ylabel: "percentage points"

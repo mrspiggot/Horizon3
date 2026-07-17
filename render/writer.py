@@ -31,6 +31,7 @@ from .illustration import vangogh
 from .infographic.agentic import _citable, _tokenize
 from .infographic.families import decision_brief
 from .infographic.from_persona import chart_png, chart_png_family, decisive, persona_material
+from .judge.graph import judge_article
 from .model_store import record_run
 from .infographic.gate import _LEAK
 from .studio.from_model import _refs
@@ -472,6 +473,27 @@ def _strip_stray(text: str) -> str:
     return re.sub(r"[ \t]{2,}", " ", re.sub(r"\s+([.,;:])", r"\1", text)).strip()
 
 
+def _judge(full_text: str, brief: dict, conn) -> tuple[bool, list]:
+    """§06 role 7 — is the prose grounded in what the models actually produced?
+
+    Returns (grounded, failures). A Judge that cannot run must not report `grounded=True`: silence
+    passing for a pass is the exact failure this role exists to end (the old critic recorded
+    `critic_ok=True` beside "the most restrictive since the financial crisis"). If it breaks, say so
+    and treat the article as unproven rather than clean.
+    """
+    runs = brief.get("runs") or {}
+    if not runs or conn is None:
+        print("JUDGE SKIPPED — no recorded runs to adjudicate against; grounding is UNPROVEN",
+              file=sys.stderr)
+        return False, []
+    try:
+        st = judge_article(full_text, runs, conn)
+        return bool(st.get("grounded")), list(st.get("failures") or [])
+    except Exception as exc:
+        print(f"JUDGE FAILED — {type(exc).__name__}: {exc}; grounding is UNPROVEN", file=sys.stderr)
+        return False, []
+
+
 def critique_article(full_text: str, title: str) -> Critique:
     llm = get_llm(max_tokens=2048).with_structured_output(Critique)
     prompt = (
@@ -729,6 +751,7 @@ def build_article_full(persona_id: str, conn, out_dir, *, backend: str = "auto",
             secs[i % len(secs)].chart_ids.append(cid)
 
     feedback, reasons, crit_ok = "", [], False
+    grounded, judge_failures = False, []
     filled_sections, headline = [], outline.headline
     standfirst, exec_summary, full_text = outline.standfirst, "", ""
     for it in range(max_iter):
@@ -755,6 +778,20 @@ def build_article_full(persona_id: str, conn, out_dir, *, backend: str = "auto",
             feedback = " ".join(bits)
             reasons.append(f"iter{it}: {'leak ' if leak else ''}{'stray ' if stray else ''}"
                            f"{'slop ' if slop else ''}{'episode' if epi else ''}".strip())
+            continue
+        # §06 role 7. Grounding is adjudicated BEFORE style: a graceful sentence that contradicts the
+        # model is worse than a clumsy one that does not, and the style critic cannot tell the
+        # difference — it has never seen a number. The LLM extracts the claims; arithmetic settles them
+        # against the very rows this brief was written from.
+        grounded, judge_failures = _judge(full_text, brief, conn)
+        failures = judge_failures
+        if not grounded and failures:
+            feedback = ("These sentences CONTRADICT the executed model output. Each is followed by the "
+                        "arithmetic that settles it, taken from the model's own series. Rewrite each one "
+                        "to say what the numbers say — do not soften it, do not delete the paragraph, and "
+                        "do not invent a replacement figure: "
+                        + " | ".join(f"{v.quote!r} — {v.detail}" for v in failures[:5]))
+            reasons.append(f"iter{it}: ungrounded {len(failures)} claims")
             continue
         crit = critique_article(full_text, headline)
         if crit.ok:
@@ -798,4 +835,8 @@ def build_article_full(persona_id: str, conn, out_dir, *, backend: str = "auto",
     return {"persona": persona_id, "ok": True, "docx_path": str(docx_path), "headline": headline,
             "standfirst": standfirst, "sections": len(filled_sections), "words": words,
             "critic_ok": crit_ok, "n_charts": len(charts), "caption": ill_meta.get("caption", ""),
-            "full_text": full_text, "reasons": reasons}
+            "full_text": full_text, "reasons": reasons,
+            # Reported SEPARATELY from critic_ok, and it is the one that matters. critic_ok is a style
+            # score; `grounded` is whether the prose agrees with the arithmetic. The shipped CB article
+            # was critic_ok=True with two sentences that contradicted their own series.
+            "grounded": grounded, "ungrounded": [v.model_dump() for v in judge_failures]}

@@ -29,6 +29,8 @@ Three claim types, because they are the three that actually shipped to a reader 
 """
 from __future__ import annotations
 
+import calendar
+import re
 from datetime import date
 from typing import Literal
 
@@ -52,14 +54,19 @@ EPISODES: dict[str, tuple[str, str]] = {
 class Claim(BaseModel):
     """One checkable assertion the prose makes about an executed model output."""
     quote: str = Field(description="the sentence fragment from the prose making the claim, verbatim")
-    kind: Literal["superlative", "regime", "direction"]
+    kind: Literal["superlative", "regime", "direction", "episode", "percentile"]
     model_id: str = Field(description="the model whose output this is about")
     output: str = Field(description="the EXACT output name from the offered list, e.g. stance_pct")
 
-    # superlative: "the highest/most X since Y"
-    op: Literal["max", "min"] | None = Field(default=None, description="superlative only")
+    # superlative: "TODAY is the highest/most X since Y"
+    # episode:     "the peak/trough HAPPENED in <period>" — same op, but `at` instead of `since`
+    op: Literal["max", "min"] | None = Field(default=None, description="superlative and episode only")
     since: str | None = Field(default=None,
                               description="superlative only: YYYY-MM-DD, or an episode name like 'the GFC'")
+    at: str | None = Field(
+        default=None,
+        description="episode only: the period the prose PLACES the extreme in — '2022', 'mid-2023', "
+                    "'COVID'. The claim is that the high/low occurred THEN.")
 
     # regime: where the series sits relative to zero — NOW, or during a stated past window
     predicate: Literal["below_zero", "above_zero", "inverted", "positive", "negative"] | None = None
@@ -71,6 +78,13 @@ class Claim(BaseModel):
     # direction: which way it has moved lately
     expect: Literal["up", "down"] | None = None
     window_months: int | None = Field(default=None, description="direction only; default 36")
+
+    # percentile: "the 78th percentile of its post-1948 history", "an eighth-percentile reading"
+    pct: int | None = Field(default=None, description="percentile only: the percentile the text states, 0-100")
+    scope: Literal["full", "recent"] | None = Field(
+        default=None,
+        description="percentile only: 'full' if the text ties it to the whole history ('since 1948', "
+                    "'post-war', 'ever'); 'recent' if to the last few years. Default 'full'.")
 
 
 class Claims(BaseModel):
@@ -85,43 +99,86 @@ class Verdict(BaseModel):
     detail: str
 
 
+# Vague halves of a year, as GENEROUS month spans. "mid-2023" is not a date, and the honest response
+# to imprecision is a wide window rather than a guess: a narrow one convicts prose for saying something
+# ordinary. These overlap deliberately — the cost of being generous is a missed catch, the cost of
+# being strict is a false accusation, and only one of those gets this check switched off.
+_VAGUE: dict[str, tuple[int, int]] = {
+    "early": (1, 7), "mid": (3, 10), "middle": (3, 10), "late": (6, 12),
+    "h1": (1, 6), "h2": (7, 12), "first half": (1, 6), "second half": (7, 12),
+}
+
+
+def _month_end(year: int, month: int) -> str:
+    """The real last day. Hardcoding 28 silently dropped 29-31 from every month-scoped claim."""
+    return f"{year:04d}-{month:02d}-{calendar.monthrange(year, month)[1]:02d}"
+
+
+def _strip_articles(s: str) -> str:
+    """`"the taper tantrum".lstrip("the ")` returns "aper tantrum" — lstrip takes a SET of characters,
+    not a prefix, so it ate the 't' of 'taper' and the episode never matched. That failed a true claim
+    with "unresolvable window", which is the worst thing this file can do."""
+    s = s.strip().lower()
+    for art in ("the ", "a ", "an "):
+        if s.startswith(art):
+            s = s[len(art):]
+    return s.strip()
+
+
 def _resolve_window(during: str | None) -> tuple[str | None, str]:
-    """A stated period -> (start, end). Accepts an episode ('COVID'), a year ('2022'), a year range
-    ('2021-2022') or an explicit 'YYYY-MM/YYYY-MM'."""
+    """A stated period -> (start, end). Accepts an episode ('COVID'), a year ('2022'), a year-month
+    ('2023-06'), a year range ('2021-2022'), a vague half ('mid-2023') or an explicit range."""
     if not during:
         return None, ""
-    s = during.strip().lower().replace("the ", "")
+    s = _strip_articles(during)
     for name, (lo, hi) in EPISODES.items():
         if name in s:
             return lo, hi
     if "/" in s:
         a, _, b = s.partition("/")
         return _pad(a.strip(), False), _pad(b.strip(), True)
-    if "-" in s and len(s) <= 9 and s.replace("-", "").isdigit():   # '2021-2022'
-        a, _, b = s.partition("-")
-        return f"{a}-01-01", f"{b}-12-31"
-    if s.isdigit() and len(s) == 4:
+    # ORDER MATTERS. '2023-06' is a MONTH, not the range 2023..06. The old year-range branch tested
+    # `len(s) <= 9 and s.replace("-","").isdigit()`, which '2023-06' satisfies — it resolved to
+    # ('2023-01-01', '06-12-31') and every claim scoped to a single month was failed as unshowable.
+    if re.fullmatch(r"\d{4}-\d{2}", s):
+        y, m = int(s[:4]), int(s[5:])
+        return f"{s}-01", _month_end(y, m)
+    if re.fullmatch(r"\d{4}\s*[-–to]+\s*\d{4}", s):
+        yrs = re.findall(r"\d{4}", s)
+        return f"{yrs[0]}-01-01", f"{yrs[-1]}-12-31"
+    if re.fullmatch(r"\d{4}", s):
         return f"{s}-01-01", f"{s}-12-31"
-    return _pad(s, False), _pad(s, True)
+    # 'mid-2023', 'late 2022', 'H1 2024' — a vague half of a named year.
+    if (yr := re.search(r"(19|20)\d{2}", s)):
+        y = int(yr.group())
+        for word, (m0, m1) in _VAGUE.items():
+            if word in s:
+                return f"{y:04d}-{m0:02d}-01", _month_end(y, m1)
+        return f"{y}-01-01", f"{y}-12-31"          # a year is named; the vagueness is only around it
+    return None, ""
 
 
 def _pad(s: str, end: bool) -> str:
-    if len(s) == 4 and s.isdigit():
+    if re.fullmatch(r"\d{4}", s):
         return f"{s}-12-31" if end else f"{s}-01-01"
-    if len(s) == 7:
-        return f"{s}-28" if end else f"{s}-01"
+    if re.fullmatch(r"\d{4}-\d{2}", s):
+        return _month_end(int(s[:4]), int(s[5:])) if end else f"{s}-01"
     return s
 
 
 def _resolve_since(since: str | None) -> str | None:
     if not since:
         return None
-    s = since.strip().lower().lstrip("the ").strip()
+    s = _strip_articles(since)
     for name, (start, _end) in EPISODES.items():
         if name in s:
             return start
-    if len(since) >= 7 and since[:4].isdigit():
-        return since if len(since) == 10 else f"{since[:7]}-01"
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
+        return s
+    if re.fullmatch(r"\d{4}-\d{2}", s):
+        return f"{s}-01"
+    if (yr := re.search(r"(19|20)\d{2}", s)):
+        return f"{yr.group()}-01-01"
     return None
 
 
@@ -151,6 +208,48 @@ def adjudicate(claim: Claim, series: list[tuple[date, float]]) -> Verdict:
                     f"{claim.op} since {since} is {ext_v:+.2f} ({ext_d})"
                     + ("" if ok else f" — the extreme was {abs(ext_v / latest_v):.1f}x the latest, "
                                      f"{ext_d.year - latest_d.year and abs(ext_d.year - latest_d.year)} year(s) earlier")))
+
+    if claim.kind == "percentile":
+        # The narrator is handed percentiles, so the narrator writes percentile sentences. Without a
+        # type for them the extractor mangled each into a superlative and the adjudicator answered a
+        # question nobody asked ("is today the minimum since 1948?" — no, so FAIL), convicting on the
+        # wrong grounds. Two of those sentences WERE false; being right by accident is not a check.
+        if claim.pct is None:
+            return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=False,
+                           detail="percentile claim with no stated percentile — cannot settle it")
+        recent = pts[-60:] if claim.scope == "recent" else pts
+        actual = sum(1 for _, v in recent if v < latest_v) / len(recent) * 100
+        which = f"last {len(recent)} obs" if claim.scope == "recent" else f"{pts[0][0]}→{pts[-1][0]}"
+        # A writer rounds ("an eighth-percentile reading" off 7.4%). Convict on a real gap, not on
+        # rounding: 10 points is wide enough to spare honest prose and far too narrow to let 8-vs-39
+        # or 78-vs-23 through.
+        ok = abs(actual - claim.pct) <= 10
+        return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=ok,
+                       detail=(f"{claim.output}={latest_v:+.2f} is the {actual:.0f}th percentile over "
+                               f"{which}; the text says {claim.pct}th"
+                               + ("" if ok else f" — off by {abs(actual - claim.pct):.0f} points")))
+
+    if claim.kind == "episode":
+        # "the trough it reached in mid-2023, the most inverted point the probit has read" — a claim
+        # about WHERE IN TIME the extreme sits, not about today. The superlative type cannot say this,
+        # so the extractor used to mangle it into one and it was convicted with "unresolvable window":
+        # a false accusation against a sentence the data supports (min -1.73 IS 2023-06).
+        # This is also the shape of a real defect an editor caught: "the 2022 spike" when the spike is
+        # 2020. Misattributing an episode is exactly as wrong as misstating a level.
+        lo, hi = _resolve_window(claim.at)
+        if not lo:
+            return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=False,
+                           detail=f"unresolvable period {claim.at!r} — cannot place the extreme")
+        scope = pts
+        if (since := _resolve_since(claim.since)):
+            scope = [(d, v) for d, v in pts if d.isoformat() >= since] or pts
+        ext_d, ext_v = (max if claim.op == "max" else min)(scope, key=lambda x: x[1])
+        ok = lo <= ext_d.isoformat() <= hi
+        return Verdict(
+            quote=claim.quote, kind=claim.kind, output=claim.output, ok=ok,
+            detail=(f"{'max' if claim.op == 'max' else 'min'} {claim.output}={ext_v:+.2f} at {ext_d}; "
+                    f"the prose places it in {lo[:7]}..{hi[:7]}"
+                    + ("" if ok else " — the extreme is NOT in that period")))
 
     if claim.kind == "regime":
         p = claim.predicate

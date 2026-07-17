@@ -46,6 +46,22 @@ def _delta(pts: list[tuple[date, float]], months: int) -> float | None:
     return (last_v - prior[-1][1]) if prior else None
 
 
+def _percentile(pts: list[tuple[date, float]], value: float) -> float:
+    """Where `value` sits in the WHOLE series. `state_tuple` returns a percentile over a trailing
+    60-observation window, which is what a MODEL wants (recent context) and the opposite of what a
+    JOURNALIST means by "low by historical standards".
+
+    Labelling the trailing figure "percentile of its own history" put two false sentences into a
+    shipped article: CPI at 2.39% was written as "an eighth-percentile reading, near the low end of
+    everything the series has printed since 1948" (it is the 39th percentile since 1948, and the 8th
+    of the last five years), and unemployment at 4.30% as "high in its own post-1948 history at the
+    78th percentile" (it is the 23rd percentile since 1948 — historically LOW, the exact opposite).
+    The narrator was not careless; it read the label. Both numbers are legitimate and they answer
+    different questions, so both are reported, each saying which window it means.
+    """
+    return sum(1 for _, v in pts if v < value) / len(pts)
+
+
 def _last_flip(pts: list[tuple[date, float]]) -> tuple[date | None, int]:
     """When the series last crossed zero, and how many observations it has held its sign.
     A regime claim ("the slope below zero") is about a SPAN, not a point."""
@@ -74,7 +90,12 @@ def fact_sheet(conn, run_id: str, name: str, *, unit: str = "") -> dict | None:
         "level": st.level,
         "d12": _delta(pts, 12), "d36": _delta(pts, 36),
         "min": lo_v, "min_at": lo_d, "max": hi_v, "max_at": hi_d,
-        "percentile": st.percentile, "zscore": st.zscore,
+        # TWO percentiles, never conflated: `percentile` is the trailing-60 window state_tuple gives
+        # the model; `percentile_all` is where today sits in everything the series has ever printed.
+        # Prose reaches for the second one ("low by post-war standards") and the model reasons with
+        # the first. Reporting one under the other's name is how a true series tells a lie.
+        "percentile": st.percentile, "percentile_all": _percentile(pts, pts[-1][1]),
+        "recent_n": min(60, len(pts)), "zscore": st.zscore,
         "sign": "positive" if pts[-1][1] >= 0 else "negative",
         "flipped_at": flip_d, "held_n": held,
     }
@@ -92,8 +113,13 @@ def render_sheet(fs: dict) -> str:
              f"      direction  {_fmt(fs['d12'])}{u} over 12m · {_fmt(fs['d36'])}{u} over 36m",
              f"      range      min {_fmt(fs['min'])}{u} ({fs['min_at']}) · "
              f"max {_fmt(fs['max'])}{u} ({fs['max_at']})",
-             f"      context    {fs['percentile']:.0%} percentile of its own history"
-             if fs["percentile"] == fs["percentile"] else "      context    n/a"]
+             # Say which window each percentile means, IN the sentence. A bare "32nd percentile" is
+             # the sentence a writer will attach to whatever history it can see the dates of.
+             f"      context    {fs['percentile_all']:.0%} percentile of its FULL history "
+             f"({fs['first']}→{fs['last']}) — use this one for 'high/low by historical standards'"]
+    if fs["percentile"] == fs["percentile"]:
+        lines.append(f"      recent     {fs['percentile']:.0%} percentile of just the last "
+                     f"{fs['recent_n']} observations — this is RECENT context only, NOT its history")
     if fs["flipped_at"]:
         lines.append(f"      regime     {fs['sign']} since {fs['flipped_at']} ({fs['held_n']} points)")
     else:
