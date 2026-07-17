@@ -362,7 +362,18 @@ def _finalize_text(text: str, toks: dict) -> tuple[str, str | None]:
     stripped = _TOKLEFT.sub(" ", t)
     leak = _LEAK.search(stripped)
     for tok, no in toks.items():
-        t = t.replace("{" + tok + "}", _render_for_prose(no))
+        val = _render_for_prose(no)
+        # SIGN DOUBLING. The writer does not know the token already carries its sign, so it writes
+        # "+{n}" and the reader gets "a stance of just ++0.18pp" — which shipped on 2026-07-17, in an
+        # article the judge passed as fully grounded. The arithmetic was right and the typography was
+        # garbage, and no claim-checker will ever catch that: it is not a claim.
+        # Only a sign that AGREES with the rendered one is absorbed. A mismatch ("-{n}" where n is
+        # positive) means the writer meant something else, and quietly rewriting it would hide a real
+        # error behind a tidy-looking number.
+        if val[:1] in "+-":
+            t = re.sub((r"\+\s*" if val[0] == "+" else r"[-−–]\s*") + r"\{" + re.escape(tok) + r"\}",
+                       lambda _m, v=val: v, t)
+        t = t.replace("{" + tok + "}", val)
     # belt-and-suspenders: strip a unit the writer restated right after a token expansion, e.g.
     # "4.55 vol pts vol points" -> "4.55 vol pts" (the prompt tells it not to, this catches slips).
     for no in toks.values():
