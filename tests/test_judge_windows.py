@@ -304,3 +304,43 @@ def test_a_decade_in_the_quote_stays_a_decade():
     v = adjudicate(Claim(quote="accommodative through the 2010s", kind="superlative", model_id="m",
                          output="stance_pct", op="min", since="the GFC"), stance)
     assert "2010-01..2019-12" in v.detail, v.detail
+
+
+# --- the extractor supplying parameters the text never stated --------------------------------------
+def test_an_unrelated_figure_does_not_license_a_percentile_claim():
+    # REGRESSION, macro_rates_trader: "Headline CPI has cooled hard — 2.39%, back within touching
+    # distance of target" states NO percentile. The extractor invented pct=50 from "touching
+    # distance", and the old guard waved it through because the quote contains 2.39 — checking for
+    # *a* number is not checking for *the claimed* number. A true sentence was convicted for being
+    # 43 points off a percentile it never made.
+    v = adjudicate(Claim(quote="Headline CPI has cooled hard — 2.39%, back within touching distance",
+                         kind="percentile", model_id="m", output="inflation_pct", pct=50), _UNEMP)
+    assert not v.settled, v.detail
+
+
+def test_a_stated_percentile_still_adjudicates():
+    assert adjudicate(_pct_claim(78), _UNEMP).settled
+
+
+def test_an_invented_window_is_ignored():
+    # "the long end has lifted while the front has barely budged" names no period. The extractor
+    # supplied window_months=3; t10y moved -0.00 over 3m, so the sentence was convicted against a
+    # horizon nobody claimed. With no period stated, every reading is tried instead.
+    rising = [(date(2021, 1, 28), 1.0), (date(2023, 1, 28), 3.0), (date(2026, 1, 28), 3.0)]
+    v = adjudicate(Claim(quote="the long end has lifted while the front has barely budged",
+                         kind="direction", model_id="m", output="t10y", expect="up",
+                         window_months=3), rising)
+    assert v.ok, v.detail
+
+
+def test_a_stated_period_is_honoured():
+    rising = [(date(2024, 6, 28), 2.8), (date(2024, 12, 28), 3.0), (date(2026, 1, 28), 3.4)]
+    v = adjudicate(Claim(quote="over the last twelve months the 10-year has risen", kind="direction",
+                         model_id="m", output="t10y", expect="up", window_months=12), rising)
+    assert v.ok and "12m" in v.detail
+
+
+def test_a_direction_claim_with_no_direction_is_unreadable():
+    v = adjudicate(Claim(quote="the premium has been essentially flat", kind="direction", model_id="m",
+                         output="t10y", expect=None), _SPREAD)
+    assert not v.settled and v.retry

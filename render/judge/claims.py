@@ -146,6 +146,40 @@ def _states_a_number(quote: str) -> bool:
     return bool(re.search(r"\d", q)) or any(w in q for w in _ORDINALS)
 
 
+# THE BUG CLASS, stated once: THE EXTRACTOR SUPPLIES PARAMETERS THE TEXT DOES NOT STATE, and the
+# arithmetic below then convicts the writer against the invention. Every guard here answers the same
+# question — is this parameter traceable to the writer's own words? If not, there is nothing to
+# settle, and settling it anyway is the judge authoring the very number it exists to police.
+_RANK_WORDS = re.compile(r"percentile|pctile|decile|quartile|quintile|\bmedian\b|percent of (?:its|the) "
+                         r"(?:own )?(?:history|record|range)", re.I)
+_PERIOD_WORDS = re.compile(r"\b(?:day|week|month|quarter|year|decade)s?\b|\bsince\s+(?:19|20)\d{2}\b|"
+                           r"\b(?:19|20)\d{2}\b", re.I)
+
+
+def _states_a_percentile(quote: str) -> bool:
+    """A percentile claim must SAY percentile.
+
+    `_states_a_number` asked only whether the quote held *a* number, and "Headline CPI has cooled
+    hard — 2.39%, back within touching distance of target" holds one: 2.39. The extractor read
+    "touching distance" as pct=50, the guard waved it through on the strength of an unrelated figure,
+    and the arithmetic convicted a true sentence for being 43 points off a percentile it never
+    claimed. Checking for *a* number is not checking for *the claimed* number.
+    """
+    return bool(_RANK_WORDS.search(quote)) and _states_a_number(quote)
+
+
+def _states_a_period(quote: str) -> bool:
+    """Did the writer name a window, or is `window_months` the extractor's own invention?
+
+    "the long end has lifted while the front has barely budged" names no period. The extractor
+    supplied window_months=3; over three months t10y moved -0.00, so a sentence about the long end
+    lifting *over no stated horizon* was called a contradiction. The prompt has always said to leave
+    it unset for vague words — "recently", "lately", "of late" — and it is ignored, so when the quote
+    names no period the window is treated as unset and every reading is tried instead.
+    """
+    return bool(_PERIOD_WORDS.search(quote))
+
+
 def _month_end(year: int, month: int) -> str:
     """The real last day. Hardcoding 28 silently dropped 29-31 from every month-scoped claim."""
     return f"{year:04d}-{month:02d}-{calendar.monthrange(year, month)[1]:02d}"
@@ -331,7 +365,7 @@ def adjudicate(claim: Claim, series: list[tuple[date, float]]) -> Verdict:
         # nothing here to settle — and an extractor that supplies the missing number is doing the one
         # thing this entire subsystem exists to prevent. The prompt says so; this enforces it, because
         # an instruction can be ignored and a guard cannot.
-        if not _states_a_number(claim.quote):
+        if not _states_a_percentile(claim.quote):
             return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=True,
                            settled=False,
                            detail=(f"{claim.quote[:44]!r} states no percentile — the extractor supplied "
@@ -426,7 +460,16 @@ def adjudicate(claim: Claim, series: list[tuple[date, float]]) -> Verdict:
     # — a claim that is TRUE (r* bottomed at +0.56 in 2014-01 and has risen to +1.06 since). Only
     # convict when EVERY plausible reading agrees against the claim; when the windows disagree, the
     # sentence is ambiguous, not false, and that is the writer's business rather than the judge's.
-    windows = [claim.window_months] if claim.window_months else [12, 36, 60]
+    # A direction claim with no direction is malformed — it was adjudicated anyway, printing "claim
+    # says None — no window supports it" against a sentence the extractor simply failed to read.
+    if claim.expect not in ("up", "down"):
+        return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=True, settled=False,
+                       retry=True,
+                       detail=f"direction claim with no stated direction ({claim.expect!r}) — unreadable")
+    # Honour `window_months` ONLY when the writer named a period. Otherwise it is the extractor's
+    # invention and convicts against a horizon nobody claimed.
+    windows = ([claim.window_months] if claim.window_months and _states_a_period(claim.quote)
+               else [12, 36, 60])
     reads: list[tuple[int, float]] = []
     for m in windows:
         cutoff = date(latest_d.year - m // 12, latest_d.month, 1)
