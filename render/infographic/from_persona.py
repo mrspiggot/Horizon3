@@ -137,6 +137,9 @@ def humanise(field: str) -> str:
     return s[:1].upper() + s[1:] if s else field
 
 
+_UNKNOWN_UNITS: set[str] = set()
+
+
 def _norm_unit(u: str) -> tuple[str, str]:
     """(display_unit, fmt) — $ goes into the fmt (prefix) so the gate still verifies core==fmt(val)."""
     u = (u or "").strip()
@@ -154,7 +157,25 @@ def _norm_unit(u: str) -> tuple[str, str]:
         return "×", "{:.1f}"
     if u in ("index", "pt", "pts", "points"):
         return "", "{:.1f}"
-    return u, "{:.2f}"
+    if not u:
+        return "", "{:.2f}"
+    # AN UNKNOWN UNIT MUST NOT BE GLUED TO THE DIGITS. `NumberObject.rendered()` is f"{s}{unit}", so
+    # the old `return u, "{:.2f}"` fallthrough printed the catalog's raw yaml string against the
+    # number: "1.05V/U", "0.05rate", "0.23x1000", "0.40net fraction", "0.35β1". "1.07V/U" reached a
+    # reader in the economist_forecaster article — the one that scored 7.2, the joint highest.
+    #
+    # 9 of the catalog's 19 authored units have no branch above. Only `V/U` was reachable until
+    # `salient` was widened to every executed number (:291), which took it from 1 to 6. A space is
+    # the minimum honest rendering and keeps the value citable; refusing instead would drop the
+    # number from the menu, which is the silent loss this whole file keeps relearning not to do.
+    #
+    # It is still a catalog defect: "rate", "x1000" and "net fraction" are notes, not units. Say so
+    # once per unit — a fallthrough nobody hears is how "1.07V/U" shipped.
+    if u not in _UNKNOWN_UNITS:
+        _UNKNOWN_UNITS.add(u)
+        print(f"UNIT NOT NORMALISED — {u!r} has no branch in _norm_unit; rendering as '<value> {u}'. "
+              f"Add a branch or fix the catalog's `unit:`.", file=sys.stderr)
+    return f" {u}", "{:.2f}"
 
 
 _SOURCE_LABEL = {
