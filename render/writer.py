@@ -802,6 +802,15 @@ def build_article_full(persona_id: str, conn, out_dir, *, backend: str = "auto",
     # cleaner draft from iter1 was thrown away. Rule #2 lost to a loop-control detail.
     best: tuple[int, dict] | None = None
 
+    def _rank(leak_free: bool, is_grounded: bool, is_crit_ok: bool) -> int:
+        """GROUNDING OUTRANKS STYLE. Said plainly everywhere and coded backwards the first time:
+        flat scores let a critic-clean-but-unproven draft (4) beat a grounded-but-clumsy one (3), and
+        volatility_trader duly shipped "rank 4/4: lints clean, critic ok" with grounded=False. A
+        graceful sentence the arithmetic cannot confirm is worth less than an awkward one it can."""
+        if not leak_free:
+            return 0                                   # an untraced figure is the worst outcome here
+        return 1 + (2 if is_grounded else 0) + (1 if is_crit_ok else 0)
+
     def _keep(score: int, **snap) -> None:
         nonlocal best
         if best is None or score > best[0]:
@@ -851,7 +860,7 @@ def build_article_full(persona_id: str, conn, out_dir, *, backend: str = "auto",
             # A draft with an untraced figure is the worst thing here — it puts a number in front of a
             # reader that no model produced. Rank it below everything, but still keep it: if every
             # draft leaks, the best of a bad set must ship with the failure reported, not vanish.
-            _keep(0 if leak else 1, full_text=full_text, standfirst=standfirst,
+            _keep(_rank(not leak, False, False), full_text=full_text, standfirst=standfirst,
                   exec_summary=exec_summary, filled_sections=filled_sections,
                   grounded=False, judge_failures=[], crit_ok=False)
             continue
@@ -862,7 +871,7 @@ def build_article_full(persona_id: str, conn, out_dir, *, backend: str = "auto",
         grounded, judge_failures = _judge(full_text, brief, conn)
         failures = judge_failures
         # Lints clean. Better than any leaking draft, and better still if the arithmetic agrees.
-        _keep(3 if grounded else 2, full_text=full_text, standfirst=standfirst,
+        _keep(_rank(True, grounded, False), full_text=full_text, standfirst=standfirst,
               exec_summary=exec_summary, filled_sections=filled_sections,
               grounded=grounded, judge_failures=judge_failures, crit_ok=False)
         if not grounded and failures:
@@ -876,7 +885,7 @@ def build_article_full(persona_id: str, conn, out_dir, *, backend: str = "auto",
         crit = critique_article(full_text, headline)
         if crit.ok:
             crit_ok = True
-            _keep(4, full_text=full_text, standfirst=standfirst, exec_summary=exec_summary,
+            _keep(_rank(True, grounded, True), full_text=full_text, standfirst=standfirst, exec_summary=exec_summary,
                   filled_sections=filled_sections, grounded=grounded,
                   judge_failures=judge_failures, crit_ok=True)
             break
@@ -891,7 +900,8 @@ def build_article_full(persona_id: str, conn, out_dir, *, backend: str = "auto",
         grounded, judge_failures, crit_ok = snap["grounded"], snap["judge_failures"], snap["crit_ok"]
         reasons.append(f"shipped the best of {max_iter} drafts (rank {best[0]}/4: "
                        f"{'lints clean' if best[0] >= 1 else 'ALL DRAFTS LEAK'}"
-                       f"{', grounded' if grounded else ''}{', critic ok' if crit_ok else ''})")
+                       f"{', grounded' if grounded else ', NOT GROUNDED'}"
+                       f"{', critic ok' if crit_ok else ''})")
     if not grounded:
         print(f"NOT GROUNDED — {persona_id}: shipping prose the arithmetic does not confirm. "
               f"{len(judge_failures)} claim(s) contradict the executed models. A human must read this.",
