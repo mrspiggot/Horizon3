@@ -262,6 +262,27 @@ def adjudicate(claim: Claim, series: list[tuple[date, float]]) -> Verdict:
     latest_d, latest_v = pts[-1]
 
     if claim.kind == "superlative":
+        # A SUPERLATIVE THAT NAMES A TIME IS AN EPISODE. The prompt says so plainly — "if the sentence
+        # names WHEN, it is an episode" — and the extractor keeps ignoring it: "the post-2022 climb to
+        # a 2023 peak, the heaviest since the GFC" was typed superlative and convicted, because today
+        # (3.64) is not the max. The sentence is about the 2023 peak (4.22), which IS the heaviest
+        # since the GFC. Prompts have not held this rule all day; a guard does.
+        # Only a year DISTINCT from the `since` anchor counts — "the highest since 2010" names 2010 as
+        # its window, not as the location of the peak, and must stay a superlative. So must the
+        # sentence that shipped, which names no year at all: "the most restrictive setting relative to
+        # the natural rate since the financial crisis".
+        if claim.at is None:
+            # Keep a trailing 's': "the 2010s" is a DECADE, and handing "2010" downstream would test
+            # a ten-year span against a single year. _resolve_window already knows the difference.
+            since_yrs = {y.rstrip("s") for y in re.findall(r"(?:19|20)\d{2}s?", claim.since or "")}
+            quote_yrs = [y for y in re.findall(r"(?:19|20)\d{2}s?", claim.quote)
+                         if y.rstrip("s") not in since_yrs]
+            if quote_yrs:
+                # The last named year is where the prose puts the extreme ("the post-2022 climb to a
+                # 2023 peak" -> 2023). If it names several, the episode branch's own guard will decline
+                # to adjudicate it — which is right: that sentence is tracing a curve, not crowning a
+                # single point, and neither a conviction nor a confirmation would mean anything.
+                return adjudicate(claim.model_copy(update={"kind": "episode", "at": quote_yrs[-1]}), series)
         readings = _since_readings(claim.since)
         if not readings:
             return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=False,

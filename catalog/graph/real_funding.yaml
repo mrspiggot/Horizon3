@@ -69,7 +69,10 @@ charts:
     interpretation: real_squeeze
     pos_label: "real cost of debt"
     neg_label: ""
-    insight: "the real burden through the cycle — a deflation-driven spike in 2008, a slide to near-zero (cheapest real funding on record) by 2021, then the post-2022 climb back to the heaviest since the GFC"
+    # Dated, for the reason policy_stance's caption was: undated, the last clause reads as a claim
+    # about NOW. The climb is real and it was the heaviest since the GFC — it peaked at 4.22 in
+    # 2023-10 and has eased to 3.64 since, and a caption that stops at the peak tells half the chart.
+    insight: "the real burden through the cycle — a deflation-driven spike in 2008, a slide to near-zero (cheapest real funding on record) by 2021, then the post-2022 climb to a 2023 peak, the heaviest since the GFC, easing since"
     data_contract:
       kind: gap_series
       ylabel: "real funding (%)"

@@ -257,3 +257,50 @@ def test_an_unresolvable_window_does_demand_a_retry():
     v = adjudicate(Claim(quote="the most restrictive in years", kind="superlative", model_id="m",
                          output="x", op="max", since="years"), _SPREAD)
     assert not v.settled and v.retry
+
+
+_RF = [(date(2008, 11, 28), 7.70), (date(2023, 10, 28), 4.22), (date(2026, 7, 28), 3.64)]
+
+
+def test_superlative_naming_a_year_is_read_as_an_episode():
+    # "the 2023 peak, the heaviest since the GFC" — TRUE: the 2023 peak of 4.22 IS the heaviest since
+    # 2010. Typed superlative by the extractor and convicted because today is 3.64. The prompt's tense
+    # rule was ignored all day; this enforces it.
+    v = adjudicate(Claim(quote="a 2023 peak, the heaviest since the GFC", kind="superlative",
+                         model_id="m", output="real_funding", op="max", since="the GFC"), _RF)
+    assert v.ok, v.detail
+
+
+def test_superlative_tracing_several_years_is_not_adjudicated():
+    # "the post-2022 climb to a 2023 peak, the heaviest since the GFC" traces a curve across two
+    # named years. Neither convicting nor confirming it means anything.
+    v = adjudicate(Claim(quote="the post-2022 climb to a 2023 peak, the heaviest since the GFC",
+                         kind="superlative", model_id="m", output="real_funding", op="max",
+                         since="the GFC"), _RF)
+    assert not v.settled and not v.retry
+
+
+def test_the_shipped_sentence_names_no_year_and_still_convicts():
+    # The sentence that reached a reader names no year — it is a claim about NOW, and stays one.
+    stance = [(date(2024, 8, 28), 2.27), (date(2026, 5, 28), 0.18)]
+    v = adjudicate(Claim(quote="the most restrictive setting relative to the natural rate since the "
+                               "financial crisis", kind="superlative", model_id="m",
+                         output="stance_pct", op="max", since="the financial crisis"), stance)
+    assert v.settled and not v.ok
+
+
+def test_a_year_that_is_the_since_anchor_does_not_convert():
+    # "the highest since 2010" names 2010 as its WINDOW, not as where the peak sits.
+    pts = [(date(2015, 1, 28), 9.0), (date(2026, 1, 28), 4.0)]
+    v = adjudicate(Claim(quote="the highest since 2010", kind="superlative", model_id="m",
+                         output="x", op="max", since="2010"), pts)
+    assert v.kind == "superlative" and not v.ok
+
+
+def test_a_decade_in_the_quote_stays_a_decade():
+    # "accommodative through the 2010s, then the swing to the most restrictive since the GFC": the
+    # converter must hand "2010s" downstream, not "2010" — a ten-year span, not one year.
+    stance = [(date(2011, 4, 28), -3.36), (date(2024, 8, 28), 2.27), (date(2026, 5, 28), 0.18)]
+    v = adjudicate(Claim(quote="accommodative through the 2010s", kind="superlative", model_id="m",
+                         output="stance_pct", op="min", since="the GFC"), stance)
+    assert "2010-01..2019-12" in v.detail, v.detail
