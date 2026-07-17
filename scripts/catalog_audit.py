@@ -37,24 +37,39 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from render.graph_corpus import run_model  # noqa: E402
 from render.judge.graph import judge_article  # noqa: E402
 from render.model_store import record_run  # noqa: E402
+from render.writer import _active_says  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
 GRAPH_DIR = REPO / "catalog" / "graph"
 
 
-def _claims_text(spec: dict) -> str:
-    """Every hand-authored assertion this model makes about its own output, as one block of prose.
+def _claims_text(spec: dict, run: dict) -> str:
+    """Every hand-authored assertion this model is CURRENTLY making about its own output.
 
     Judged together rather than one-by-one: a caption is a fragment ("the 2022 spike"), and the
     extractor binds a fragment to an output far more reliably with its siblings for context.
+
+    THE TWO KINDS ARE NOT THE SAME, and conflating them convicts honest work:
+
+      charts[].insight        — UNCONDITIONAL. Rendered under the chart on every run, whatever the
+                                data says. Judging it against today is exactly right.
+      interpretations[].says  — CONDITIONAL on its `when` guard. commodity_momentum's "the complex is
+                                broadly trending down" is guarded by `breadth < -0.5`; breadth is
+                                positive today, so the string does not ship — and checking it against
+                                a rising market flags a sentence that is correct for the state it
+                                describes. That is a category error: testing a consequent in a world
+                                where the antecedent is false.
+
+    So only the interpretations the model is actually voicing are judged. `_active_says` already
+    evaluates the guards properly (inputs + outputs in scope, raises made loud), so it is reused
+    rather than reimplemented.
     """
     lines = []
     for c in spec.get("charts") or []:
         if ins := (c.get("insight") or "").strip():
             lines.append(f"{ins}.")
-    for i in spec.get("interpretations") or []:
-        if says := (i.get("says") or "").strip():
-            lines.append(f"{says}.")
+    for says in _active_says(run.get("meta") or {}, run.get("latest")):
+        lines.append(f"{says}.")
     return "\n".join(lines)
 
 
@@ -79,9 +94,6 @@ def main() -> None:
     findings: list[tuple[str, str, str]] = []
 
     for mid, spec in specs.items():
-        text = _claims_text(spec)
-        if not text.strip():
-            continue
         try:
             run = run_model(mid, conn, instance=args.instance)
             rid = record_run(conn, run, instance=args.instance)
@@ -97,6 +109,9 @@ def main() -> None:
             skipped += 1
             continue
 
+        text = _claims_text(spec, run)
+        if not text.strip():
+            continue
         audited += 1
         st = judge_article(text, {mid: rid}, conn)
         bad = st.get("failures") or []
