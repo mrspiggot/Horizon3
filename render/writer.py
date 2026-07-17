@@ -754,6 +754,18 @@ def build_article_full(persona_id: str, conn, out_dir, *, backend: str = "auto",
     grounded, judge_failures = False, []
     filled_sections, headline = [], outline.headline
     standfirst, exec_summary, full_text = outline.standfirst, "", ""
+    # KEEP THE BEST DRAFT, NOT THE LAST ONE. Each iteration is a full rewrite, so a draft that fixes
+    # the leak can introduce slop and vice versa — it resamples rather than converges. The loop simply
+    # fell out at max_iter and shipped whatever the final pass produced: on 2026-07-17 that was
+    # ['iter0: leak', 'iter1: ungrounded', 'iter2: leak'], so an UNTRACED FIGURE shipped while a
+    # cleaner draft from iter1 was thrown away. Rule #2 lost to a loop-control detail.
+    best: tuple[int, dict] | None = None
+
+    def _keep(score: int, **snap) -> None:
+        nonlocal best
+        if best is None or score > best[0]:
+            best = (score, snap)
+
     for it in range(max_iter):
         article = write_article(brief, outline, feedback=feedback)
         full_text, standfirst, exec_summary, filled_sections, leak = _finalize_article(article, brief["toks"])
@@ -778,6 +790,12 @@ def build_article_full(persona_id: str, conn, out_dir, *, backend: str = "auto",
             feedback = " ".join(bits)
             reasons.append(f"iter{it}: {'leak ' if leak else ''}{'stray ' if stray else ''}"
                            f"{'slop ' if slop else ''}{'episode' if epi else ''}".strip())
+            # A draft with an untraced figure is the worst thing here — it puts a number in front of a
+            # reader that no model produced. Rank it below everything, but still keep it: if every
+            # draft leaks, the best of a bad set must ship with the failure reported, not vanish.
+            _keep(0 if leak else 1, full_text=full_text, standfirst=standfirst,
+                  exec_summary=exec_summary, filled_sections=filled_sections,
+                  grounded=False, judge_failures=[], crit_ok=False)
             continue
         # §06 role 7. Grounding is adjudicated BEFORE style: a graceful sentence that contradicts the
         # model is worse than a clumsy one that does not, and the style critic cannot tell the
@@ -785,6 +803,10 @@ def build_article_full(persona_id: str, conn, out_dir, *, backend: str = "auto",
         # against the very rows this brief was written from.
         grounded, judge_failures = _judge(full_text, brief, conn)
         failures = judge_failures
+        # Lints clean. Better than any leaking draft, and better still if the arithmetic agrees.
+        _keep(3 if grounded else 2, full_text=full_text, standfirst=standfirst,
+              exec_summary=exec_summary, filled_sections=filled_sections,
+              grounded=grounded, judge_failures=judge_failures, crit_ok=False)
         if not grounded and failures:
             feedback = ("These sentences CONTRADICT the executed model output. Each is followed by the "
                         "arithmetic that settles it, taken from the model's own series. Rewrite each one "
@@ -796,9 +818,26 @@ def build_article_full(persona_id: str, conn, out_dir, *, backend: str = "auto",
         crit = critique_article(full_text, headline)
         if crit.ok:
             crit_ok = True
+            _keep(4, full_text=full_text, standfirst=standfirst, exec_summary=exec_summary,
+                  filled_sections=filled_sections, grounded=grounded,
+                  judge_failures=judge_failures, crit_ok=True)
             break
         feedback = "; ".join(crit.fixes or crit.defects)
         reasons.append(f"iter{it}: critic {len(crit.defects)} defects")
+
+    # Whatever the loop's last pass happened to produce, ship the best draft it ever saw.
+    if best is not None:
+        snap = best[1]
+        full_text, standfirst = snap["full_text"], snap["standfirst"]
+        exec_summary, filled_sections = snap["exec_summary"], snap["filled_sections"]
+        grounded, judge_failures, crit_ok = snap["grounded"], snap["judge_failures"], snap["crit_ok"]
+        reasons.append(f"shipped the best of {max_iter} drafts (rank {best[0]}/4: "
+                       f"{'lints clean' if best[0] >= 1 else 'ALL DRAFTS LEAK'}"
+                       f"{', grounded' if grounded else ''}{', critic ok' if crit_ok else ''})")
+    if not grounded:
+        print(f"NOT GROUNDED — {persona_id}: shipping prose the arithmetic does not confirm. "
+              f"{len(judge_failures)} claim(s) contradict the executed models. A human must read this.",
+              file=sys.stderr)
 
     # final safety: strip any residual marker so nothing broken ships; place charts from the plan
     standfirst = _strip_stray(standfirst)
