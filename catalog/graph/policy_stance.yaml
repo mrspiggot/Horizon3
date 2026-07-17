@@ -30,17 +30,26 @@ outputs:
   - {name: r_star_pct, unit: "%", meaning: "the HLW natural rate of interest r*"}
   - {name: stance_pct, unit: "pp", meaning: "ex-ante real rate minus r* (>0 restrictive)"}
 interpretations:
+  # An interpretation is the MODEL's voice: what this regime MEANS, whenever and wherever the guard
+  # fires. It is not a bulletin. Two things were welded in here that do not belong:
+  #   - a dated episode ("the post-2023 stance is the most restrictive since before the GFC"). The
+  #     guard is generic, so that sentence would fire in any decade, about any jurisdiction this model
+  #     is bound to. It was also simply false: the stance is +0.18pp against a 2024 peak of +2.27pp.
+  #   - a hardcoded level ("r* is low (~1%)"). r* is an executed output — it was 2.74% in 2003. A
+  #     number typed into the catalog by hand is asserted, not executed, and it ages silently.
+  # The dates now come from the fact sheet, off the live series, where they cannot go stale.
   - id: restrictive
     when: "stance_pct > 0.25"
     says: >
       The ex-ante real policy rate sits above the HLW natural rate — policy is genuinely restrictive.
-      Because r* is low (~1%), even a modest positive real rate is tight; the post-2023 stance is the
-      most restrictive relative to r* since before the GFC.
+      The gap is the measure, not the nominal rate: when r* is depressed, even a modest positive real
+      rate bites.
   - id: accommodative
     when: "stance_pct < -0.25"
     says: >
-      The real policy rate is below r* — policy is accommodative, adding stimulus. The 2010-2021
-      regime, when the real rate sat far under an already-depressed natural rate.
+      The real policy rate is below r* — policy is accommodative, adding stimulus. Again the gap is
+      the measure: a real rate far beneath an already-depressed natural rate is easier than its level
+      looks.
 charts:
   - id: "The real policy rate against the natural rate r*"
     role: input

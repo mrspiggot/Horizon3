@@ -44,16 +44,23 @@ Extract only these five kinds:
                 percentile" -> kind=percentile, output=unemployment_pct, pct=78, scope=full
                 e.g. "back in the 22nd percentile of their own history" -> pct=22, scope=full
                 e.g. "an eighth-percentile reading" -> pct=8
+                ONLY when the text STATES the figure. "near the bottom of its range", "near the top",
+                "low by post-war standards", "elevated" state NO percentile — DO NOT convert them into
+                one. Supplying the number yourself is authoring a number, which you must never do: the
+                writer is then convicted against a figure you invented, and the sentence was true.
                 `scope`: use "full" when the text ties it to the whole record ("since 1948",
                 "post-war", "of its own history", "ever printed"); "recent" only when the text
                 explicitly says the last few years. A percentile sentence is NOT a superlative —
                 "near the low end" is not "the lowest". Do not emit it as one.
 
   superlative — the text asserts THE CURRENT VALUE is the highest/lowest/most/least since some point.
-                e.g. "the most restrictive setting relative to the natural rate since the financial
-                crisis" -> kind=superlative, op=max, output=stance_pct, since="the financial crisis"
-                The test is: is the claim about NOW? If the sentence is about a PAST high or low, it is
-                an `episode`, not a superlative. Getting this backwards convicts true prose.
+                THE TEST IS THE TENSE. "the stance NOW READS the most restrictive since the financial
+                crisis" -> kind=superlative, op=max, output=stance_pct, since="the financial crisis".
+                But "THE 2024 SWING to the most restrictive setting since the GFC" is about 2024, so it
+                is an `episode` (op=max, at="2024") — and it is TRUE, because the high really is
+                2024-08. Read as a superlative it is convicted, because today is +0.18pp. Same words,
+                opposite verdict: if the sentence names WHEN, it is an episode. Do not default to
+                superlative because the words "most ... since" appear.
   episode     — the text places a peak/trough AT A TIME. The claim is WHEN the extreme happened, not
                 that today is extreme.
                 e.g. "a decisive reversal from the trough it reached in mid-2023, the most inverted
@@ -146,14 +153,22 @@ def adjudicate_node(state: JudgeState) -> dict:
         if not series:
             unresolved.append(f"{c.output!r} is not an output of {c.model_id} — bind to an offered name")
             continue
-        verdicts.append(adjudicate(c, series))
+        v = adjudicate(c, series)
+        verdicts.append(v)
+        # The judge failing to settle a claim is the JUDGE's problem. Route it back for a cleaner
+        # extraction; never hand it to the writer as evidence its sentence is wrong.
+        if not v.settled:
+            unresolved.append(f"{c.output}: {v.detail}")
     return {"verdicts": verdicts, "unresolved": unresolved,
             "feedback": "; ".join(unresolved[:4]) if unresolved else ""}
 
 
 def verdict(state: JudgeState) -> dict:
     vs = state.get("verdicts") or []
-    failures = [v for v in vs if not v.ok]
+    # ONLY a settled claim can convict. An unsettled one means the judge could not resolve the window,
+    # bind the output, or read the sentence — all of which are its own failure. Counting those as
+    # contradictions told the writer to rewrite three TRUE sentences on 2026-07-17.
+    failures = [v for v in vs if v.settled and not v.ok]
     for v in failures:
         print(f"UNGROUNDED — {v.output}: {v.quote[:70]!r}\n    {v.detail}", file=sys.stderr)
     # Unresolved claims mean the Judge could not do its job — that is not a pass. Silence here is the

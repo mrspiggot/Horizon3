@@ -27,8 +27,8 @@ interpretations:
   - id: rates_driven
     when: "risk_free_pct > 3.5"
     says: >
-      The funding cost is dominated by the risk-free rate, not credit — a rates story. Since 2022 the
-      risk-free leg, not the spread, has driven the all-in cost: a treasurer's problem the company
+      The funding cost is dominated by the risk-free rate, not credit — a rates story. When the
+      risk-free leg rather than the spread drives the all-in cost, it is a treasurer's problem the company
       cannot fix by improving its own credit, only by timing duration or funding floating.
   - id: credit_driven
     when: "credit_oas_pct > 2.7"

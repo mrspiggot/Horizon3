@@ -1,52 +1,58 @@
 model_id: energy_complex
-name: "Energy complex — the Brent-WTI location spread"
+name: "Energy complex — real price, location spread, and oil-vs-gas"
 family: commodity
 persona: commodity_analyst
 grounded_in: [gorton-rouwenhorst-facts, nber-commodity-futures]
 method: data-direct
 method_note: >
-  The Brent-WTI spread is a directly-observed relative price — the premium of seaborne (Brent) over
-  landlocked US (WTI) crude, driven by pipeline/export bottlenecks and shale supply (Gorton-Hayashi-
-  Rouwenhorst commodity fundamentals). Presented with the complex read as §10 states; an observed
-  spread, like a credit spread, not a fitted model.
+  Four analytic reads of the energy complex from spot benchmarks (Gorton-Hayashi-Rouwenhorst commodity
+  fundamentals), each requiring computation a quoted price cannot give: crude deflated to constant
+  dollars, the Brent-WTI location premium, the crude-to-gas relative price, and 12-month time-series
+  momentum (Moskowitz-Ooi-Pedersen 2012). Deep FRED benchmarks (WTI/Brent/Henry Hub daily from 2000,
+  CPI monthly) rather than the thin Yahoo futures.
 spec:
-  equations: "Brent-WTI = BZ=F - CL=F ($/bbl). Positive = tight seaborne / ample US shale; the location premium."
-history: {start: "2010-01", end: "2026-07", cadence: monthly}
+  equations: >
+    real_wti = WTI x (CPI_now / CPI_t);  Brent-WTI = Brent - WTI ($/bbl);
+    oil_gas = WTI / HenryHub;  momentum = 12m trailing return of WTI (%).
+history: {start: "1997-01", end: "2026-07", cadence: monthly}
 inputs:
-  - {id: crude, series_id: "CL=F", db_source: yahoo, state: level, context_window: 252}
-  - {id: brent, series_id: "BZ=F", db_source: yahoo, state: level, context_window: 252}
-  - {id: natgas, series_id: "NG=F", db_source: yahoo, state: level, context_window: 252}
+  # Deep FRED daily benchmarks (2000→present) — WTI, Brent, Henry Hub — plus CPI for real terms.
+  - {id: crude,    series_id: "DCOILWTICO",   db_source: fred, state: level, context_window: 252}
+  - {id: brent,    series_id: "DCOILBRENTEU", db_source: fred, state: level, context_window: 252}
+  - {id: natgas,   series_id: "DHHNGSP",      db_source: fred, state: level, context_window: 252}
+  - {id: cpi,      series_id: "CPIAUCSL",     db_source: fred, state: level, context_window: 252}
+  - {id: crude_mom, series_id: "DCOILWTICO",  db_source: fred, transform: momentum, state: level, context_window: 252}
 execution:
-  implemented_by: unified_market_data.analysis.term_premium.curve_slope
-  args: {short_pct: crude.level, long_pct: brent.level}
+  implemented_by: unified_market_data.analysis.commodity_analytics.energy_complex
+  args: {brent: brent.level, wti: crude.level, natgas: natgas.level, cpi: cpi.level}
 outputs:
-  - {name: slope, unit: "$/bbl", meaning: "Brent minus WTI — the location/quality spread"}
+  - {name: brent_wti_spread, unit: "$/bbl", meaning: "Brent minus WTI — the location/quality spread"}
+  - {name: real_wti, unit: "$", meaning: "WTI deflated to ~current dollars (CPI-adjusted)"}
+  - {name: oil_gas_ratio, unit: "ratio", meaning: "WTI ($/bbl) / Henry Hub ($/MMBtu) — crude-to-gas relative price"}
 interpretations:
   - id: brent_premium
-    when: "slope > 4"
+    when: "brent_wti_spread > 4"
     says: >
-      Brent trades well above WTI — a wide location premium. This is the shale-era signature: abundant
+      Brent trades well above WTI — a wide location premium. The shale-era signature: abundant
       landlocked US crude priced below waterborne Brent when export capacity binds (2011-2014), the
       structural spread that made US pipeline and export infrastructure a decade-long trade.
   - id: parity
-    when: "slope < 1.5"
+    when: "brent_wti_spread < 1.5"
     says: >
       The Brent-WTI spread has collapsed toward parity — US export capacity has caught up with shale
       supply, or a global demand shock has hit both benchmarks alike. The location arbitrage is gone.
 charts:
-  - id: "The energy complex (standardized)"
-    role: input
+  - id: "Crude oil: nominal price vs real (inflation-stripped)"
+    role: outcome
     chart_type: series
     color_job: categorical
-    insight: "crude, Brent and gas on a comparable (z-score) scale — where crude and gas diverge, the driver is supply-specific (a freeze, a storage glut), not the macro demand cycle"
+    insight: "deflating WTI by CPI shows the real cost of energy across decades — 2008's real peak dwarfs later nominal highs, and today's price is well below its real-2008 level even as the nominal number looks large"
     data_contract:
       kind: series
-      ylabel: "z-score"
-      zero_line: true
+      ylabel: "$/bbl"
       series:
-        - {label: "WTI crude", from: "input:crude.zscore"}
-        - {label: "Brent", from: "input:brent.zscore"}
-        - {label: "nat gas", from: "input:natgas.zscore"}
+        - {label: "WTI (nominal $)", from: "input:crude.level"}
+        - {label: "WTI (real, ~today's $)", from: "output:real_wti"}
   - id: "The Brent-WTI location spread over time"
     role: outcome
     chart_type: gap_series
@@ -59,27 +65,26 @@ charts:
       kind: gap_series
       ylabel: "$/bbl"
       label: "Brent - WTI"
-      minuend: "input:brent.level"
-      subtrahend: "input:crude.level"
-  - id: "Crude vs gas (energy divergence)"
-    role: consequence
+      minuend: "output:brent_wti_spread"
+  - id: "Oil-to-gas ratio (crude vs gas relative value)"
+    role: outcome
     chart_type: series
-    color_job: categorical
-    insight: "oil and gas diverging is the tell that the move is supply-specific — the 2022 European gas crisis sent gas vertical while crude was range-bound"
+    color_job: sequential
+    insight: "crude priced in gas — the shale gas glut drove the ratio far above its ~6-10x energy-equivalent parity, the clean read on oil-vs-gas that a single price line cannot show (the 2012 and 2020 spikes are gas collapsing, not oil soaring)"
     data_contract:
       kind: series
-      ylabel: "z-score"
-      zero_line: true
+      ylabel: "WTI / Henry Hub"
       series:
-        - {label: "crude z", from: "input:crude.zscore"}
-        - {label: "gas z", from: "input:natgas.zscore"}
-  - id: "The energy complex today"
-    role: outcome
-    chart_type: bar
+        - {label: "oil-to-gas ratio", from: "output:oil_gas_ratio"}
+  - id: "Crude oil momentum (12-month trailing return)"
+    role: consequence
+    chart_type: gap_series
     color_job: diverging
-    insight: "the current standardized level of each energy contract"
+    pos_label: "uptrend (reflation)"
+    neg_label: "downtrend (demand shock / glut)"
+    insight: "time-series momentum (Moskowitz-Ooi-Pedersen) — the sign of the 12-month return is the tradable regime; the deep-negative troughs mark 2008, the 2014-16 shale price war, and the 2020 demand collapse"
     data_contract:
-      kind: named_values
-      ylabel: "z-score"
-      labels: ["WTI", "Brent", "nat gas"]
-      values: ["input:crude.zscore", "input:brent.zscore", "input:natgas.zscore"]
+      kind: gap_series
+      ylabel: "12m return (%)"
+      label: "WTI 12m momentum"
+      minuend: "input:crude_mom.level"

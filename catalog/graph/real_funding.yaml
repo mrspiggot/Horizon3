@@ -25,9 +25,9 @@ interpretations:
   - id: real_squeeze
     when: "real_funding > 2.0"
     says: >
-      The real cost of debt is high — even after inflation, funding is genuinely expensive. This is the
-      post-2022 regime: nominal rates rose faster than breakevens, so the Fisher-real burden on issuers
-      is the heaviest since before the GFC — a case to wait, shorten, or fund floating.
+      The real cost of debt is high — even after inflation, funding is genuinely expensive. This is
+      what it looks like when nominal rates outrun breakevens: the Fisher-real burden lands on the
+      issuer — a case to wait, shorten, or fund floating.
   - id: cheap_funding
     when: "real_funding < 1.0"
     says: >

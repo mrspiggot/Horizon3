@@ -7,7 +7,7 @@ method: published
 method_note: "ACM term-premium tenor x time surface"
 spec:
   equations: "the ACM term premium across the whole tenor grid (1..10y) through time"
-history: {start: "2025-07-10", end: "2026-07-09", cadence: weekly}
+history: {start: "2000-01", end: "2026-07", cadence: quarterly}
 inputs:
   - {id: tp1, series_id: ACMTP01, db_source: nyfed_acm, state: level, context_window: 250}
   - {id: tp2, series_id: ACMTP02, db_source: nyfed_acm, state: level, context_window: 250}

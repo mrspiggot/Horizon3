@@ -86,8 +86,10 @@ _UNEMP = [(date(1950 + i // 12, i % 12 + 1, 28), v) for i, v in
 
 
 def _pct_claim(pct, scope="full"):
-    return Claim(quote="q", kind="percentile", model_id="m", output="unemployment_pct",
-                 pct=pct, scope=scope)
+    # The quote must STATE the figure — a percentile claim whose prose names no number is refused
+    # outright now, because the extractor was inventing them. See the number-authoring tests below.
+    return Claim(quote=f"unemployment sits at the {pct}th percentile of its history", kind="percentile",
+                 model_id="m", output="unemployment_pct", pct=pct, scope=scope)
 
 
 def test_percentile_catches_the_backwards_claim():
@@ -115,3 +117,86 @@ def test_percentile_scope_recent_is_a_different_question():
     full = adjudicate(_pct_claim(23, "full"), _UNEMP)
     recent = adjudicate(_pct_claim(23, "recent"), _UNEMP)
     assert full.detail != recent.detail
+
+
+# --- settled vs ok: the distinction that cost three true sentences ---------------------------------
+def test_unresolvable_window_is_the_judges_failure_not_the_proses():
+    # SHIPPED FEEDBACK: "a swing in 2024 to the most restrictive reading against r* in years"
+    # -> "unresolvable window 'years' — a superlative needs a start" -> counted as a CONTRADICTION.
+    # The judge could not read "in years". That is not evidence the writer lied.
+    v = adjudicate(Claim(quote="the most restrictive reading against r* in years", kind="superlative",
+                         model_id="m", output="stance_pct", op="max", since="years"), _SPREAD)
+    assert not v.settled
+    assert not any(x.settled and not x.ok for x in [v]), "an unresolvable window must never convict"
+
+
+def test_multi_period_sentence_describes_shape_and_is_not_adjudicated():
+    # SHIPPED FEEDBACK: "nowhere near the peaks above 20 the index printed in 1975 and 1980" was
+    # convicted because the max is 1980, not 1975. The sentence never claimed 1975 held the record —
+    # it says today is small, which is true, and names both peaks.
+    v = adjudicate(Claim(quote="nowhere near the peaks above 20 the index printed in 1975 and 1980",
+                         kind="episode", model_id="m", output="misery_index", op="max", at="1975"),
+                   _SPREAD)
+    assert not v.settled, "a sentence naming several periods must not be crowned or convicted"
+
+
+def test_a_real_contradiction_is_still_settled_and_convicted():
+    # The guard rail must not swallow the genuine catch. This is the sentence that shipped to a reader.
+    stance = [(date(2024, 8, 28), 2.27), (date(2026, 5, 28), 0.18)]
+    v = adjudicate(Claim(quote="the most restrictive setting since the financial crisis",
+                         kind="superlative", model_id="m", output="stance_pct", op="max",
+                         since="the financial crisis"), stance)
+    assert v.settled and not v.ok, "the real contradiction must still convict"
+
+
+# --- the judge must not author numbers (hard rule #2, broken BY the judge) --------------------------
+def test_qualitative_phrase_is_not_a_percentile_claim():
+    # SHIPPED FEEDBACK: the prose said "the stance now sits near the bottom of its range" — no figure
+    # anywhere. The extractor invented pct=10 and the arithmetic convicted the writer against the
+    # LLM's own invention. The claim and the evidence were both fabricated; the sentence was true.
+    v = adjudicate(Claim(quote="the stance now sits near the bottom of its range", kind="percentile",
+                         model_id="m", output="stance_pct", pct=10, scope="recent"), _UNEMP)
+    assert not v.settled
+    assert "never authors a number" in v.detail
+
+
+def test_a_stated_percentile_is_still_adjudicated():
+    assert adjudicate(_pct_claim(78), _UNEMP).settled          # "the 78th percentile" — a real figure
+    v = adjudicate(Claim(quote="an eighth-percentile reading", kind="percentile", model_id="m",
+                         output="unemployment_pct", pct=8, scope="full"), _UNEMP)
+    assert v.settled, "written-out ordinals state a number too"
+
+
+def test_episode_tolerates_prose_rounding_across_a_year_boundary():
+    # The Taylor prescription peaks 1981-01-28. "the peak of 1980" is how everyone writes about
+    # Volcker, and convicting it for one month is pedantry that gets a check switched off.
+    volcker = [(date(1981, 1, 28), 14.02), (date(2026, 5, 28), 5.31)]
+    assert adjudicate(Claim(quote="the peak it hit in 1980", kind="episode", model_id="m",
+                            output="taylor_1993", op="max", at="1980"), volcker).ok
+
+
+def test_grace_does_not_rescue_a_real_misattribution():
+    spike = [(date(2020, 4, 28), 14.8), (date(2026, 1, 28), 4.3)]
+    v = adjudicate(Claim(quote="the 2022 spike", kind="episode", model_id="m",
+                         output="unemployment_pct", op="max", at="2022"), spike)
+    assert v.settled and not v.ok, "two years off is a misattribution, not rounding"
+
+
+# --- decades: prose talks in them; the parser had no concept of one --------------------------------
+def test_early_1980s_is_a_decade_not_the_year_1980():
+    # SHIPPED FEEDBACK: "nowhere near the near-14% peak the rule reached in the disinflation of the
+    # early 1980s" was convicted because the parser read "early"+"1980" as months 1-7 of 1980. The
+    # prescription peaks 1981-01-28 — squarely in the early 1980s. The sentence is true.
+    lo, hi = _resolve_window("the early 1980s")
+    assert lo <= "1981-01-28" <= hi
+
+
+def test_decade_variants():
+    assert _resolve_window("the 2010s") == ("2010-01-01", "2019-12-31")
+    assert _resolve_window("the late 1990s") == ("1996-01-01", "1999-12-31")
+    lo, hi = _resolve_window("the mid-1970s")
+    assert lo <= "1975-06-01" <= hi
+
+
+def test_a_bare_year_still_means_that_year_not_its_decade():
+    assert _resolve_window("1980") == ("1980-01-01", "1980-12-31")

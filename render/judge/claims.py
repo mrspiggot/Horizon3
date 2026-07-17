@@ -97,6 +97,17 @@ class Verdict(BaseModel):
     output: str
     ok: bool
     detail: str
+    # THE DISTINCTION THIS FILE KEPT GETTING WRONG, four separate times in one day.
+    #
+    # `settled=False` means THE JUDGE could not do its job — it could not resolve the window ("in
+    # years"), could not bind the output, or the claim is genuinely ambiguous. That is not evidence
+    # against the prose. graph.py has always said so ("an unresolved claim is a FAILURE OF THE JUDGE,
+    # not of the prose") while adjudicate() quietly returned ok=False for exactly those cases, and the
+    # writer was handed "these sentences CONTRADICT the executed model output" about sentences that
+    # were true. It then rewrote good prose to appease a broken check.
+    #
+    # Only settled=True + ok=False is a contradiction. Everything else routes back for re-extraction.
+    settled: bool = True
 
 
 # Vague halves of a year, as GENEROUS month spans. "mid-2023" is not a date, and the honest response
@@ -107,6 +118,23 @@ _VAGUE: dict[str, tuple[int, int]] = {
     "early": (1, 7), "mid": (3, 10), "middle": (3, 10), "late": (6, 12),
     "h1": (1, 6), "h2": (7, 12), "first half": (1, 6), "second half": (7, 12),
 }
+
+
+# Written-out ordinals, because "an eighth-percentile reading" states a number without a digit.
+_ORDINALS = ("first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth",
+             "tenth", "twentieth", "thirtieth", "fortieth", "fiftieth", "sixtieth", "seventieth",
+             "eightieth", "ninetieth", "hundredth", "quarter", "median", "third")
+
+
+def _shift_days(iso: str, days: int) -> str:
+    from datetime import timedelta
+    return (date.fromisoformat(iso) + timedelta(days=days)).isoformat()
+
+
+def _states_a_number(quote: str) -> bool:
+    """Does the writer actually state a figure here, or is the extractor about to invent one?"""
+    q = quote.lower()
+    return bool(re.search(r"\d", q)) or any(w in q for w in _ORDINALS)
 
 
 def _month_end(year: int, month: int) -> str:
@@ -148,6 +176,20 @@ def _resolve_window(during: str | None) -> tuple[str | None, str]:
         return f"{yrs[0]}-01-01", f"{yrs[-1]}-12-31"
     if re.fullmatch(r"\d{4}", s):
         return f"{s}-01-01", f"{s}-12-31"
+    # A DECADE. "the disinflation of the early 1980s" is not "early 1980": the Taylor prescription
+    # peaks 1981-01-28, which is squarely in the early 1980s and was convicted because the parser read
+    # "early" + the digits "1980" and returned months 1-7 of that single year. Prose reaches for
+    # decades constantly — "the 2010s", "the early 1980s", "the late 1990s" — and a judge with no
+    # concept of one will keep failing sentences that are simply true.
+    if (dec := re.search(r"(19|20)(\d)0s", s)):
+        d0 = int(dec.group(1)) * 100 + int(dec.group(2)) * 10
+        if "early" in s:
+            return f"{d0}-01-01", f"{d0 + 3}-12-31"
+        if "late" in s:
+            return f"{d0 + 6}-01-01", f"{d0 + 9}-12-31"
+        if "mid" in s or "middle" in s:
+            return f"{d0 + 3}-01-01", f"{d0 + 7}-12-31"
+        return f"{d0}-01-01", f"{d0 + 9}-12-31"
     # 'mid-2023', 'late 2022', 'H1 2024' — a vague half of a named year.
     if (yr := re.search(r"(19|20)\d{2}", s)):
         y = int(yr.group())
@@ -187,18 +229,18 @@ def adjudicate(claim: Claim, series: list[tuple[date, float]]) -> Verdict:
     pts = [(d, v) for d, v in series if v is not None]
     if len(pts) < 2:
         return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=False,
-                       detail=f"cannot adjudicate: {claim.output} has {len(pts)} usable points")
+                       detail=f"cannot adjudicate: {claim.output} has {len(pts)} usable points", settled=False)
     latest_d, latest_v = pts[-1]
 
     if claim.kind == "superlative":
         since = _resolve_since(claim.since)
         if not since:
             return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=False,
-                           detail=f"unresolvable window {claim.since!r} — a superlative needs a start")
+                           detail=f"unresolvable window {claim.since!r} — a superlative needs a start", settled=False)
         window = [(d, v) for d, v in pts if d.isoformat() >= since]
         if not window:
             return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=False,
-                           detail=f"no {claim.output} data since {since} — the claim cannot be shown")
+                           detail=f"no {claim.output} data since {since} — the claim cannot be shown", settled=False)
         pick = max if claim.op == "max" else min
         ext_d, ext_v = pick(window, key=lambda x: x[1])
         ok = (ext_d == latest_d)
@@ -210,13 +252,29 @@ def adjudicate(claim: Claim, series: list[tuple[date, float]]) -> Verdict:
                                      f"{ext_d.year - latest_d.year and abs(ext_d.year - latest_d.year)} year(s) earlier")))
 
     if claim.kind == "percentile":
+        # HARD RULE #2 — "the LLM never authors a number" — was being broken BY THE JUDGE.
+        #
+        # The prose said "the stance now sits near the bottom of its range" and "low by the standards
+        # of the whole post-1948 record". Neither states a percentile. The extractor invented pct=10
+        # for both, and the arithmetic below then convicted the writer against a number the LLM had
+        # made up. The claim AND the evidence against it were fabricated; the sentences were true.
+        #
+        # A qualitative phrase is not a percentile. If the writer did not state a number, there is
+        # nothing here to settle — and an extractor that supplies the missing number is doing the one
+        # thing this entire subsystem exists to prevent. The prompt says so; this enforces it, because
+        # an instruction can be ignored and a guard cannot.
+        if not _states_a_number(claim.quote):
+            return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=True,
+                           settled=False,
+                           detail=(f"{claim.quote[:44]!r} states no percentile — the extractor supplied "
+                                   f"{claim.pct!r} itself. Not adjudicated: the LLM never authors a number."))
         # The narrator is handed percentiles, so the narrator writes percentile sentences. Without a
         # type for them the extractor mangled each into a superlative and the adjudicator answered a
         # question nobody asked ("is today the minimum since 1948?" — no, so FAIL), convicting on the
         # wrong grounds. Two of those sentences WERE false; being right by accident is not a check.
         if claim.pct is None:
             return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=False,
-                           detail="percentile claim with no stated percentile — cannot settle it")
+                           detail="percentile claim with no stated percentile — cannot settle it", settled=False)
         recent = pts[-60:] if claim.scope == "recent" else pts
         actual = sum(1 for _, v in recent if v < latest_v) / len(recent) * 100
         which = f"last {len(recent)} obs" if claim.scope == "recent" else f"{pts[0][0]}→{pts[-1][0]}"
@@ -236,15 +294,32 @@ def adjudicate(claim: Claim, series: list[tuple[date, float]]) -> Verdict:
         # a false accusation against a sentence the data supports (min -1.73 IS 2023-06).
         # This is also the shape of a real defect an editor caught: "the 2022 spike" when the spike is
         # 2020. Misattributing an episode is exactly as wrong as misstating a level.
+        # A sentence that names SEVERAL periods is describing the shape of a curve, not crowning one
+        # of them. "nowhere near the peaks above 20 the index printed in 1975 and 1980" says today is
+        # small — it makes no claim about which year holds the record, and convicting it because the
+        # max is 1980 rather than 1975 is a false accusation against a sentence that is plainly true.
+        # The prompt says to skip these; the extractor emits them anyway, so this is enforced here
+        # where an instruction cannot be ignored.
+        if len(set(re.findall(r"(?:19|20)\d{2}", claim.quote))) > 1:
+            return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=True,
+                           settled=False,
+                           detail=(f"{claim.quote[:40]!r} names several periods — it describes the "
+                                   f"curve's shape rather than crowning one extreme. Not adjudicated."))
         lo, hi = _resolve_window(claim.at)
         if not lo:
             return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=False,
-                           detail=f"unresolvable period {claim.at!r} — cannot place the extreme")
+                           detail=f"unresolvable period {claim.at!r} — cannot place the extreme", settled=False)
         scope = pts
         if (since := _resolve_since(claim.since)):
             scope = [(d, v) for d, v in pts if d.isoformat() >= since] or pts
         ext_d, ext_v = (max if claim.op == "max" else min)(scope, key=lambda x: x[1])
-        ok = lo <= ext_d.isoformat() <= hi
+        # Prose rounds an episode; arithmetic must not treat rounding as a lie. The Taylor-rule
+        # prescription peaks 1981-01-28, so "the peak of 1980" is one month outside a calendar year
+        # and would be convicted — for a phrase every economist writing about Volcker uses. Two
+        # months of grace at each end costs nothing real: it cannot rescue "the 2022 spike" when the
+        # spike is 2020, which is the misattribution worth catching.
+        lo_g, hi_g = _shift_days(lo, -62), _shift_days(hi, 62)
+        ok = lo_g <= ext_d.isoformat() <= hi_g
         return Verdict(
             quote=claim.quote, kind=claim.kind, output=claim.output, ok=ok,
             detail=(f"{'max' if claim.op == 'max' else 'min'} {claim.output}={ext_v:+.2f} at {ext_d}; "
@@ -263,11 +338,11 @@ def adjudicate(claim: Claim, series: list[tuple[date, float]]) -> Verdict:
             lo, hi = _resolve_window(claim.during)
             if not lo:
                 return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=False,
-                               detail=f"unresolvable period {claim.during!r} — cannot scope the claim")
+                               detail=f"unresolvable period {claim.during!r} — cannot scope the claim", settled=False)
             win = [(d, v) for d, v in pts if lo <= d.isoformat() <= hi]
             if not win:
                 return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=False,
-                               detail=f"no {claim.output} data in {lo}..{hi} — the claim cannot be shown")
+                               detail=f"no {claim.output} data in {lo}..{hi} — the claim cannot be shown", settled=False)
             ext_d, ext_v = (min if want_neg else max)(win, key=lambda x: x[1])
             ok = (ext_v < 0) if want_neg else (ext_v > 0)
             return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=ok,
@@ -292,7 +367,7 @@ def adjudicate(claim: Claim, series: list[tuple[date, float]]) -> Verdict:
             reads.append((m, latest_v - prior[-1][1]))
     if not reads:
         return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=False,
-                       detail=f"no {claim.output} history before {latest_d} to compare against")
+                       detail=f"no {claim.output} history before {latest_d} to compare against", settled=False)
     agree = [(m, d) for m, d in reads if ((d > 0) if claim.expect == "up" else (d < 0))]
     shown = " · ".join(f"{m}m {d:+.2f}" for m, d in reads)
     if len(agree) == len(reads):
