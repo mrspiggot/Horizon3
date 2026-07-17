@@ -280,11 +280,23 @@ _VOICE = (
     "  • End on the genuine unresolved risk, NOT a tidy bow. Sit with the ambiguity.\n"
     "  • Plain and concrete over ornate. No purple metaphor, no bodily/sensory overwriting, no throat-"
     "clearing ('it is worth noting', 'in today's market', 'make no mistake').\n"
-    "  • CITE FIGURES ONLY as the {n} tokens provided, written exactly. Never type, invent, round, or "
-    "derive a number of your own. Each token ALREADY carries its unit (a token may render as "
-    "'4.55 vol pts' or '14%') — write the token alone and NEVER restate the unit after it (never "
-    "'{n} vol points', never '{n} percent'). And use real terms: never a garbled or invented phrase "
-    "(write 'at-the-money', never a mangled substitute).")
+    "  • DIGITS MEAN MEASURED. WORDS MEAN APPROXIMATE. This is a hard contract and it runs both ways.\n"
+    "      – Every MEASURED value is cited ONLY as the {n} token provided, written exactly. Never type "
+    "a digit of your own. Each token ALREADY carries its unit (it may render as '4.55 vol pts' or "
+    "'14%') — write the token alone and NEVER restate the unit after it (never '{n} vol points', "
+    "never '{n} percent').\n"
+    "      – When the prose genuinely needs a number FIGURATIVELY — a rough magnitude, a round "
+    "threshold, a target, a rule of thumb — SPELL IT OUT IN WORDS and never in digits: 'more than a "
+    "hundred basis points below its own rule', 'an r* of around one percent', 'the two percent "
+    "target', 'peaks near twenty'. This is allowed, it is good FT/Economist style, and it is how you "
+    "say 'roughly' without pretending to a precision you do not have.\n"
+    "      – NEVER spell out a PRECISE value to dodge a token. 'two point three nine percent' is a "
+    "measured figure in disguise and is the one thing you must not write. If you know the exact "
+    "number, it has a token — use the token.\n"
+    "    The reader must be able to tell at a glance which numbers are measured and which are "
+    "gestures. Digits are a promise that the number came from the model.\n"
+    "  • Use real terms: never a garbled or invented phrase (write 'at-the-money', never a mangled "
+    "substitute).")
 
 
 def plan_arc(brief: dict, feedback: str = "") -> Outline:
@@ -345,6 +357,24 @@ def write_article(brief: dict, outline: Outline, feedback: str = "") -> Article:
 
 
 # ── firewall + slop lint ───────────────────────────────────────────────────────────────────────────
+_ONES = (r"zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|"
+         r"fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|"
+         r"eighty|ninety|hundred")
+# "two point three nine percent" — a MEASURED figure wearing words to slip past a digit-matching
+# firewall. The writer may spell out approximations ("around one percent", "more than a hundred basis
+# points"); that is the deal, and it is what lets the prose be figurative without inventing data. This
+# is the other half of the deal. It matters more now than it used to: since the fact sheet landed the
+# narrator can SEE the real numbers, so it has something precise to disguise.
+# Trailing digit-words are consumed so the whole figure is quoted back ("two point three nine", not
+# "two point three") — the feedback names the string, and half a number reads like a typo.
+_WORD_DECIMAL = re.compile(rf"\b(?:{_ONES})[\s-]+point[\s-]+(?:{_ONES})(?:[\s-]+(?:{_ONES}))*\b", re.I)
+
+
+def _worded_precision(text: str) -> str | None:
+    m = _WORD_DECIMAL.search(text)
+    return m.group() if m else None
+
+
 def _render_for_prose(no) -> str:
     """A NumberObject's value for running prose: like rendered(), but a multi-word unit ('vol pts') gets
     a space off the number ('4.55 vol pts', not '4.55vol pts'); tight units (%, pp, bp, σ) stay glued."""
@@ -783,10 +813,26 @@ def build_article_full(persona_id: str, conn, out_dir, *, backend: str = "auto",
         slop = _slop_lint(full_text)
         stray = re.search(r"\{[^}]*\}", full_text)          # an invented figure marker / bad token
         epi = _episode_leaks(full_text, brief.get("data_start", ""))
-        if leak or slop or stray or epi:
+        wordnum = _worded_precision(full_text)
+        if leak or slop or stray or epi or wordnum:
             bits = []
             if leak:
-                bits.append(f"REMOVE the untraced figure '{leak}' — cite only the listed {{n}} tokens.")
+                # Two ways out, and the writer needs to be told BOTH — otherwise it rewrites the
+                # sentence, needs the number again, types it again, and the loop burns its whole
+                # budget. On 2026-07-17 all three CB drafts leaked and the Judge never ran: the
+                # figures were "more than 100bp tighter" (true — the gap is ~140bp), "the 2% target"
+                # (a model parameter) and "around 1%" (r* is 1.06). Every one a true statement the
+                # gate had no legitimate way to express.
+                bits.append(
+                    f"The figure '{leak}' is typed in digits but is not a token. Digits are reserved "
+                    f"for measured values. EITHER cite it as its {{n}} token if it is a real executed "
+                    f"figure, OR — if you meant it loosely (a rough magnitude, a round threshold, a "
+                    f"target) — SPELL IT OUT IN WORDS instead: 'more than a hundred basis points', "
+                    f"'the two percent target', 'around one percent'. Do not simply delete the point.")
+            if wordnum:
+                bits.append(f"REWRITE '{wordnum}': you have spelled out a precise value in words to "
+                            f"avoid a token. Words are for approximations only. If the figure is real, "
+                            f"cite its {{n}} token; if you meant roughly, round it and say so.")
             if stray:
                 bits.append("REMOVE every {…} marker from the prose — do not number or footnote the "
                             "charts; name a chart in words. The only braces allowed are the number tokens.")
@@ -799,8 +845,9 @@ def build_article_full(persona_id: str, conn, out_dir, *, backend: str = "auto",
                             f"shows those years — naming them fabricates history. Rewrite using ONLY episodes "
                             f"on or after {sy} (e.g. what the series actually spans).")
             feedback = " ".join(bits)
-            reasons.append(f"iter{it}: {'leak ' if leak else ''}{'stray ' if stray else ''}"
-                           f"{'slop ' if slop else ''}{'episode' if epi else ''}".strip())
+            reasons.append(f"iter{it}: {f'leak({leak}) ' if leak else ''}{'stray ' if stray else ''}"
+                           f"{'slop ' if slop else ''}{'episode ' if epi else ''}"
+                           f"{f'worded({wordnum})' if wordnum else ''}".strip())
             # A draft with an untraced figure is the worst thing here — it puts a number in front of a
             # reader that no model produced. Rank it below everything, but still keep it: if every
             # draft leaks, the best of a bad set must ship with the failure reported, not vanish.
