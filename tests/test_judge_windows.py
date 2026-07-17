@@ -41,8 +41,10 @@ def test_lstrip_the_does_not_eat_the_word():
     # `"the taper tantrum".lstrip("the ")` -> "aper tantrum": lstrip takes a CHARACTER SET, not a
     # prefix. The episode never matched, so "since the taper tantrum" was ruled unresolvable and the
     # claim FAILED — a false accusation against a sentence that may well be true.
-    assert _resolve_since("the taper tantrum") == "2013-05-01"
-    assert _resolve_since("the GFC") == "2007-01-01"
+    # The point is that it RESOLVES AT ALL. (The date is the episode's end: "since X" means after
+    # X — see test_since_the_gfc_prefers_after_the_gfc.)
+    assert _resolve_since("the taper tantrum") is not None
+    assert _resolve_since("the GFC") is not None
 
 
 def test_since_accepts_dates_and_bare_years():
@@ -200,3 +202,58 @@ def test_decade_variants():
 
 def test_a_bare_year_still_means_that_year_not_its_decade():
     assert _resolve_window("1980") == ("1980-01-01", "1980-12-31")
+
+
+# --- "since X" means AFTER X, and it is ambiguous ---------------------------------------------------
+def test_since_the_gfc_prefers_after_the_gfc():
+    # AUDIT FALSE POSITIVE: real_funding's "the post-2022 climb back to the heaviest since the GFC" is
+    # TRUE — the post-2022 peak of 4.22 (2023-10) IS the highest since 2010. It was convicted because
+    # "since the GFC" resolved to the GFC's START (2007), and 2008 printed 7.70.
+    assert _resolve_since("the GFC") == "2010-01-01"
+
+
+def test_superlative_is_spared_when_one_reading_supports_it():
+    # Today IS the highest since the GFC ended; 2008 was higher, but "since the GFC" idiomatically
+    # excludes the crisis itself. One reading supports the claim, so it must not be convicted.
+    real_funding = [(date(2008, 11, 28), 7.70), (date(2023, 10, 28), 3.90), (date(2026, 7, 28), 4.22)]
+    v = adjudicate(Claim(quote="the heaviest since the GFC", kind="superlative", model_id="m",
+                         output="real_funding", op="max", since="the GFC"), real_funding)
+    assert v.ok, v.detail          # true after the GFC; only the from-2007 reading fails it
+
+
+def test_the_cb_catch_survives_both_readings():
+    # The sentence that shipped. It must still convict under EVERY reading of "the financial crisis" —
+    # the loosening above must not blunt the one catch that matters.
+    stance = [(date(2008, 6, 28), 1.10), (date(2024, 8, 28), 2.27), (date(2026, 5, 28), 0.18)]
+    v = adjudicate(Claim(quote="the most restrictive setting since the financial crisis",
+                         kind="superlative", model_id="m", output="stance_pct", op="max",
+                         since="the financial crisis"), stance)
+    assert v.settled and not v.ok, "the 2024 peak beats today under both readings — still false"
+
+
+def test_superlative_ties_do_not_convict():
+    # max() returns the EARLIER date on a tie, so a series back at exactly its prior high was
+    # convicted for a true claim. Compare values, not dates.
+    tied = [(date(2015, 1, 28), 5.0), (date(2026, 1, 28), 5.0)]
+    v = adjudicate(Claim(quote="the highest since 2010", kind="superlative", model_id="m",
+                         output="x", op="max", since="2010"), tied)
+    assert v.ok, v.detail
+
+
+def test_a_benign_skip_does_not_block_grounded():
+    # A sentence describing a curve's shape, or stating no figure, is not an open question. Routing
+    # these to `unresolved` (which blocks `grounded`) meant an article could carry sound prose and
+    # never be certifiable — and the writer would burn its whole iteration budget re-extracting.
+    shape = adjudicate(Claim(quote="the peaks in 1975 and 1980", kind="episode", model_id="m",
+                             output="x", op="max", at="1975"), _SPREAD)
+    qual = adjudicate(Claim(quote="near the bottom of its range", kind="percentile", model_id="m",
+                            output="x", pct=10), _SPREAD)
+    assert not shape.retry and not qual.retry, "benign skips must not demand re-extraction"
+
+
+def test_an_unresolvable_window_does_demand_a_retry():
+    # This one the extractor really could do better on, and the judge genuinely has not checked the
+    # sentence — so it must block `grounded` rather than pass silently.
+    v = adjudicate(Claim(quote="the most restrictive in years", kind="superlative", model_id="m",
+                         output="x", op="max", since="years"), _SPREAD)
+    assert not v.settled and v.retry

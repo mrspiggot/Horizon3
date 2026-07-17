@@ -108,6 +108,15 @@ class Verdict(BaseModel):
     #
     # Only settled=True + ok=False is a contradiction. Everything else routes back for re-extraction.
     settled: bool = True
+    # …but "unsettled" covers two different things, and treating them alike was its own bug:
+    #   retry=True   the EXTRACTOR could do better — it named a window nothing can resolve, or bound
+    #                to an output with no data. Worth another extraction pass, and worth blocking
+    #                `grounded`: the judge genuinely has not checked that sentence.
+    #   retry=False  the sentence is CORRECTLY not adjudicable — it describes a curve's shape, or
+    #                states no figure. Nothing to check, nothing wrong, and re-extracting will only
+    #                produce the same non-claim. Routing these to `unresolved` made every article
+    #                carrying one ungrounded forever, no matter how sound its prose.
+    retry: bool = False
 
 
 # Vague halves of a year, as GENEROUS month spans. "mid-2023" is not a date, and the honest response
@@ -208,20 +217,40 @@ def _pad(s: str, end: bool) -> str:
     return s
 
 
-def _resolve_since(since: str | None) -> str | None:
+def _since_readings(since: str | None) -> list[str]:
+    """The plausible start dates a "since X" could mean — ALL of them.
+
+    "the heaviest since the GFC" is genuinely ambiguous: it can mean "heaviest at any point from the
+    crisis onward" (start 2007) or, far more commonly in market prose, "heaviest since the crisis
+    ENDED — nothing in the years between was worse" (start 2010). Resolving only to the episode's
+    START silently picked the less common reading and convicted a true caption: real_funding's
+    "the post-2022 climb back to the heaviest since the GFC" is right — the post-2022 peak of 4.22
+    (2023-10) IS the highest since 2010 — but 2008 printed 7.70, so the 2007 reading fails it.
+
+    Both readings are returned and the claim is convicted only if EVERY reading fails, which is the
+    same rule `direction` already uses for its vague windows. When the readings disagree the sentence
+    is ambiguous, not false, and that is the writer's business rather than the judge's.
+    """
     if not since:
-        return None
+        return []
     s = _strip_articles(since)
-    for name, (start, _end) in EPISODES.items():
+    for name, (start, end) in EPISODES.items():
         if name in s:
-            return start
+            # "since the GFC" most often means AFTER it; keep the from-its-onset reading too.
+            return [_shift_days(end, 1), start]
     if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
-        return s
+        return [s]
     if re.fullmatch(r"\d{4}-\d{2}", s):
-        return f"{s}-01"
+        return [f"{s}-01"]
     if (yr := re.search(r"(19|20)\d{2}", s)):
-        return f"{yr.group()}-01-01"
-    return None
+        return [f"{yr.group()}-01-01"]
+    return []
+
+
+def _resolve_since(since: str | None) -> str | None:
+    """The single best reading — kept for callers that need one date (e.g. scoping an episode)."""
+    r = _since_readings(since)
+    return r[0] if r else None
 
 
 def adjudicate(claim: Claim, series: list[tuple[date, float]]) -> Verdict:
@@ -229,27 +258,45 @@ def adjudicate(claim: Claim, series: list[tuple[date, float]]) -> Verdict:
     pts = [(d, v) for d, v in series if v is not None]
     if len(pts) < 2:
         return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=False,
-                       detail=f"cannot adjudicate: {claim.output} has {len(pts)} usable points", settled=False)
+                       detail=f"cannot adjudicate: {claim.output} has {len(pts)} usable points", settled=False, retry=True)
     latest_d, latest_v = pts[-1]
 
     if claim.kind == "superlative":
-        since = _resolve_since(claim.since)
-        if not since:
+        readings = _since_readings(claim.since)
+        if not readings:
             return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=False,
-                           detail=f"unresolvable window {claim.since!r} — a superlative needs a start", settled=False)
-        window = [(d, v) for d, v in pts if d.isoformat() >= since]
-        if not window:
-            return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=False,
-                           detail=f"no {claim.output} data since {since} — the claim cannot be shown", settled=False)
+                           detail=f"unresolvable window {claim.since!r} — a superlative needs a start", settled=False, retry=True)
         pick = max if claim.op == "max" else min
-        ext_d, ext_v = pick(window, key=lambda x: x[1])
-        ok = (ext_d == latest_d)
+        # Every plausible reading of "since X" is tried. Convict only if the claim fails under ALL of
+        # them — the same rule `direction` uses for a vague window, and for the same reason: resolving
+        # someone else's ambiguity and then calling them a liar for it is not adjudication.
+        tried: list[tuple[str, date, float]] = []
+        for since in readings:
+            window = [(d, v) for d, v in pts if d.isoformat() >= since]
+            if not window:
+                continue
+            ext_d, ext_v = pick(window, key=lambda x: x[1])
+            tried.append((since, ext_d, ext_v))
+            # Compare VALUES, not dates. On a tie max() returns the EARLIER date, so a series that
+            # has come back to exactly its post-crisis high would be convicted for a claim that is
+            # true. The window includes the latest point, so "today is the max" is simply "nothing
+            # in the window beats today".
+            if (latest_v >= ext_v - 1e-9) if claim.op == "max" else (latest_v <= ext_v + 1e-9):
+                return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=True,
+                               detail=(f"latest {claim.output}={latest_v:+.2f} ({latest_d}) IS the "
+                                       f"{claim.op} since {since}"
+                                       + (" (of the readings tried)" if len(readings) > 1 else "")))
+        if not tried:
+            return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=False,
+                           detail=f"no {claim.output} data since {readings[0]} — the claim cannot be shown",
+                           settled=False, retry=True)
+        shown = " · ".join(f"since {s}: {claim.op}={v:+.2f} ({d})" for s, d, v in tried)
+        _, ext_d, ext_v = tried[0]
         return Verdict(
-            quote=claim.quote, kind=claim.kind, output=claim.output, ok=ok,
-            detail=(f"latest {claim.output}={latest_v:+.2f} ({latest_d}); "
-                    f"{claim.op} since {since} is {ext_v:+.2f} ({ext_d})"
-                    + ("" if ok else f" — the extreme was {abs(ext_v / latest_v):.1f}x the latest, "
-                                     f"{ext_d.year - latest_d.year and abs(ext_d.year - latest_d.year)} year(s) earlier")))
+            quote=claim.quote, kind=claim.kind, output=claim.output, ok=False,
+            detail=(f"latest {claim.output}={latest_v:+.2f} ({latest_d}); {shown} — no reading supports "
+                    f"it; the extreme was {abs(ext_v / latest_v):.1f}x the latest, "
+                    f"{abs(ext_d.year - latest_d.year)} year(s) earlier"))
 
     if claim.kind == "percentile":
         # HARD RULE #2 — "the LLM never authors a number" — was being broken BY THE JUDGE.
@@ -274,7 +321,7 @@ def adjudicate(claim: Claim, series: list[tuple[date, float]]) -> Verdict:
         # wrong grounds. Two of those sentences WERE false; being right by accident is not a check.
         if claim.pct is None:
             return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=False,
-                           detail="percentile claim with no stated percentile — cannot settle it", settled=False)
+                           detail="percentile claim with no stated percentile — cannot settle it", settled=False, retry=True)
         recent = pts[-60:] if claim.scope == "recent" else pts
         actual = sum(1 for _, v in recent if v < latest_v) / len(recent) * 100
         which = f"last {len(recent)} obs" if claim.scope == "recent" else f"{pts[0][0]}→{pts[-1][0]}"
@@ -308,7 +355,7 @@ def adjudicate(claim: Claim, series: list[tuple[date, float]]) -> Verdict:
         lo, hi = _resolve_window(claim.at)
         if not lo:
             return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=False,
-                           detail=f"unresolvable period {claim.at!r} — cannot place the extreme", settled=False)
+                           detail=f"unresolvable period {claim.at!r} — cannot place the extreme", settled=False, retry=True)
         scope = pts
         if (since := _resolve_since(claim.since)):
             scope = [(d, v) for d, v in pts if d.isoformat() >= since] or pts
@@ -338,11 +385,11 @@ def adjudicate(claim: Claim, series: list[tuple[date, float]]) -> Verdict:
             lo, hi = _resolve_window(claim.during)
             if not lo:
                 return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=False,
-                               detail=f"unresolvable period {claim.during!r} — cannot scope the claim", settled=False)
+                               detail=f"unresolvable period {claim.during!r} — cannot scope the claim", settled=False, retry=True)
             win = [(d, v) for d, v in pts if lo <= d.isoformat() <= hi]
             if not win:
                 return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=False,
-                               detail=f"no {claim.output} data in {lo}..{hi} — the claim cannot be shown", settled=False)
+                               detail=f"no {claim.output} data in {lo}..{hi} — the claim cannot be shown", settled=False, retry=True)
             ext_d, ext_v = (min if want_neg else max)(win, key=lambda x: x[1])
             ok = (ext_v < 0) if want_neg else (ext_v > 0)
             return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=ok,
@@ -367,7 +414,7 @@ def adjudicate(claim: Claim, series: list[tuple[date, float]]) -> Verdict:
             reads.append((m, latest_v - prior[-1][1]))
     if not reads:
         return Verdict(quote=claim.quote, kind=claim.kind, output=claim.output, ok=False,
-                       detail=f"no {claim.output} history before {latest_d} to compare against", settled=False)
+                       detail=f"no {claim.output} history before {latest_d} to compare against", settled=False, retry=True)
     agree = [(m, d) for m, d in reads if ((d > 0) if claim.expect == "up" else (d < 0))]
     shown = " · ".join(f"{m}m {d:+.2f}" for m, d in reads)
     if len(agree) == len(reads):

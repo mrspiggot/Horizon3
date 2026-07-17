@@ -105,7 +105,12 @@ RULES
   downstream. Known: {episodes}.
 - Ignore claims about things that are not model outputs (the Fed's intentions, what a chart shows,
   general economics). Ignore pure statements of a current value — those are checked elsewhere.
-- Be exhaustive on the three kinds and silent on everything else.
+- A DEFINITION IS NOT A CLAIM. Text that explains what a chart ENCODES or what a threshold MEANS
+  asserts nothing about today: "the yield-curve slope the model reads; inversion (below 0) is the
+  signal" is a legend — it says what below-zero would mean, not that the series is below zero now.
+  Same for "restrictive above zero", "positive readings indicate tightening", "(>0 = expansion)".
+  Emitting these as regime claims convicts a caption for correctly labelling its own axis.
+- Be exhaustive on the five kinds and silent on everything else.
 
 OFFERED OUTPUTS (the only ones that exist):
 {outputs}
@@ -157,7 +162,10 @@ def adjudicate_node(state: JudgeState) -> dict:
         verdicts.append(v)
         # The judge failing to settle a claim is the JUDGE's problem. Route it back for a cleaner
         # extraction; never hand it to the writer as evidence its sentence is wrong.
-        if not v.settled:
+        # Only `retry` cases go back: a sentence that is CORRECTLY not adjudicable (it describes a
+        # curve's shape, or states no figure) is not an open question, and treating it as one made
+        # every article carrying one ungrounded no matter how sound its prose.
+        if not v.settled and v.retry:
             unresolved.append(f"{c.output}: {v.detail}")
     return {"verdicts": verdicts, "unresolved": unresolved,
             "feedback": "; ".join(unresolved[:4]) if unresolved else ""}
