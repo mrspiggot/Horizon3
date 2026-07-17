@@ -26,10 +26,12 @@ import yaml
 from pydantic import BaseModel, Field, model_validator
 
 from .article import FAMILY, _fill_template
+from .factsheet import sheets_for_run
 from .illustration import vangogh
 from .infographic.agentic import _citable, _tokenize
 from .infographic.families import decision_brief
 from .infographic.from_persona import chart_png, chart_png_family, decisive, persona_material
+from .model_store import record_run
 from .infographic.gate import _LEAK
 from .studio.from_model import _refs
 from .studio.llm import get_llm
@@ -155,16 +157,39 @@ def _is_snapshot(c: dict) -> bool:
     return dc.get("kind") in {"named_values", "bar"} or c.get("chart_type") in {"bar", "named_values"}
 
 
-def build_brief(mat: dict, *, limit: int = 24) -> dict:
+def build_brief(mat: dict, *, conn=None, limit: int = 24) -> dict:
     """Everything the planner/writer sees: the token menu, and per model its name, grounding, method,
-    outputs, chart insights, and live regime call. Plus a chart index for id resolution."""
+    outputs, chart insights, live regime call, and — when `conn` is given — the §10 FACT SHEET of every
+    output series it is asked to narrate. Plus a chart index for id resolution.
+
+    The fact sheet is the difference between narrating FROM the model and narrating ABOUT it. Without
+    it the Narrator knows two strings per chart — a title and a catalog `insight` written months ago —
+    so it recites the textbook's story rather than this run's. That is why "r* drifted down through the
+    2010s" and "the most restrictive setting since the financial crisis" shipped: not carelessness, but
+    the only thing possible for a writer that has never seen the series.
+
+    Recording the runs here is deliberate. The Narrator and the Judge must read the SAME source, or the
+    check is against a different set of numbers than the prose was written from. `runs` is returned so
+    the Judge can adjudicate against exactly these rows.
+    """
     toks, menu = _citable(mat, limit=limit)
-    models, chart_index = [], {}
+    models, chart_index, runs = [], {}, {}
     for mid in mat["p"].get("models", []):
         run = mat["runs"].get(mid) or {}
         meta = run.get("meta") or {}
         if not meta:
             continue
+        sheet = ""
+        if conn is not None:
+            # A fact sheet is evidence; failing to produce one must be visible, never a silent
+            # downgrade to the priors-reciting Narrator we are trying to retire.
+            try:
+                rid = record_run(conn, run, instance=run.get("instance"))
+                if rid:
+                    runs[mid] = rid
+                    sheet = sheets_for_run(conn, rid, meta.get("outputs") or [])
+            except Exception as exc:
+                print(f"FACT SHEET UNAVAILABLE — {mid}: {type(exc).__name__}: {exc}", file=sys.stderr)
         sp = meta.get("spec") or {}
         equations = sp.get("equations", "") if isinstance(sp, dict) else ""
         raw = run.get("charts") or []
@@ -190,6 +215,7 @@ def build_brief(mat: dict, *, limit: int = 24) -> dict:
             "method": meta.get("method_note", "") or equations,
             "outputs": outs, "charts": charts,
             "regime": _active_says(meta, run.get("latest")),
+            "sheet": sheet,
         })
     # The data boundary: the earliest observation any of this persona's models actually holds. The writer
     # must NOT name a market episode before this (the data cannot show it) — the firewall for HISTORY.
@@ -199,7 +225,7 @@ def build_brief(mat: dict, *, limit: int = 24) -> dict:
     data_start = min(starts) if starts else ""
     return {"mat": mat, "toks": toks, "menu": menu, "models": models,
             "chart_index": chart_index, "papers": mat.get("papers", []),
-            "as_of": mat.get("as_of", ""), "data_start": data_start}
+            "as_of": mat.get("as_of", ""), "data_start": data_start, "runs": runs}
 
 
 def _brief_text(brief: dict) -> str:
@@ -221,6 +247,13 @@ def _brief_text(brief: dict) -> str:
             lines.append(f"   method: {m['method']}")
         if m["outputs"]:
             lines.append(f"   outputs: {m['outputs']}")
+        if m.get("sheet"):
+            lines.append("   ► WHAT THIS MODEL ACTUALLY PRODUCED IN THIS RUN — read it before you write a "
+                         "word about shape. Any claim about a HIGH/LOW ('the most X since Y'), a SIGN "
+                         "('below zero', 'inverted') or a MOVE ('has risen', 'more recently up') must "
+                         "match these numbers. They are executed, they are this run's, and they OVERRIDE "
+                         "anything you remember about how this series is supposed to behave:")
+            lines.append(m["sheet"])
         for cid, ins in m["charts"]:
             lines.append(f"   chart «{cid}» — {ins}")
         for s in m["regime"]:
@@ -658,7 +691,7 @@ def build_article_full(persona_id: str, conn, out_dir, *, backend: str = "auto",
     out_dir.mkdir(parents=True, exist_ok=True)
     mat = persona_material(persona_id, conn)
     p = mat["p"]
-    brief = build_brief(mat)
+    brief = build_brief(mat, conn=conn)
     outline = plan_arc(brief)
 
     def _place_charts(secs: list[SectionDraft]) -> None:
