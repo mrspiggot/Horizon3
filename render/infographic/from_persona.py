@@ -21,6 +21,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import yaml                      # noqa: E402
 
 from .. import from_graph, graph_corpus  # noqa: E402
+from ..selector.graph import select_models  # noqa: E402
 from ..studio.families import decomposition as _dc  # noqa: E402
 from ..studio.families import relationship as _rel  # noqa: E402
 from ..studio.families import surface as _surf      # noqa: E402
@@ -201,19 +202,41 @@ def reader_takeaway(summary: str) -> str:
 _MATERIAL_CACHE: dict[str, dict] = {}
 
 
-def persona_material(persona_id: str, conn, *, use_cache: bool = True) -> dict:
+def persona_material(persona_id: str, conn, *, use_cache: bool = True, select: bool = True) -> dict:
     """Executed material for a persona. Process-level memoised by persona_id (the data is fixed for a
     run) so multi-family harnesses don't re-execute every model four times; pass use_cache=False to
-    force a fresh execution."""
+    force a fresh execution.
+
+    `select` runs §06 role 2: the models come from a query over the PROVEN executable spine rather
+    than from the hand-typed list in personas.yaml. That list stays as the floor — if selection
+    produces nothing usable it is used, loudly. Pass select=False to pin the hardcoded set (harnesses
+    that compare renderings need the models held still).
+    """
     if use_cache and persona_id in _MATERIAL_CACHE:
         return _MATERIAL_CACHE[persona_id]
     p = yaml.safe_load((GRAPH_DIR / "personas.yaml").read_text())["personas"][persona_id]
+    model_ids, why = list(p["models"]), {}
+    if select:
+        try:
+            sel = select_models(persona_id, p.get("decision", ""), list(p["models"]))
+            model_ids, why = sel["selected"], sel.get("reasons", {})
+            added = [m for m in model_ids if m not in p["models"]]
+            dropped = [m for m in p["models"] if m not in model_ids]
+            print(f"ROLE 2 — {persona_id}: {len(model_ids)} models"
+                  + (f" | +{', '.join(added)}" if added else "")
+                  + (f" | -{', '.join(dropped)}" if dropped else " | (the hardcoded set)"))
+        except Exception as exc:
+            # Selection is an improvement, not a dependency. If the spine is unseeded or Neo4j is
+            # down, the article must still be written from the hand-authored list — but never
+            # silently, or a degraded run looks exactly like a healthy one.
+            print(f"ROLE 2 UNAVAILABLE — {persona_id}: {type(exc).__name__}: {str(exc)[:80]}; "
+                  f"using the hardcoded models", file=sys.stderr)
     runs: dict[str, dict] = {}
     numbers: dict[str, NumberObject] = {}
     meanings: dict[str, str] = {}
     model_names: list[str] = []
     papers, sources = set(), set()
-    for mid in p["models"]:
+    for mid in model_ids:
         run = graph_corpus.run_model(mid, conn)
         runs[mid] = run
         latest = run["latest"]
@@ -245,13 +268,33 @@ def persona_material(persona_id: str, conn, *, use_cache: bool = True) -> dict:
                     source=key, source_computation="input level", as_of=as_of)
         papers.update(meta.get("grounded_in") or [])
         sources.update(i["db_source"] for i in (meta.get("inputs") or []) if i.get("db_source"))
+    # THE CITABLE MENU. `salient` is what `_citable` turns into the {n} tokens — the ONLY numbers the
+    # writer is allowed to put in front of a reader.
+    #
+    # It used to be exactly the placeholders in `summary_template`: a hand-typed YAML string whose job
+    # is to render a one-line summary. It was never meant to gate the article's evidence, and it did.
+    # On 2026-07-17 every article's figure count equalled its persona's placeholder count — 9/9 for
+    # the central banker, 8/8 for the vol trader, 4 for the commodity analyst, which is why that piece
+    # cited 3 figures in 1,743 words and every reviewer called it thin. Role 2 then handed the
+    # commodity analyst 6 models and 26 more executed numbers, and the menu stayed at 3: the models
+    # ran, produced their outputs, and the writer was forbidden to mention them.
+    #
+    # The template's picks LEAD, because they encode a human's judgement about which number matters
+    # most for this decision, and that judgement is worth keeping. Everything else the selected models
+    # actually produced follows, and `_citable`'s limit caps the whole thing. A hand-typed list may
+    # order the evidence; it may not be the evidence.
     salient: list[str] = []
     for m in _PLACE.finditer(p.get("summary_template", "")):
         k = f"{m.group(1)}.{m.group(2)}"
         if k in numbers and k not in salient:
             salient.append(k)
+    salient += [k for k in numbers if k not in salient]
     source_labels = sorted({_SOURCE_LABEL.get(s, s) for s in sources})
-    mat = {"id": persona_id, "p": p, "runs": runs, "numbers": numbers, "meanings": meanings,
+    # `p["models"]` must be the models we ACTUALLY RAN, not the YAML's list — everything downstream
+    # (build_brief, the exhibit contract, the data-window firewall) iterates it, so leaving the
+    # hardcoded list here would compute a selection and then quietly ignore it.
+    mat = {"id": persona_id, "p": {**p, "models": model_ids}, "runs": runs, "numbers": numbers,
+           "meanings": meanings, "selection_why": why,
            "salient": salient, "papers": sorted(papers), "sources": sorted(sources),
            "source_labels": source_labels, "model_names": model_names,
            "as_of": max((n.as_of for n in numbers.values()), default="")}
