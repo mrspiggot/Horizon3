@@ -26,20 +26,22 @@ interpretations:
   - id: recession
     when: "gdp_growth_pct < 0 and unemployment_change_pp > 0.5"
     says: >
-      Output is contracting and unemployment is rising together — the bottom-right of Okun's scatter,
-      a recession. The tight negative relationship is why a growth forecast IS an unemployment forecast.
+      Output is contracting and unemployment is rising together — the top-left of Okun's scatter
+      (negative growth on the x-axis, rising unemployment on the y-axis), a recession. The tight
+      negative relationship is why a growth forecast IS an unemployment forecast.
   - id: hot
     when: "gdp_growth_pct > 3 and unemployment_change_pp < 0"
     says: >
-      Above-trend growth is pulling unemployment down — the top-left of the cloud. Okun's coefficient
-      lets you translate the growth surprise directly into how much slack is being absorbed.
+      Above-trend growth is pulling unemployment down — the bottom-right of the cloud (high growth,
+      falling unemployment). Okun's coefficient lets you translate the growth surprise directly into
+      how much slack is being absorbed.
 charts:
   - id: "Okun's Law (GDP growth vs change in unemployment)"
     role: outcome
     chart_type: scatter
     color_job: sequential
     interpretation: recession
-    insight: "the canonical downward slope — faster growth means falling unemployment; the fitted slope IS Okun's coefficient (~ -0.4). Points shade 1962→2026; the recession clusters sit bottom-right (2008, 2020)"
+    insight: "the canonical downward slope — faster growth means falling unemployment; the fitted slope IS Okun's coefficient (~ -0.4). Points shade 1962→2026; the recession clusters sit top-left — negative growth, rising unemployment (2008, 2020)"
     data_contract:
       kind: scatter
       xlabel: "real GDP growth, YoY (%)"

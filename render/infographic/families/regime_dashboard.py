@@ -19,8 +19,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from ..from_persona import (clean_meaning, first_sentence, humanise, persona_material,
-                            reader_takeaway)
+from ..from_persona import (clean_meaning, dashboard_read, dashboard_thesis, dashboard_tile_keys,
+                            humanise, persona_material)
 from ..gate import emit
 from ..schema import Block, InfographicSpec, Layout
 
@@ -57,12 +57,12 @@ def _series(conn, sid):
     return s.resample("MS").last()
 
 
-def macro_regime_png(conn) -> str | None:
-    """Render the §10 macro-regime quadrant (8 macro variables as states) → base64 PNG, or None."""
-    sys.path.insert(0, str(Path.home() / "PycharmProjects" / "unified_market_data" / "src"))
+def _macro_backdrop_points(conn) -> list:
+    """The shared 8-variable macro backdrop as §10 states — the fallback when a persona's own inputs
+    can't fill the quadrant."""
     import numpy as np
     from unified_market_data.analysis.state import state_tuple
-    from ...studio.families.state_space import StatePoint, StateSpaceSpec, render_state_space
+    from ...studio.families.state_space import StatePoint
 
     dgs10, dgs2 = _series(conn, "DGS10"), _series(conn, "DGS2")
     points = []
@@ -78,15 +78,72 @@ def macro_regime_png(conn) -> str | None:
         reading = f"{st.level:.1f}{unit} · {st.zscore:+.1f}σ · mom {momz:+.1f}σ/3m"
         points.append(StatePoint(label=label, x=st.zscore, y=momz,
                                  accel=(st.acceleration or 0.0), reading=reading))
+    return points
+
+
+def _persona_state_points(mat: dict) -> list:
+    """The persona's OWN model inputs as §10 states — reconstruct each input's level series from the
+    run history and read it with the same `state_tuple` math the macro backdrop uses. So the quadrant
+    shows the variables the body narrates, not a recycled macro panel, and cannot contradict it."""
+    import numpy as np
+    from unified_market_data.analysis.state import state_tuple
+    from ...studio.families.state_space import StatePoint
+
+    points, seen = [], set()
+    for mid in mat["p"].get("models", []):
+        run = mat["runs"].get(mid, {})
+        hist, latest = run.get("history") or [], run.get("latest")
+        if latest is None or len(hist) < 40:
+            continue
+        for iid in getattr(latest, "inputs", {}) or {}:
+            if iid in seen:
+                continue
+            series = []
+            for rec in hist:
+                obj = (getattr(rec, "inputs", {}) or {}).get(iid)
+                lvl = getattr(obj, "level", obj)
+                if isinstance(lvl, (int, float)):
+                    series.append(float(lvl))
+            if len(series) < 40:
+                continue
+            try:
+                st = state_tuple(series, step=3, context_window=120)
+                std = float(np.std(series[-120:], ddof=1)) or 1.0
+                momz = st.direction / std
+            except Exception:
+                continue
+            seen.add(iid)
+            reading = f"{st.level:.2f} · {st.zscore:+.1f}σ · mom {momz:+.1f}σ/3m"
+            points.append(StatePoint(label=_badge_label(iid), x=st.zscore, y=momz,
+                                     accel=(st.acceleration or 0.0), reading=reading))
+    return points
+
+
+def macro_regime_png(conn, mat: dict | None = None) -> str | None:
+    """Render the §10 regime quadrant → base64 PNG. Plots the PERSONA's own model inputs when they
+    fill the quadrant (≥3 readable states); otherwise the shared 8-variable macro backdrop."""
+    sys.path.insert(0, str(Path.home() / "PycharmProjects" / "unified_market_data" / "src"))
+    from ...studio.families.state_space import StateSpaceSpec, render_state_space
+
+    points, own = [], False
+    if mat is not None:
+        points = _persona_state_points(mat)
+        own = len(points) >= 3
+    if not own:
+        points = _macro_backdrop_points(conn)
     if len(points) < 3:
         return None
+    subtitle = ("Each of this decision's own model inputs read as a §10 STATE, not a level: how "
+                "extreme it is versus its own history (x) against its 3-month momentum (y).") if own else \
+               ("Eight variables read as §10 STATES, not levels: each plotted by how extreme it is "
+                "versus its own 10-year history (x) against its 3-month momentum (y).")
     spec = StateSpaceSpec(
-        title="Where every macro input sits in its own cycle",
-        subtitle=("Eight variables read as §10 STATES, not levels: each plotted by how extreme it is "
-                  "versus its own 10-year history (x) against its 3-month momentum (y)."),
-        xlabel="level vs own 10-year history  (z-score, σ)",
+        title=("Where this decision's inputs sit in their own cycle" if own else
+               "Where every macro input sits in its own cycle"),
+        subtitle=subtitle,
+        xlabel="level vs own history  (z-score, σ)",
         ylabel="momentum: 3-month change  (σ)",
-        source="Source: FRED, NY Fed ACM.  State via §10 state_tuple (step=3m, 10-year window).",
+        source="Source: FRED, NY Fed ACM.  State via §10 state_tuple (step=3m).",
         footer="Every value is executed on data — nothing on this chart is authored.")
     out = os.path.join(tempfile.gettempdir(), "ais_regime.png")
     try:
@@ -130,9 +187,64 @@ def _state_words(st) -> tuple[str, str]:
     return lvl, mom
 
 
-def _badges(mat: dict, limit: int = 5) -> list[Block]:
-    """One §10 state badge per key input, deduped across the persona's models."""
-    out, seen = [], set()
+# A badge reads the raw input STATE (z-score over the model's window); the body reads the model's
+# INTERPRETATION, often against a recent range. They can clash — "CPI: elevated, rising" beside a body
+# that says inflation is low and its momentum has bled out. We suppress a badge ONLY when the body
+# clearly says the opposite for the same concept (the opposite cue present, the confirming cue absent),
+# never on ambiguity: a factual badge is not convicted on a fuzzy read, and the floor still holds.
+_FALLING = re.compile(r"\b(fall\w*|fell|declin\w*|deceler\w*|eas(?:e|ed|ing)|cool\w*|bled out|"
+                      r"drop\w*|lower|receded|soften\w*|softer|slow\w*|subsid\w*)\b", re.I)
+_RISING = re.compile(r"\b(ris\w*|rose|acceler\w*|climb\w*|higher|hotter|surg\w*|jump\w*|firm\w*)\b", re.I)
+_LOWWORD = re.compile(r"\b(low|lowest|bottom|subdued|depressed|below|weak\w*|muted)\b", re.I)
+_HIGHWORD = re.compile(r"\b(high|highest|elevated|above|strong\w*|hot)\b", re.I)
+
+# the body and the badge often use different words for one concept (a "CPI" badge vs an "inflation"
+# body). Expand a label to its synonym group so the concept's sentences are actually found.
+_SYN = [
+    {"cpi", "inflation", "pce", "price", "prices", "disinflation", "inflationary"},
+    {"unemployment", "jobless", "payroll", "payrolls", "labour", "labor", "employment"},
+    {"vacancy", "vacancies", "openings", "tightness"},
+    {"growth", "gdp", "output", "activity"},
+    {"policy", "funds", "rate", "rates"},
+    {"spread", "slope", "curve", "premium"},
+    {"vol", "volatility", "vix"},
+    {"gap", "slack"},
+]
+
+
+def _concept_words(label: str) -> set[str]:
+    ws = set(re.findall(r"[a-z]{3,}", label.lower())) - {"rate", "index", "gauge", "the"}
+    for grp in _SYN:
+        if ws & grp:
+            ws = ws | grp
+    return ws
+
+
+def _badge_contradicts_body(label: str, lvl: str, mom: str, body: str) -> bool:
+    concept = _concept_words(label)
+    if not concept or not body:
+        return False
+    sents = [s for s in re.split(r"(?<=[.!?])\s+", body) if any(w in s.lower() for w in concept)]
+    if not sents:
+        return False
+    t = " ".join(sents)
+    if mom == "rising" and _FALLING.search(t) and not _RISING.search(t):
+        return True
+    if mom == "falling" and _RISING.search(t) and not _FALLING.search(t):
+        return True
+    if lvl == "elevated" and _LOWWORD.search(t) and not _HIGHWORD.search(t):
+        return True
+    if lvl == "depressed" and _HIGHWORD.search(t) and not _LOWWORD.search(t):
+        return True
+    return False
+
+
+def _badges(mat: dict, limit: int = 5, *, article: dict | None = None, floor: int = 3) -> list[Block]:
+    """One §10 state badge per key input, deduped across the persona's models. A badge that clearly
+    contradicts the finished body is suppressed (down to the floor), so the dashboard cannot say the
+    opposite of the article beside it."""
+    body = (article or {}).get("full_text") or ""
+    cands, seen = [], set()
     for mid in mat["p"].get("models", []):
         latest = mat["runs"].get(mid, {}).get("latest")
         if latest is None:
@@ -144,45 +256,51 @@ def _badges(mat: dict, limit: int = 5) -> list[Block]:
             if not lvl and not mom:
                 continue
             seen.add(iid)
-            words = ", ".join(w for w in (lvl, mom) if w)
-            out.append(Block(id=f"badge_{iid}", type="state_badge",
-                             title=f"{_badge_label(iid)}: {words}",
-                             tone=("dn" if mom == "rising" else "up" if mom == "falling" else "")))
-            if len(out) >= limit:
-                return out
+            label = _badge_label(iid)
+            cands.append({"iid": iid, "label": label, "lvl": lvl, "mom": mom,
+                          "contra": _badge_contradicts_body(label, lvl, mom, body)})
+    clean = [c for c in cands if not c["contra"]]
+    kept = clean + [c for c in cands if c["contra"]][: max(0, floor - len(clean))]
+    for c in cands:
+        if c["contra"] and c not in kept:
+            print(f"BADGE suppressed (contradicts body) — {c['label']}: "
+                  f"{', '.join(w for w in (c['lvl'], c['mom']) if w)}", file=sys.stderr)
+    out = []
+    for c in kept[:limit]:
+        words = ", ".join(w for w in (c["lvl"], c["mom"]) if w)
+        out.append(Block(id=f"badge_{c['iid']}", type="state_badge", title=f"{c['label']}: {words}",
+                         tone=("dn" if c["mom"] == "rising" else "up" if c["mom"] == "falling" else "")))
     return out
 
 
-def spec_from_persona(persona_id: str, conn) -> tuple[InfographicSpec, set[str]]:
+def spec_from_persona(persona_id: str, conn, *, article: dict | None = None) -> tuple[InfographicSpec, set[str]]:
     if persona_id not in _MACRO:
         raise ValueError(f"{persona_id}: not a macro/regime persona — no regime_dashboard")
     mat = persona_material(persona_id, conn)
-    p, numbers, salient, meanings = mat["p"], mat["numbers"], mat["salient"], mat["meanings"]
+    p, numbers, meanings = mat["p"], mat["numbers"], mat["meanings"]
 
-    dimensioned = [k for k in salient
-                   if any(c in "%$×σ°" or c.isalpha() for c in numbers[k].rendered())]
+    tile_keys = dashboard_tile_keys(mat, article, n=4)
     tiles = [Block(id=f"kpi{i}", type="kpi_tile",
                    title=clean_meaning(meanings.get(k, ""), humanise(k.split(".", 1)[1])),
                    numbers=[numbers[k]], tone=_TONES[i % len(_TONES)])
-             for i, k in enumerate(dimensioned[:4])]
+             for i, k in enumerate(tile_keys)]
     if len(tiles) < 3:
         raise ValueError(f"{persona_id}: <3 dimensioned salient numbers for the KPI row")
 
-    badges = _badges(mat)
+    badges = _badges(mat, article=article)
     if len(badges) < 3:
         raise ValueError(f"{persona_id}: <3 state badges — inputs carry no readable §10 state")
 
-    png = macro_regime_png(conn)
+    png = macro_regime_png(conn, mat)
     if not png:
         raise ValueError(f"{persona_id}: macro regime quadrant did not render")
     hero = Block(id="regime", type="chart_embed",
-                 title="Every macro input as a §10 state — extremity (x) against momentum (y).",
+                 title="Every input as a §10 state — extremity (x) against momentum (y).",
                  chart_png=png)
 
-    thesis = Block(id="thesis", type="thesis_callout",
-                   text=first_sentence(p.get("summary_template", "")))
+    thesis = Block(id="thesis", type="thesis_callout", text=dashboard_thesis(mat, article))
     blocks = [thesis, *tiles, *badges, hero]
-    take = reader_takeaway(p.get("summary_template", ""))
+    take = dashboard_read(mat, article)
     if take:
         blocks.append(Block(id="note", type="note", title="The read", text=take))
     src_line = f"Source: {', '.join(mat['source_labels']) or 'UMD'}."
@@ -198,6 +316,6 @@ def spec_from_persona(persona_id: str, conn) -> tuple[InfographicSpec, set[str]]
     return spec, set(numbers.keys())
 
 
-def render_persona(persona_id: str, conn, out_png: str) -> str:
-    spec, valid = spec_from_persona(persona_id, conn)
+def render_persona(persona_id: str, conn, out_png: str, **kw) -> str:
+    spec, valid = spec_from_persona(persona_id, conn, **kw)
     return emit(spec, out_png, valid_sources=valid)

@@ -14,8 +14,8 @@ from __future__ import annotations
 import re
 from collections import Counter
 
-from ..from_persona import (chart_png_family, decisive, first_sentence, humanise,
-                            persona_material, reader_takeaway)
+from ..from_persona import (chart_png_family, dashboard_read, dashboard_thesis, decisive, humanise,
+                            persona_material)
 from ..gate import emit
 from ..schema import Block, InfographicSpec, Layout
 
@@ -46,7 +46,8 @@ def _cross_section(mat: dict) -> tuple[str, str] | None:
     return None
 
 
-def spec_from_persona(persona_id: str, conn, *, min_rungs: int = 3) -> tuple[InfographicSpec, set[str]]:
+def spec_from_persona(persona_id: str, conn, *, min_rungs: int = 3,
+                      article: dict | None = None) -> tuple[InfographicSpec, set[str]]:
     mat = persona_material(persona_id, conn)
     p, numbers, meanings = mat["p"], mat["numbers"], mat["meanings"]
     xs = _cross_section(mat)
@@ -78,10 +79,9 @@ def spec_from_persona(persona_id: str, conn, *, min_rungs: int = 3) -> tuple[Inf
     chart = Block(id="ch0", type="chart_embed",
                   title=(cap[:128] + "…") if len(cap) > 128 else cap, chart_png=png)
 
-    thesis = Block(id="thesis", type="thesis_callout",
-                   text=first_sentence(p.get("summary_template", "")))
+    thesis = Block(id="thesis", type="thesis_callout", text=dashboard_thesis(mat, article))
     blocks = [thesis, ladder, chart]
-    take = reader_takeaway(p.get("summary_template", ""))
+    take = dashboard_read(mat, article)
     if take:
         blocks.append(Block(id="note", type="note", title="The read", text=take))
     src_line = f"Source: {', '.join(mat['source_labels']) or 'UMD'}."

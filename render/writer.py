@@ -17,6 +17,7 @@ from __future__ import annotations
 import base64
 import collections
 import difflib
+import os
 import re
 import sys
 from functools import lru_cache
@@ -30,7 +31,8 @@ from .factsheet import sheets_for_run
 from .illustration import vangogh
 from .infographic.agentic import _citable, _tokenize
 from .infographic.families import decision_brief
-from .infographic.from_persona import chart_png, chart_png_family, decisive, persona_material
+from . import graph_corpus
+from .infographic.from_persona import GRAPH_DIR, chart_png, chart_png_family, decisive
 from .judge.graph import judge_article
 from .model_store import record_run
 from .infographic.gate import _LEAK
@@ -90,6 +92,18 @@ class SectionDraft(BaseModel):
     heading: str
     prose: str = Field(description="the section body, flowing paragraphs; cite figures ONLY as {n} tokens")
     chart_ids: list[str] = Field(default_factory=list)
+
+
+class SectionBinding(BaseModel):
+    """A drafted section paired with the charts that belong to it — by identity, never by position.
+    `model_id` is the planner's semantic anchor for the section; `origin` records how each chart got
+    here (planned by the section editor / added by the exhibit contract to reach the floor / pulled in
+    because the prose names it), for the human read and the completeness log."""
+    heading: str
+    model_id: str = ""
+    prose: str = ""
+    chart_ids: list[str] = Field(default_factory=list)
+    origin: dict[str, str] = Field(default_factory=dict)   # chart_id -> planned | floor | prose
 
 
 class Article(BaseModel):
@@ -289,7 +303,9 @@ _VOICE = (
     "threshold, a target, a rule of thumb — SPELL IT OUT IN WORDS and never in digits: 'more than a "
     "hundred basis points below its own rule', 'an r* of around one percent', 'the two percent "
     "target', 'peaks near twenty'. This is allowed, it is good FT/Economist style, and it is how you "
-    "say 'roughly' without pretending to a precision you do not have.\n"
+    "say 'roughly' without pretending to a precision you do not have. The spelled-out words REPLACE "
+    "the figure — NEVER place them next to the token or numeral for the same number (never 'above "
+    "five percent {n}', never 'around one percent 1.06%').\n"
     "      – NEVER spell out a PRECISE value to dodge a token. 'two point three nine percent' is a "
     "measured figure in disguise and is the one thing you must not write. If you know the exact "
     "number, it has a token — use the token.\n"
@@ -375,6 +391,36 @@ def _worded_precision(text: str) -> str | None:
     return m.group() if m else None
 
 
+# ── "one figure, once" (number-rendering guard) ──────────────────────────────────────────────────
+# A figure must appear ONCE. Two ways it doubled in v3, both invisible to the claim-checker because
+# they are typography, not claims: (a) a token cited twice — "reads +0.18pp +0.18pp"; (b) a spelled-out
+# round approximation run into its own numeral token — "above five percent 5.31%", "about one percent
+# 1.06%". (b) is SELF-INFLICTED: the leak-feedback tells the writer to spell out round thresholds to
+# clear the digit firewall, and the token for that same figure then expands right beside the words.
+_QUAL = (r"about|around|above|below|just|only|nearly|roughly|over|under|almost|barely|some|"
+         r"north of|south of|more than|less than|at least|at most")
+_ADJ_DUP = re.compile(r"([+\-−]?\d[\d,]*(?:\.\d+)?\s?(?:%|pp|bp|bps|×|σ))\s+\1(?!\w)")
+_WORDED_ROUND_PCT = re.compile(
+    rf"\b((?:(?:{_QUAL})\s+)*)(?:a\s+)?(?:{_ONES})(?:[\s-]+(?:{_ONES}))*\s+per\s?cent\s+"
+    rf"([+\-]?\d[\d,]*(?:\.\d+)?\s?%)", re.I)
+_WORDED_ROUND_BP = re.compile(
+    rf"\b((?:(?:{_QUAL})\s+)*)(?:a\s+)?(?:{_ONES})(?:[\s-]+(?:{_ONES}))*\s+basis\s+points?\s+"
+    rf"([+\-]?\d[\d,]*(?:\.\d+)?\s?(?:bp|bps))", re.I)
+
+
+def _one_figure_once(t: str, toks: dict) -> str:
+    """Collapse a figure that renders twice — an adjacent duplicate of the same value, or a worded
+    round number sitting immediately before its own numeral (keep the qualifier + the numeral)."""
+    for no in toks.values():                                   # exact adjacent dup (incl. word units)
+        v = _render_for_prose(no)
+        if v:
+            t = re.sub(rf"({re.escape(v)})\s+{re.escape(v)}(?!\w)", r"\1", t)
+    t = _ADJ_DUP.sub(r"\1", t)                                 # any adjacent identical figure
+    t = _WORDED_ROUND_PCT.sub(lambda m: (m.group(1) or "") + m.group(2), t)
+    t = _WORDED_ROUND_BP.sub(lambda m: (m.group(1) or "") + m.group(2), t)
+    return t
+
+
 def _render_for_prose(no) -> str:
     """A NumberObject's value for running prose: like rendered(), but a multi-word unit ('vol pts') gets
     a space off the number ('4.55 vol pts', not '4.55vol pts'); tight units (%, pp, bp, σ) stay glued."""
@@ -411,6 +457,7 @@ def _finalize_text(text: str, toks: dict) -> tuple[str, str | None]:
         if u and " " in u:                                  # word unit like "vol pts"
             head = re.escape(u.split()[0])                  # "vol"
             t = re.sub(rf"({re.escape(u)})\s+{head}\s+\w+", r"\1", t, flags=re.I)
+    t = _one_figure_once(t, toks)                           # a figure must appear once, not twice
     return t, (leak.group() if leak else None)
 
 
@@ -584,6 +631,39 @@ def _chart_key(cid: str, ci: dict) -> tuple:
     return (e.get("model_id"), e.get("refs"))
 
 
+def _dedup_by_concept(cids: list[str], ci: dict) -> list[str]:
+    """Collapse a model's subset/superset chart chain to its RICHEST member — the double-EBP that
+    `_chart_key` misses because the two exhibits differ in FORM. `credit_excess_bond_premium` authors a
+    GZ decomposition AND a standalone excess-bond-premium series whose one referenced field is a subset
+    of the decomposition's; the decomposition already shows it, so the standalone is redundant. Only
+    within a model (cross-model same-series views can be legitimately different)."""
+    out: list[str] = []
+    for cid in cids:
+        e = ci.get(cid) or {}
+        refs, mid = e.get("refs") or frozenset(), e.get("model_id")
+        if not refs:
+            out.append(cid)
+            continue
+        kept, redundant = [], False
+        for kc in out:
+            ke = ci.get(kc) or {}
+            if ke.get("model_id") != mid:
+                kept.append(kc)
+                continue
+            kr = ke.get("refs") or frozenset()
+            if refs <= kr:                     # subsumed by an already-kept richer chart → drop this one
+                redundant = True
+                kept.append(kc)
+            elif kr < refs:                    # this chart is richer → drop the kept subset
+                continue
+            else:
+                kept.append(kc)
+        out = kept
+        if not redundant:
+            out.append(cid)
+    return out
+
+
 def _greedy_diverse(chosen: list[str], pool: list[str], ci: dict, target: int) -> list[str]:
     """Take from `pool` until `chosen` reaches `target`, each step preferring the LEAST-used model,
     then the least-used role, then the earliest candidate.
@@ -667,16 +747,44 @@ def _resolve_chart_id(cid: str, chart_index: dict) -> str | None:
     return m[0] if m else None
 
 
+def _studio_chart(brief: dict, cid: str, info: dict, run: dict, out_dir: Path) -> str | None:
+    """Design ONE article chart through the agentic Chart Studio — the SoTA multimodal critique loop
+    (framer → proposer → vision critique → reviser → judge). Opt-in via ARTICLE_CHART_STUDIO=1; returns
+    a base64 PNG, or None to fall back to the deterministic family renderer. The defect fix (A–D) does
+    not depend on this — it is the chart-quality upgrade the graph unlocks, gated because a vision loop
+    per chart is expensive and the family renderers already produce good exhibits."""
+    try:
+        from .studio.from_model import brief_for_chart
+        from .studio.graph import run_studio
+        p = brief["mat"]["p"]
+        ib = brief_for_chart(p["name"], p.get("decision", ""), info["model_id"], cid, run)
+        if ib is None:
+            return None
+        st = run_studio(ib, str(out_dir), max_iterations=2)
+        png = st.get("png_path")
+        if png and Path(png).exists():
+            return base64.b64encode(Path(png).read_bytes()).decode()
+    except Exception as exc:
+        print(f"STUDIO fallback — {cid}: {type(exc).__name__}: {str(exc)[:60]}", file=sys.stderr)
+    return None
+
+
 def _render_charts(brief: dict, chart_ids: list[str], out_dir: Path) -> dict[str, tuple[Path, str]]:
     """Render each referenced chart once → {chart_id: (png_path, caption)}."""
     runs = brief["mat"]["runs"]
+    use_studio = os.environ.get("ARTICLE_CHART_STUDIO") == "1"
     out: dict[str, tuple[Path, str]] = {}
     for i, cid in enumerate(dict.fromkeys(chart_ids)):
         info = brief["chart_index"].get(cid)
         if not info:
             continue
         run = runs.get(info["model_id"]) or {}
-        b64, cap = chart_png_family(run, cid)
+        b64, cap = None, None
+        if use_studio:
+            b64 = _studio_chart(brief, cid, info, run, out_dir)
+            cap = decisive(info.get("insight", "") or cid) if b64 else None
+        if not b64:
+            b64, cap = chart_png_family(run, cid)
         if not b64:
             b64 = chart_png(run, cid)
             cap = decisive(info.get("insight", "") or cid)
@@ -685,6 +793,204 @@ def _render_charts(brief: dict, chart_ids: list[str], out_dir: Path) -> dict[str
             pth.write_bytes(base64.b64decode(b64))
             out[cid] = (pth, (cap or info.get("insight", ""))[:160])
     return out
+
+
+# ── semantic chart↔section binding (A) ──────────────────────────────────────────────────────────
+def _match_plan(sec: SectionDraft, plans: list, used: set):
+    """The planned section a drafted section came from — by heading similarity, tie-broken by the
+    plan's model being named in the prose. Greedy over the unused plans, so it survives the writer
+    renaming, reordering, or adding sections across the resampling loop (index alignment does not)."""
+    cands = [pl for pl in plans if id(pl) not in used]
+    if not cands:
+        return None
+
+    def score(pl) -> float:
+        h = difflib.SequenceMatcher(None, (sec.heading or "").lower(), (pl.heading or "").lower()).ratio()
+        mid = (pl.model_id or "").replace("_", " ").lower()
+        return h + (0.15 if mid and mid in (sec.prose or "").lower() else 0.0)
+
+    return max(cands, key=score)
+
+
+def _bind_sections(outline, filled_sections: list[SectionDraft], ci: dict) -> list[SectionBinding]:
+    """Pair each drafted section with the planner's chart picks and model_id for that section. Returns
+    bindings 1:1 with `filled_sections` (same order), so placement writes back cleanly."""
+    plans, used, bindings = list(outline.sections), set(), []
+    for sec in filled_sections:
+        plan = _match_plan(sec, plans, used)
+        ids: list[str] = []
+        mid = ""
+        if plan is not None:
+            used.add(id(plan))
+            mid = plan.model_id or ""
+            for c in plan.chart_ids:
+                r = _resolve_chart_id(c, ci)
+                if r and r not in ids:
+                    ids.append(r)
+        bindings.append(SectionBinding(heading=sec.heading, model_id=mid, prose=sec.prose,
+                                       chart_ids=ids, origin={c: "planned" for c in ids}))
+    return bindings
+
+
+def _dedup_keep(cids: list[str], ci: dict) -> list[str]:
+    """Order-preserving drop of near-duplicate charts (same model + refs), no truncation."""
+    out, seen = [], set()
+    for c in cids:
+        if c not in ci:
+            continue
+        k = _chart_key(c, ci)
+        if k not in seen:
+            seen.add(k)
+            out.append(c)
+    return out
+
+
+def _place_charts(bindings: list[SectionBinding], ci: dict, *, soft_cap: int = 12) -> None:
+    """Enforce the exhibit contract on the charts the sections ASKED FOR, then return each surviving
+    chart to its home section — by identity, never by `i % len`.
+
+    Owner choice (2026-07-17): the argument drives the count. Every chart a section named is kept, the
+    inline ceiling flexing up to `soft_cap`; only past the cap do we diversify-truncate. Under the
+    floor, `_exhibit_contract` fills from the pool as before. A floor-filled chart lands in the section
+    whose model owns it, because every chart knows its model and every section declares one.
+    """
+    if not ci or not bindings:
+        return
+    picked: list[str] = []
+    for b in bindings:
+        for c in b.chart_ids:
+            if c not in picked:
+                picked.append(c)
+    deduped = _dedup_by_concept(picked, ci)                         # collapse the double-EBP / one-decomp-twice
+    if len(deduped) != len(picked):
+        dropped = [c for c in picked if c not in deduped]
+        print(f"CONCEPT-DEDUP charts — dropped {len(dropped)} redundant: {', '.join(dropped)[:80]}",
+              file=sys.stderr)
+        for b in bindings:                                         # keep the bindings consistent
+            b.chart_ids = [c for c in b.chart_ids if c in deduped]
+        picked = deduped
+
+    if len(picked) < _CHART_FLOOR:
+        final = _exhibit_contract(picked, ci)                      # under floor → fill up to the floor
+    elif len(picked) <= soft_cap:
+        final = _dedup_keep(picked, ci)                            # 4..cap → keep what the argument named
+    else:
+        final = _greedy_diverse([], picked, ci, soft_cap)          # over the cap → diversify down to it
+    if len(final) != len(picked):
+        print(f"EXHIBIT CONTRACT — sections named {len(picked)}, shipping {len(final)} "
+              f"(floor {_CHART_FLOOR}, soft cap {soft_cap})", file=sys.stderr)
+
+    finalset = set(final)
+    for b in bindings:                                             # 1) keep each section's own survivors
+        b.chart_ids = [c for c in b.chart_ids if c in finalset]
+        b.origin = {c: b.origin.get(c, "planned") for c in b.chart_ids}
+    placed = {c for b in bindings for c in b.chart_ids}
+    for cid in final:                                              # 2) home the floor-fill by provenance
+        if cid in placed:
+            continue
+        mid = (ci.get(cid) or {}).get("model_id")
+        home = next((b for b in bindings if b.model_id and b.model_id == mid), None) \
+            or min(bindings, key=lambda b: len(b.chart_ids))
+        home.chart_ids.append(cid)
+        home.origin[cid] = "floor"
+        placed.add(cid)
+
+
+# ── prose↔chart completeness (B) ────────────────────────────────────────────────────────────────
+# A NAMED EXHIBIT is a specific visual the reader is told to expect — "the Phillips curve", "the
+# Beveridge curve", "the Sahm rule", "the variance risk premium". Its telltale is a proper phrase
+# ending in an exhibit noun. This must be high-PRECISION: an article is grounded in its models, so it
+# legitimately mentions their topics (inflation, the output gap, the reaction function) — matching on
+# topic words pulls in every chart (the central banker "named" 19). We fire only on named exhibits, so
+# a chart is built when the prose promises a picture, not merely when it discusses a subject.
+_EXHIBIT_NOUN = {"curve", "index", "rule", "premium", "surface", "ladder", "quadrant", "fan",
+                 "arch", "distribution", "cone", "band", "heatmap", "frontier", "dumbbell"}
+
+
+def _named_phrases(cid: str, info: dict) -> list[str]:
+    """The exhibit phrases that would identify this chart in prose: the model spelled out, plus any
+    trailing 'X curve / Y index' phrase in the chart's own title — each ending in an exhibit noun."""
+    out = []
+    mid = (info.get("model_id") or "").replace("_", " ").strip().lower()
+    if mid and any(w in _EXHIBIT_NOUN for w in mid.split()):
+        out.append(mid)
+    title = (cid or "").lower()
+    for m in re.finditer(r"([a-z]+(?:[ -][a-z]+)?[ -](?:%s))" % "|".join(_EXHIBIT_NOUN), title):
+        out.append(m.group(1).replace("-", " ").strip())
+    return out
+
+
+def _prose_names(cid: str, info: dict, low: str) -> bool:
+    """Does the finished prose name this chart as an exhibit? True only when one of its exhibit phrases
+    appears verbatim — high precision, so completeness never stuffs the article with topic charts."""
+    return any(len(ph) >= 6 and ph in low for ph in _named_phrases(cid, info))
+
+
+def _section_for_chart(bindings: list[SectionBinding], info: dict, low: str) -> SectionBinding | None:
+    """The section a prose-named chart belongs to: the one grounded in its model, else one whose prose
+    spells the model out, else the section that names the most of the chart's words."""
+    mid = info.get("model_id") or ""
+    home = next((b for b in bindings if b.model_id and b.model_id == mid), None)
+    if home is None and mid:
+        home = next((b for b in bindings if mid.replace("_", " ") in (b.prose or "").lower()), None)
+    return home or (bindings[0] if bindings else None)
+
+
+def _reconcile_prose_charts(full_text: str, bindings: list[SectionBinding], brief: dict,
+                            conn=None, mat=None, *, soft_cap: int = 12) -> list[str]:
+    """Build every chart the finished prose names. The writer names charts in words (the Phillips
+    curve, the Beveridge curve); nothing used to reconcile those words with the built set, so a chart
+    the argument builds toward could simply not exist. Scan the prose against the persona's chart
+    universe, and attach each named-but-unbuilt chart to the section that names it — pulling and
+    executing its model if selection had left it out. Returns the chart ids added."""
+    ci = brief["chart_index"]
+    low = (full_text or "").lower()
+    built = {c for b in bindings for c in b.chart_ids}
+
+    # 1) prose-named charts already in the index (their models ran) but never placed
+    named = [cid for cid, info in ci.items() if _prose_names(cid, info, low)]
+
+    # 2) prose-named charts whose model selection dropped entirely — pull and run it (best effort)
+    if conn is not None and mat is not None:
+        ran = set(mat.get("runs", {}))
+        try:
+            candidates = yaml.safe_load((GRAPH_DIR / "personas.yaml").read_text())["personas"][mat["id"]]["models"]
+        except Exception:
+            candidates = []
+        for mid in candidates:
+            if mid in ran or mid.replace("_", " ") not in low:
+                continue
+            try:
+                run = graph_corpus.run_model(mid, conn)
+            except Exception as exc:
+                print(f"PULL FAILED — {mid}: {type(exc).__name__}: {str(exc)[:60]}", file=sys.stderr)
+                continue
+            mat["runs"][mid] = run
+            for c in (run.get("charts") or []):
+                cid = c.get("id")
+                if not cid:
+                    continue
+                ci[cid] = {"model_id": mid, "insight": c.get("insight", ""),
+                           "refs": c.get("data_contract", {}) or {}}
+                if _prose_names(cid, ci[cid], low):
+                    named.append(cid)
+            print(f"PULLED — {mat['id']}: {mid} (prose names it; selection had dropped it)", file=sys.stderr)
+
+    added = []
+    for cid in named:
+        if cid in built:
+            continue
+        home = _section_for_chart(bindings, ci[cid], low)
+        if home is not None:
+            home.chart_ids.append(cid)
+            home.origin[cid] = "prose"
+            built.add(cid)
+            added.append(cid)
+    if len(built) > soft_cap:
+        print(f"OVER-CAP — {mat['id'] if mat else '?'}: prose names {len(built)} charts (soft cap "
+              f"{soft_cap}); placement will diversify-truncate and a human must reconcile the prose.",
+              file=sys.stderr)
+    return added
 
 
 def _assemble_docx(path: Path, p: dict, mat: dict, headline: str, standfirst: str, exec_summary: str,
@@ -748,49 +1054,21 @@ def _assemble_docx(path: Path, p: dict, mat: dict, headline: str, standfirst: st
     doc.save(str(path))
 
 
-# ── the orchestrator ───────────────────────────────────────────────────────────────────────────────
-def build_article_full(persona_id: str, conn, out_dir, *, backend: str = "auto", max_iter: int = 3) -> dict:
-    out_dir = Path(out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    mat = persona_material(persona_id, conn)
-    p = mat["p"]
-    brief = build_brief(mat, conn=conn)
-    outline = plan_arc(brief)
+# ── the pipeline stages (node bodies for the article graph) ──────────────────────────────────────
+def _rank(leak_free: bool, is_grounded: bool, is_crit_ok: bool) -> int:
+    """GROUNDING OUTRANKS STYLE. Said plainly everywhere and coded backwards the first time: flat
+    scores let a critic-clean-but-unproven draft (4) beat a grounded-but-clumsy one (3), and
+    volatility_trader duly shipped "rank 4/4: lints clean, critic ok" with grounded=False. A graceful
+    sentence the arithmetic cannot confirm is worth less than an awkward one it can."""
+    if not leak_free:
+        return 0                                       # an untraced figure is the worst outcome here
+    return 1 + (2 if is_grounded else 0) + (1 if is_crit_ok else 0)
 
-    def _place_charts(secs: list[SectionDraft]) -> None:
-        """Resolve the planner's chart picks, then ENFORCE the exhibit contract and spread the result
-        one-per-section.
 
-        The planner chooses which charts (it saw the index). It does not choose how many: it picked 10
-        on 2026-07-14 and 1 on 2026-07-16 from the same 13, and the old net only caught zero. In an app
-        whose every section is a chart read aloud, an article with one chart is a failure, not variance.
-        """
-        ci = brief["chart_index"]
-        if not ci:
-            return
-
-        picked: list[str] = []                            # the planner's intent, in its order
-        for i, _s in enumerate(secs):
-            ids = outline.sections[i].chart_ids if i < len(outline.sections) else _s.chart_ids
-            for c in ids:
-                r = _resolve_chart_id(c, ci)
-                if r and r not in picked:
-                    picked.append(r)
-
-        final = _exhibit_contract(picked, ci)
-        if len(final) != len(picked):
-            print(f"EXHIBIT CONTRACT — planner picked {len(picked)}, shipping {len(final)} "
-                  f"(floor {_CHART_FLOOR}, ceiling {_CHART_CEILING})", file=sys.stderr)
-
-        # Spread one per section, in section order, so the argument stays chart-led rather than
-        # clumping every exhibit under one heading.
-        for s in secs:
-            s.chart_ids = []
-        if not secs:
-            return
-        for i, cid in enumerate(final):
-            secs[i % len(secs)].chart_ids.append(cid)
-
+def draft_best(persona_id: str, brief: dict, outline, conn, *, max_iter: int = 3) -> dict:
+    """The best-of-N redraft loop: write → firewall → lint gates → ground (Judge) → style critic,
+    keeping the highest-ranked draft across iterations (grounding outranks style). One cohesive node:
+    the draft / ground / critique steps form an atomic resample loop and must stay together."""
     feedback, reasons, crit_ok = "", [], False
     grounded, judge_failures = False, []
     filled_sections, headline = [], outline.headline
@@ -801,15 +1079,6 @@ def build_article_full(persona_id: str, conn, out_dir, *, backend: str = "auto",
     # ['iter0: leak', 'iter1: ungrounded', 'iter2: leak'], so an UNTRACED FIGURE shipped while a
     # cleaner draft from iter1 was thrown away. Rule #2 lost to a loop-control detail.
     best: tuple[int, dict] | None = None
-
-    def _rank(leak_free: bool, is_grounded: bool, is_crit_ok: bool) -> int:
-        """GROUNDING OUTRANKS STYLE. Said plainly everywhere and coded backwards the first time:
-        flat scores let a critic-clean-but-unproven draft (4) beat a grounded-but-clumsy one (3), and
-        volatility_trader duly shipped "rank 4/4: lints clean, critic ok" with grounded=False. A
-        graceful sentence the arithmetic cannot confirm is worth less than an awkward one it can."""
-        if not leak_free:
-            return 0                                   # an untraced figure is the worst outcome here
-        return 1 + (2 if is_grounded else 0) + (1 if is_crit_ok else 0)
 
     def _keep(score: int, **snap) -> None:
         nonlocal best
@@ -837,7 +1106,10 @@ def build_article_full(persona_id: str, conn, out_dir, *, backend: str = "auto",
                     f"for measured values. EITHER cite it as its {{n}} token if it is a real executed "
                     f"figure, OR — if you meant it loosely (a rough magnitude, a round threshold, a "
                     f"target) — SPELL IT OUT IN WORDS instead: 'more than a hundred basis points', "
-                    f"'the two percent target', 'around one percent'. Do not simply delete the point.")
+                    f"'the two percent target', 'around one percent'. Do not simply delete the point. "
+                    f"But choose ONE: the words REPLACE the figure — never put the spelled-out number "
+                    f"next to its own token or numeral (never 'above five percent {{n}}', never 'around "
+                    f"one percent 1.06%'), and never cite the same token twice in a row.")
             if wordnum:
                 bits.append(f"REWRITE '{wordnum}': you have spelled out a precise value in words to "
                             f"avoid a token. Words are for approximations only. If the figure is real, "
@@ -907,43 +1179,89 @@ def build_article_full(persona_id: str, conn, out_dir, *, backend: str = "auto",
               f"{len(judge_failures)} claim(s) contradict the executed models. A human must read this.",
               file=sys.stderr)
 
-    # final safety: strip any residual marker so nothing broken ships; place charts from the plan
+    # final safety: strip any residual marker so nothing broken ships
     standfirst = _strip_stray(standfirst)
     exec_summary = _strip_stray(exec_summary)
     for s in filled_sections:
         s.prose = _strip_stray(s.prose)
-    _place_charts(filled_sections)
+    return {"full_text": full_text, "standfirst": standfirst, "exec_summary": exec_summary,
+            "filled_sections": filled_sections, "grounded": grounded, "judge_failures": judge_failures,
+            "crit_ok": crit_ok, "headline": headline, "reasons": reasons}
 
-    # illustration (art-director from the article's own finding), infographic, charts
+
+def reconcile_charts(brief: dict, outline, draft: dict, conn, mat: dict) -> dict:
+    """A + B: bind each section to the charts it reads, build every chart the prose names, place them
+    by identity. Mutates the draft's sections' chart_ids; returns the bindings and any added reasons."""
+    ci = brief["chart_index"]
+    filled_sections = draft["filled_sections"]
+    bindings = _bind_sections(outline, filled_sections, ci)
+    added = _reconcile_prose_charts(draft["full_text"], bindings, brief, conn=conn, mat=mat)
+    reasons = list(draft.get("reasons", []))
+    if added:
+        reasons.append(f"built {len(added)} prose-named chart(s): {', '.join(added)[:80]}")
+    _place_charts(bindings, ci)
+    for sec, b in zip(filled_sections, bindings):
+        sec.chart_ids = list(b.chart_ids)
+    return {"bindings": bindings, "reasons": reasons}
+
+
+def make_illustration(mat: dict, persona_id: str, out_dir: Path, backend: str) -> tuple[Path, dict]:
+    """The Van Gogh header — a meaning-carrying metaphor of the article's own finding."""
     finding = _fill_template(mat)
     ill_b64, ill_meta = vangogh.illustration_png(
-        finding, title=p["title"], decision=p.get("decision", ""),
+        finding, title=mat["p"]["title"], decision=mat["p"].get("decision", ""),
         cache_key=f"{persona_id}|article", backend=backend)
-    ill_png = out_dir / "illustration.png"; ill_png.write_bytes(base64.b64decode(ill_b64))
+    ill_png = out_dir / "illustration.png"
+    ill_png.write_bytes(base64.b64decode(ill_b64))
+    return ill_png, ill_meta
 
+
+def reconcile_dashboard(persona_id: str, conn, draft: dict, brief: dict, out_dir: Path) -> dict:
+    """C: the dashboard is a projection of THIS finished article — the numbers the prose actually cited
+    (so no tile shows a figure the body never used) and the article's own closing read."""
+    full_text = draft["full_text"]
+    cited_keys = [no.source for no in brief["toks"].values()
+                  if no.rendered() and (no.rendered() in full_text or no.rendered().lstrip("+") in full_text)]
+    article_ctx = {"exec_summary": draft["exec_summary"], "full_text": full_text,
+                   "thesis": draft["standfirst"], "cited_keys": cited_keys}
     infog_png = out_dir / "infographic.png"
+    reasons = list(draft.get("reasons", []))
     fam = FAMILY.get(persona_id, decision_brief)
     try:
-        fam.render_persona(persona_id, conn, str(infog_png))
+        fam.render_persona(persona_id, conn, str(infog_png), article=article_ctx)
     except Exception as exc:
         reasons.append(f"infographic→decision_brief: {str(exc).splitlines()[0][:70]}")
         try:
-            decision_brief.render_persona(persona_id, conn, str(infog_png))
+            decision_brief.render_persona(persona_id, conn, str(infog_png), article=article_ctx)
         except Exception:
             infog_png = None
+    return {"infog_png": infog_png, "cited_keys": cited_keys, "reasons": reasons}
 
+
+def assemble(persona_id: str, mat: dict, brief: dict, draft: dict, ill_png, ill_meta: dict,
+             infog_png, out_dir: Path) -> dict:
+    """Render each placed chart once and assemble the .docx; return the run's result dict."""
+    p, filled_sections = mat["p"], draft["filled_sections"]
     all_chart_ids = [cid for s in filled_sections for cid in s.chart_ids]
     charts = _render_charts(brief, all_chart_ids, out_dir)
-
     docx_path = out_dir / "article.docx"
-    _assemble_docx(docx_path, p, mat, headline, standfirst, exec_summary, filled_sections, charts,
-                   ill_png, infog_png)
-    words = len(full_text.split())
-    return {"persona": persona_id, "ok": True, "docx_path": str(docx_path), "headline": headline,
-            "standfirst": standfirst, "sections": len(filled_sections), "words": words,
-            "critic_ok": crit_ok, "n_charts": len(charts), "caption": ill_meta.get("caption", ""),
-            "full_text": full_text, "reasons": reasons,
+    _assemble_docx(docx_path, p, mat, draft["headline"], draft["standfirst"], draft["exec_summary"],
+                   filled_sections, charts, ill_png, infog_png)
+    return {"persona": persona_id, "ok": True, "docx_path": str(docx_path), "headline": draft["headline"],
+            "standfirst": draft["standfirst"], "sections": len(filled_sections),
+            "words": len(draft["full_text"].split()), "critic_ok": draft["crit_ok"],
+            "n_charts": len(charts), "caption": ill_meta.get("caption", ""),
+            "full_text": draft["full_text"], "reasons": draft.get("reasons", []),
             # Reported SEPARATELY from critic_ok, and it is the one that matters. critic_ok is a style
             # score; `grounded` is whether the prose agrees with the arithmetic. The shipped CB article
             # was critic_ok=True with two sentences that contradicted their own series.
-            "grounded": grounded, "ungrounded": [v.model_dump() for v in judge_failures]}
+            "grounded": draft["grounded"], "ungrounded": [v.model_dump() for v in draft["judge_failures"]]}
+
+
+# ── the orchestrator ─────────────────────────────────────────────────────────────────────────────
+def build_article_full(persona_id: str, conn, out_dir, *, backend: str = "auto", max_iter: int = 3) -> dict:
+    """Compile and run the article StateGraph, returning its result dict. The graph threads a single
+    ArticleState through material → brief → plan → draft → reconcile_charts → reconcile_dashboard →
+    assemble, with every node LangSmith-traced; the stage functions above are its node bodies."""
+    from .article_graph import run_article
+    return run_article(persona_id, conn, out_dir, backend=backend, max_iter=max_iter)["result"]

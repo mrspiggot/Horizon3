@@ -43,7 +43,7 @@ charts:
     role: input
     chart_type: heatmap
     color_job: diverging
-    insight: "where and when each component tightened (blue) or loosened (red) — the whole decomposition at once"
+    insight: "where and when each component tightened (red) or loosened (blue) — the whole decomposition at once"
     data_contract:
       kind: heatmap
       cbar_label: "subindex (sigma; >0 tight)"

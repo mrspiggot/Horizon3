@@ -105,9 +105,9 @@ def render_state_space(points: list[StatePoint], spec: StateSpaceSpec, out: str)
 
     # ── side key ──────────────────────────────────────────────────────────────────
     axk.axis("off"); axk.set_xlim(0, 1); axk.set_ylim(0, 1)
-    axk.text(0.0, 0.985, "the eight inputs, read as states", fontsize=10.5, fontweight="bold",
-             color="#4a4a52", va="top")
     n = len(pts)
+    axk.text(0.0, 0.985, f"the {n} inputs, read as states", fontsize=10.5, fontweight="bold",
+             color="#4a4a52", va="top")
     y = 0.92
     dy = min(0.108, 0.86 / max(n, 1))
     for i, pt in enumerate(pts, 1):

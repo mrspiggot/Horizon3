@@ -220,6 +220,141 @@ def reader_takeaway(summary: str) -> str:
     return ""
 
 
+# ── the dashboard, derived from the FINISHED article (C) ──────────────────────────────────────────
+# The infographic used to be built from the hand-typed `summary_template` and the raw salient menu,
+# never from the prose the writer redrafted — so its thesis, its "THE READ" line and its tiles were
+# fossils of a prior draft in every regeneration (the CB dashboard said "CPI elevated, rising" while
+# the body argued inflation was low and falling). These derive the same three things from the article
+# when it is supplied, and fall back to the template only when it is not.
+def _dimensioned_keys(numbers: dict, keys) -> list[str]:
+    return [k for k in keys if k in numbers
+            and any(c in "%$×σ°" or c.isalpha() for c in numbers[k].rendered())]
+
+
+def dashboard_thesis(mat: dict, article: dict | None) -> str:
+    if article and article.get("exec_summary"):
+        s = first_sentence(article["exec_summary"])
+        if s:
+            return s
+    return first_sentence(mat["p"].get("summary_template", ""))
+
+
+def dashboard_read(mat: dict, article: dict | None) -> str:
+    if article and article.get("exec_summary"):
+        r = reader_takeaway(article["exec_summary"])
+        if r:
+            return r
+    return reader_takeaway(mat["p"].get("summary_template", ""))
+
+
+def dashboard_tile_keys(mat: dict, article: dict | None, n: int = 4, floor: int = 3) -> list[str]:
+    """The KPI tiles: the canonical numbers the PROSE actually cited, so no tile can show a figure the
+    body never used; back-filled from the salient menu only to reach the floor."""
+    numbers, canon = mat["numbers"], mat.get("canon", {})
+    keys: list[str] = []
+    for k in (article or {}).get("cited_keys", []) or []:
+        rep = canon.get(k, k)
+        if rep in numbers and rep not in keys:
+            keys.append(rep)
+    keys = _dimensioned_keys(numbers, keys)
+    for k in mat["salient"]:                              # back-fill to the floor, in salient order
+        if len(keys) >= max(n, floor):
+            break
+        if k not in keys and _dimensioned_keys(numbers, [k]):
+            keys.append(k)
+    return keys[:n]
+
+
+def _concept_registry(numbers: dict, meanings: dict, *, template_keys=(), runs=None
+                      ) -> tuple[dict[str, list[str]], dict[str, str]]:
+    """Group executed numbers by CONCEPT so ONE value represents each everywhere (D).
+
+    Two models can emit the same concept — `implied_vol_pct` from both variance_risk_premium and
+    garch_volatility, an all-in cost from two funding models. Keyed `model_id.field` they look
+    distinct, so the prose, the tiles, and the template each pick a different one and the article
+    shows 15.57 in one place and 16.73 in another. Same concept ⇔ SAME UNIT and (same humanised field
+    OR same meaning clause); the unit gate stops two different quantities merging on a coincidental
+    word. Returns (concepts, canon): concepts maps a stable concept id → its member keys; canon maps
+    every member key → the ONE representative every surface should cite.
+    """
+    runs = runs or {}
+    parent = {k: k for k in numbers}
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[ra] = rb
+
+    by_field: dict[str, str] = {}
+    by_meaning: dict[str, str] = {}
+    for k in numbers:
+        field, unit = k.split(".", 1)[1], (numbers[k].unit or "")
+        fsig = f"{humanise(field).lower()}|{unit}"
+        union(k, by_field.setdefault(fsig, k))
+        mcl = clean_meaning(meanings.get(k, "") or "").lower().strip()
+        if len(mcl) >= 6:                                  # a clause specific enough to trust as identity
+            union(k, by_meaning.setdefault(f"{mcl}|{unit}", k))
+
+    # Fuzzy cross-model identity: two same-unit numbers whose meaning clauses strongly overlap are one
+    # concept even when field names AND clauses differ — funding_quality.ig_all_in_pct ("all-in IG
+    # funding cost") ≡ funding_cost.all_in_pct ("all-in fixed IG funding cost"), the 5.86-vs-5.05 that
+    # survived three review rounds. The threshold sits ABOVE the IG-vs-HY case (one differing token,
+    # ~0.6) so genuinely distinct quantities stay apart; every merge is logged for the human read.
+    _STOP = {"the", "of", "and", "for", "its", "per", "vs", "versus"}
+
+    def _content(key: str) -> set[str]:
+        # the leading meaning clause, NOT length-truncated (clean_meaning caps at 26 chars for display,
+        # which would drop the very words that establish identity — "…funding cost").
+        m = re.split(r"[—;(]", (meanings.get(key, "") or "").lower(), maxsplit=1)[0]
+        return {w for w in re.findall(r"[a-z][a-z-]+", m) if w not in _STOP}
+
+    content = {k: (_content(k), numbers[k].unit or "") for k in numbers}
+    ks = list(numbers)
+    for i in range(len(ks)):
+        ti, ui = content[ks[i]]
+        if len(ti) < 2:
+            continue
+        for j in range(i + 1, len(ks)):
+            tj, uj = content[ks[j]]
+            if ui != uj or len(tj) < 2:
+                continue
+            inter = ti & tj
+            if len(inter) >= 2 and len(inter) / len(ti | tj) >= 0.75:
+                union(ks[i], ks[j])
+
+    groups: dict[str, list[str]] = {}
+    for k in numbers:
+        groups.setdefault(find(k), []).append(k)
+
+    tset = set(template_keys)
+
+    def _score(k: str) -> tuple:
+        # canonical preference: a template-cited number (the human's explicit pick) wins; then the
+        # concept's "home" model (its id/name carries the concept noun); then the longest history.
+        mid, field = k.split(".", 1)
+        meta = (runs.get(mid) or {}).get("meta") or {}
+        name = (meta.get("name") or "").lower()
+        nouns = [w for w in humanise(field).lower().split() if len(w) > 3]
+        home = any(w in mid.lower() or w in name for w in nouns)
+        hist = len((runs.get(mid) or {}).get("history") or [])
+        return (k in tset, home, hist)
+
+    concepts: dict[str, list[str]] = {}
+    canon: dict[str, str] = {}
+    for members in groups.values():
+        rep = sorted(members, key=lambda k: (_score(k), k))[-1]
+        concepts[min(members)] = members
+        for k in members:
+            canon[k] = rep
+    return concepts, canon
+
+
 _MATERIAL_CACHE: dict[str, dict] = {}
 
 
@@ -304,18 +439,36 @@ def persona_material(persona_id: str, conn, *, use_cache: bool = True, select: b
     # most for this decision, and that judgement is worth keeping. Everything else the selected models
     # actually produced follows, and `_citable`'s limit caps the whole thing. A hand-typed list may
     # order the evidence; it may not be the evidence.
+    # ── one concept → one citable number (D) ─────────────────────────────────────────────────────
+    # Collapse same-concept duplicates BEFORE building the menu, so the writer, the tiles and the
+    # narrator are each offered exactly one {n} per concept — the prose can no longer cite two
+    # implied-vols, and a tile can no longer disagree with the body. `numbers` keeps every key (the
+    # gate and provenance still resolve every source); only the citable ORDER is deduped.
+    template_keys = {f"{m.group(1)}.{m.group(2)}" for m in _PLACE.finditer(p.get("summary_template", ""))}
+    concepts, canon = _concept_registry(numbers, meanings, template_keys=template_keys, runs=runs)
+    for cid, members in concepts.items():
+        if len(members) > 1:
+            print(f"CONCEPT — {persona_id}: {' = '.join(members)} → cite {canon[members[0]]}", file=sys.stderr)
+
     salient: list[str] = []
-    for m in _PLACE.finditer(p.get("summary_template", "")):
-        k = f"{m.group(1)}.{m.group(2)}"
-        if k in numbers and k not in salient:
-            salient.append(k)
-    salient += [k for k in numbers if k not in salient]
+    seen_concepts: set[str] = set()
+
+    def _push(k: str) -> None:
+        rep = canon.get(k, k)
+        if rep in numbers and rep not in seen_concepts:
+            seen_concepts.add(rep)
+            salient.append(rep)                            # cite the canonical member, not the alias
+
+    for m in _PLACE.finditer(p.get("summary_template", "")):   # the template's picks still LEAD the order
+        _push(f"{m.group(1)}.{m.group(2)}")
+    for k in numbers:
+        _push(k)
     source_labels = sorted({_SOURCE_LABEL.get(s, s) for s in sources})
     # `p["models"]` must be the models we ACTUALLY RAN, not the YAML's list — everything downstream
     # (build_brief, the exhibit contract, the data-window firewall) iterates it, so leaving the
     # hardcoded list here would compute a selection and then quietly ignore it.
     mat = {"id": persona_id, "p": {**p, "models": model_ids}, "runs": runs, "numbers": numbers,
-           "meanings": meanings, "selection_why": why,
+           "meanings": meanings, "selection_why": why, "concepts": concepts, "canon": canon,
            "salient": salient, "papers": sorted(papers), "sources": sorted(sources),
            "source_labels": source_labels, "model_names": model_names,
            "as_of": max((n.as_of for n in numbers.values()), default="")}

@@ -7,8 +7,8 @@ LLM. Every KPI is a provenance-traced NumberObject; the tier-1 gate refuses anyt
 """
 from __future__ import annotations
 
-from ..from_persona import (chart_png, clean_meaning, decisive, first_sentence, hero_charts,
-                            humanise, persona_material, reader_takeaway)
+from ..from_persona import (chart_png, clean_meaning, dashboard_read, dashboard_thesis,
+                            dashboard_tile_keys, decisive, hero_charts, humanise, persona_material)
 from ..gate import emit
 from ..schema import Block, InfographicSpec, Layout
 
@@ -16,19 +16,18 @@ _PALETTE = ["#4C6EA8", "#D55E00", "#009E73", "#B8C4CE", "#D98A00"]
 _TONES = ["mid", "up", "dn", "mid"]
 
 
-def spec_from_persona(persona_id: str, conn, *, n_tiles: int = 4, n_charts: int = 1) -> tuple[InfographicSpec, set[str]]:
+def spec_from_persona(persona_id: str, conn, *, n_tiles: int = 4, n_charts: int = 1,
+                      article: dict | None = None) -> tuple[InfographicSpec, set[str]]:
     """Return (spec, valid_sources) — valid_sources is the set of executed output keys the gate
-    checks every rendered number against."""
+    checks every rendered number against. When `article` is supplied, the thesis, the tiles and the
+    read are derived from the FINISHED piece rather than the static template."""
     mat = persona_material(persona_id, conn)
-    p, numbers, salient, meanings = mat["p"], mat["numbers"], mat["salient"], mat["meanings"]
+    p, numbers, meanings = mat["p"], mat["numbers"], mat["meanings"]
 
-    # KPI tiles from the author's salient numbers, keeping only DIMENSIONED ones (a bare, unitless
-    # value is usually a raw input — the model's OUTPUTS carry the units and the insight). Tile
+    # KPI tiles: the numbers the PROSE cited (canonical), else the salient menu to the floor. Tile
     # headings come from the authored `meaning` (reader-facing), not the internal field id.
-    dimensioned = [k for k in salient
-                   if any(c in "%$×σ°" or c.isalpha() for c in numbers[k].rendered())]
     tiles: list[Block] = []
-    for i, key in enumerate(dimensioned[:n_tiles]):
+    for i, key in enumerate(dashboard_tile_keys(mat, article, n=n_tiles)):
         heading = clean_meaning(meanings.get(key, ""), humanise(key.split(".", 1)[1]))
         tiles.append(Block(id=f"kpi{i}", type="kpi_tile", title=heading,
                            numbers=[numbers[key]], tone=_TONES[i % len(_TONES)]))
@@ -50,11 +49,10 @@ def spec_from_persona(persona_id: str, conn, *, n_tiles: int = 4, n_charts: int 
                 charts.append(Block(id="ch0", type="chart_embed", title=cid, chart_png=png))
                 break
 
-    thesis = Block(id="thesis", type="thesis_callout",
-                   text=first_sentence(p.get("summary_template", "")))
-    # a real editorial takeaway — the exec summary's closing read (reader copy, number-free)
+    thesis = Block(id="thesis", type="thesis_callout", text=dashboard_thesis(mat, article))
+    # a real editorial takeaway — the finished article's closing read (reader copy, number-free)
     blocks = [thesis, *tiles, *charts]
-    take = reader_takeaway(p.get("summary_template", ""))
+    take = dashboard_read(mat, article)
     if take:
         blocks.append(Block(id="note", type="note", title="The read", text=take))
     # a clean, FT-style source line — no internal ids, no system doctrine

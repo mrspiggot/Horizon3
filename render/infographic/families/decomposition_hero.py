@@ -9,10 +9,8 @@ treasurer, credit). Deterministic; every leg is a provenance-traced NumberObject
 """
 from __future__ import annotations
 
-import yaml
-
-from ..from_persona import (GRAPH_DIR, chart_png_family, clean_meaning, decisive, first_sentence,
-                            humanise, persona_material, reader_takeaway)
+from ..from_persona import (chart_png_family, clean_meaning, dashboard_read, dashboard_thesis,
+                            decisive, humanise, persona_material)
 from ..gate import emit
 from ..schema import Block, InfographicSpec, Layout
 
@@ -34,9 +32,9 @@ def _find_decomposition(mat: dict) -> tuple[str, dict] | None:
     return None
 
 
-def spec_from_persona(persona_id: str, conn) -> tuple[InfographicSpec, set[str]]:
+def spec_from_persona(persona_id: str, conn, *, article: dict | None = None) -> tuple[InfographicSpec, set[str]]:
     mat = persona_material(persona_id, conn)
-    p, numbers, meanings = mat["p"], mat["numbers"], mat["meanings"]
+    p, numbers = mat["p"], mat["numbers"]
     found = _find_decomposition(mat)
     if not found:
         raise ValueError(f"{persona_id}: no decomposition model — not a decomposition_hero persona")
@@ -71,10 +69,9 @@ def spec_from_persona(persona_id: str, conn) -> tuple[InfographicSpec, set[str]]
     charts = [Block(id="hero", type="chart_embed", title=(cap[:128] + "…") if len(cap) > 128 else cap,
                     chart_png=png)]
 
-    thesis = Block(id="thesis", type="thesis_callout",
-                   text=first_sentence(p.get("summary_template", "")))
+    thesis = Block(id="thesis", type="thesis_callout", text=dashboard_thesis(mat, article))
     blocks = [thesis, *tiles, *charts]
-    take = reader_takeaway(p.get("summary_template", ""))
+    take = dashboard_read(mat, article)
     if take:
         blocks.append(Block(id="note", type="note", title="The read", text=take))
     src_line = f"Source: {', '.join(mat['source_labels']) or 'UMD'}."
@@ -90,6 +87,6 @@ def spec_from_persona(persona_id: str, conn) -> tuple[InfographicSpec, set[str]]
     return spec, set(numbers.keys())
 
 
-def render_persona(persona_id: str, conn, out_png: str) -> str:
-    spec, valid = spec_from_persona(persona_id, conn)
+def render_persona(persona_id: str, conn, out_png: str, **kw) -> str:
+    spec, valid = spec_from_persona(persona_id, conn, **kw)
     return emit(spec, out_png, valid_sources=valid)
