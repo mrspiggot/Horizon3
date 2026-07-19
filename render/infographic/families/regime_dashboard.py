@@ -140,9 +140,9 @@ def macro_regime_png(conn, mat: dict | None = None) -> str | None:
         points = _macro_backdrop_points(conn)
     if len(points) < 3:
         return None
-    subtitle = ("Each of this decision's own model inputs read as a §10 STATE, not a level: how "
+    subtitle = ("Each of this decision's own model inputs read as a state, not a level: how "
                 "extreme it is versus its own history (x) against its 3-month momentum (y).") if own else \
-               ("Eight variables read as §10 STATES, not levels: each plotted by how extreme it is "
+               ("Eight variables read as states, not levels: each plotted by how extreme it is "
                 "versus its own 10-year history (x) against its 3-month momentum (y).")
     spec = StateSpaceSpec(
         title=("Where this decision's inputs sit in their own cycle" if own else
@@ -150,7 +150,7 @@ def macro_regime_png(conn, mat: dict | None = None) -> str | None:
         subtitle=subtitle,
         xlabel="level vs own history  (z-score, σ)",
         ylabel="momentum: 3-month change  (σ)",
-        source="Source: FRED, NY Fed ACM.  State via §10 state_tuple (step=3m).",
+        source="Source: FRED, NY Fed ACM.  State = level, 3-month momentum, acceleration.",
         footer="Every value is executed on data — nothing on this chart is authored.")
     out = os.path.join(tempfile.gettempdir(), "ais_regime.png")
     try:

@@ -11,6 +11,7 @@ quadrant guidance — a scatter of unlabelled dots (the failure that shipped onc
 """
 from __future__ import annotations
 
+import re
 import textwrap
 from dataclasses import dataclass, field
 
@@ -41,6 +42,14 @@ class StateSpaceSpec:
     footer: str
     quadrants: dict = field(default_factory=lambda: {
         "tr": "HOT & HEATING", "br": "HOT, COOLING", "tl": "COLD, WARMING", "bl": "COLD & COOLING"})
+
+
+def _reader_safe(s: str) -> str:
+    """Strip internal notation that must never reach a reader — assessment section refs (§10) and code
+    identifiers (state_tuple). The v6 review caught '§10 STATE / §10 state_tuple' in a dashboard scatter."""
+    s = re.sub(r"§\s*\d+\s*", "", s or "")
+    s = re.sub(r"\bstate_tuple\b", "state", s, flags=re.I)
+    return re.sub(r"\s{2,}", " ", s).strip()
 
 
 def lint_state_space(spec: StateSpaceSpec, points: list[StatePoint]) -> list[str]:
@@ -117,15 +126,15 @@ def render_state_space(points: list[StatePoint], spec: StateSpaceSpec, out: str)
         axk.text(0.03, y, str(i), color="white", fontsize=8.6, fontweight="bold",
                  ha="center", va="center", transform=axk.transAxes)
         axk.text(0.10, y + 0.012, pt.label, fontsize=9.8, fontweight="bold", color=INK, va="center")
-        axk.text(0.10, y - 0.028, pt.reading, fontsize=8.6, color="#6a6a72", va="center")
+        axk.text(0.10, y - 0.028, _reader_safe(pt.reading), fontsize=8.6, color="#6a6a72", va="center")
         y -= dy
     axk.scatter([0.03], [0.02], s=120, color="#D55E00", transform=axk.transAxes, clip_on=False)
     axk.scatter([0.42], [0.02], s=120, color="#4C6EA8", transform=axk.transAxes, clip_on=False)
     axk.text(0.07, 0.02, "accelerating", fontsize=8.6, color="#6a6a72", va="center")
     axk.text(0.46, 0.02, "decelerating", fontsize=8.6, color="#6a6a72", va="center")
 
-    fig.text(0.072, 0.945, spec.title, fontsize=18, fontweight="bold", color=INK)
-    sub = "\n".join(textwrap.wrap(spec.subtitle, width=118)[:2])
+    fig.text(0.072, 0.945, _reader_safe(spec.title), fontsize=18, fontweight="bold", color=INK)
+    sub = "\n".join(textwrap.wrap(_reader_safe(spec.subtitle), width=118)[:2])
     fig.text(0.072, 0.875, sub, fontsize=10.8, color="#4a4a52", linespacing=1.32, va="top")
     fig.text(0.072, 0.028, spec.source, fontsize=8.2, color="#8a8a93")
     fig.text(0.072, 0.008, spec.footer, fontsize=8.2, color="#8a8a93", style="italic")

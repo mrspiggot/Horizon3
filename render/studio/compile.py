@@ -130,9 +130,29 @@ def _apply_refs_events(ax, enc: ChartEncoding, df: pd.DataFrame):
 
 # ── marks ──────────────────────────────────────────────────────────────────────────────────
 
+def _place_end_labels(ax, items) -> None:
+    """Direct series labels at the right edge, nudged apart vertically so two series ending near the same
+    value don't overprint (the right-edge collisions the v6 review flagged across the batch). Conservative:
+    only separates labels closer than a small fraction of the y-span."""
+    if not items:
+        return
+    lo, hi = ax.get_ylim()
+    gap = 0.04 * ((hi - lo) or 1.0)
+    order = sorted(range(len(items)), key=lambda k: items[k][1])
+    ys = [items[k][1] for k in order]
+    for j in range(1, len(ys)):
+        if ys[j] - ys[j - 1] < gap:
+            ys[j] = ys[j - 1] + gap
+    for pos, k in enumerate(order):
+        x, _, text, col = items[k]
+        ax.annotate(f"  {text}", (x, ys[pos]), fontsize=9.5, color=col, fontweight="bold",
+                    va="center", annotation_clip=False)
+
+
 def _mark_line_area(ax, enc, df, fill: bool):
     xf, yf = enc.encoding.x.field, enc.encoding.y.field
     xtype = enc.encoding.x.type if enc.encoding.x else None
+    endlabels = []
     for i, (lbl, g) in enumerate(_series_groups(df, enc)):
         g = _sorted_for_x(g, xf, xtype)
         col = theme.cat(i)
@@ -143,8 +163,8 @@ def _mark_line_area(ax, enc, df, fill: bool):
             if (g[yf] < base).any():
                 ax.fill_between(g[xf], base, g[yf], where=g[yf] < base, color=theme.DIVERGING[1], alpha=0.20, zorder=3)
         if enc.annotations.label_last and len(g):
-            ax.annotate(f"  {lbl}", (g[xf].iloc[-1], g[yf].iloc[-1]), fontsize=9.5, color=col,
-                        fontweight="bold", va="center")
+            endlabels.append((g[xf].iloc[-1], float(g[yf].iloc[-1]), lbl, col))
+    _place_end_labels(ax, endlabels)
 
 
 def _mark_connected_scatter(ax, enc, df):
