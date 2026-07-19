@@ -1125,12 +1125,16 @@ def _section_for_chart(bindings: list[SectionBinding], info: dict, low: str,
         home = next((b for b in bindings if mid.replace("_", " ") in (b.prose or "").lower()), None)
         if home is not None:
             return home
-    # score sections by how much of the chart's subject their prose actually discusses
+    # score sections by how much of the chart's subject their prose actually discusses. The index is the
+    # final tiebreaker so two equally-scored, equally-loaded sections never fall through to comparing the
+    # (unorderable) SectionBinding objects themselves.
     words = set(_distinctive_words(cid)) | {w for w in re.findall(r"[a-z]{4,}", (info.get("insight") or "").lower())}
-    scored = [(sum(1 for w in words if w in (b.prose or "").lower()), -len(b.chart_ids), b) for b in bindings]
-    scored.sort(reverse=True)                                  # best prose match, then least-loaded
-    if scored and scored[0][0] > 0:
-        return scored[0][2]
+    best = max(range(len(bindings)),
+               key=lambda i: (sum(1 for w in words if w in (bindings[i].prose or "").lower()),
+                              -len(bindings[i].chart_ids), -i),
+               default=None)
+    if best is not None and sum(1 for w in words if w in (bindings[best].prose or "").lower()) > 0:
+        return bindings[best]
     return min(bindings, key=lambda b: len(b.chart_ids)) if bindings else None
 
 

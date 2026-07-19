@@ -158,6 +158,12 @@ def test_placement_never_defaults_to_opening_and_spreads_overflow():
                 SectionBinding(heading="the curve", prose="the yield curve slope and its inversion", chart_ids=[])]
     ci = {"The yield-curve slope": {"model_id": "x", "insight": "the slope of the yield curve"}}
     assert _section_for_chart(bindings, ci["The yield-curve slope"], "", "The yield-curve slope").heading == "the curve"
+    # tied score AND tied load across sections must not fall through to comparing SectionBindings (crashed
+    # the whole batch with `'<' not supported between instances of 'SectionBinding'`)
+    tied = [SectionBinding(heading="a", prose="unrelated", chart_ids=[]),
+            SectionBinding(heading="b", prose="unrelated", chart_ids=[])]
+    got = _section_for_chart(tied, {"model_id": "z", "insight": "nothing matches here"}, "", "some chart id")
+    assert got in tied            # returns a section (least-loaded fallback), does not raise
     # an over-cap opener sheds the chart that belongs elsewhere
     op = SectionBinding(heading="opening", prose="the setup",
                         chart_ids=["c1", "c2", "c3", "c4", "The unemployment recession sahm chart"])
