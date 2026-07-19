@@ -279,9 +279,36 @@ def _mark_waterfall(ax, enc, df):
     ax.axhline(0, color=theme.GRID, lw=0.8)
 
 
-def _mark_point(ax, enc, df):
+def _mark_point(ax, enc, df, fig=None):
     xf, yf = enc.encoding.x.field, enc.encoding.y.field
-    for i, (lbl, g) in enumerate(_series_groups(df, enc)):
+    groups = _series_groups(df, enc)
+    tf = next((c for c in ("order", "date", "t", "time") if c in df), None)
+    # A single time-stamped cloud → colour points by DATE with a dated colourbar, so the era-shift a
+    # scatter's caption describes ("the cloud shifted up-and-out in the 1970s") is actually visible. The
+    # Okun scatter had this; the Phillips and gold scatters were monochrome and the caption's colour claim
+    # had nothing behind it (v6 review). Only fires for one cloud with a time field, so cross-sections stay
+    # categorical.
+    if len(groups) == 1 and tf is not None and fig is not None:
+        g = groups[0][1]
+        dts = pd.to_datetime(g[tf], errors="coerce") if tf in ("date", "time") else None
+        order = pd.to_numeric(pd.Series(range(len(g))), errors="coerce").to_numpy(float) \
+            if dts is None else dts.rank(method="first").to_numpy(float)
+        s = 34
+        if enc.encoding.size and enc.encoding.size.field in g:
+            sv = g[enc.encoding.size.field].to_numpy(float)
+            s = 20 + 260 * (sv - sv.min()) / (np.ptp(sv) or 1)
+        sc = ax.scatter(g[xf], g[yf], c=order, cmap="viridis", s=s, alpha=0.82,
+                        edgecolor="white", lw=0.4, zorder=4)
+        if len(fig.axes) <= 1:                     # single panel only — no per-facet colourbars
+            try:
+                cb = fig.colorbar(sc, ax=ax, pad=0.015, fraction=0.046)
+                if dts is not None and dts.notna().any():
+                    cb.set_ticks([float(np.nanmin(order)), float(np.nanmax(order))])
+                    cb.set_ticklabels([dts.min().strftime("%b %Y"), dts.max().strftime("%b %Y")])
+            except Exception:
+                pass
+        return
+    for i, (lbl, g) in enumerate(groups):
         s = 30
         if enc.encoding.size and enc.encoding.size.field in g:
             sv = g[enc.encoding.size.field].to_numpy(float)
@@ -405,8 +432,8 @@ _DISPATCH = {
     "connected_scatter": lambda ax, e, d, f: _mark_connected_scatter(ax, e, d),
     "dumbbell": lambda ax, e, d, f: _mark_dumbbell(ax, e, d),
     "slope": lambda ax, e, d, f: _mark_slope(ax, e, d),
-    "point": lambda ax, e, d, f: _mark_point(ax, e, d),
-    "bubble": lambda ax, e, d, f: _mark_point(ax, e, d),
+    "point": lambda ax, e, d, f: _mark_point(ax, e, d, f),
+    "bubble": lambda ax, e, d, f: _mark_point(ax, e, d, f),
     "heatmap": lambda ax, e, d, f: _mark_heatmap(ax, e, d, f),
     "ridgeline": lambda ax, e, d, f: _mark_ridgeline(ax, e, d),
     "waterfall": lambda ax, e, d, f: _mark_waterfall(ax, e, d),

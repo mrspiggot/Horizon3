@@ -122,6 +122,18 @@ def test_prefer_form_keeps_gap_chart_when_prose_emphasizes_the_gap():
     assert _prefer_form(gap, fan, ci, "the rules broadly track the funds rate") == fan
 
 
+def test_probit_and_scatter_are_named_exhibits_but_stay_distinctive():
+    """P5.4 — the recession probit was 'described but not drawn' for 3 rounds because 'probit' wasn't an
+    exhibit noun. It now is (so _prose_names fires), while staying a distinctive word for _prose_describes."""
+    from render.writer import _distinctive_words, _prose_describes, _prose_names
+    assert _prose_names("The recession probit", {"model_id": "recession_probit"},
+                        "the recession probit puts the odds at sixteen percent")
+    # scatter stays distinctive (not stripped like the generic base nouns), so _prose_describes still fires
+    assert "scatter" in _distinctive_words("The realized-vs-implied volatility scatter")
+    assert _prose_describes("The realized-vs-implied volatility scatter",
+                            ["the scatter of realized against implied volatility sits in an odd quadrant"])
+
+
 def test_dashboard_embed_prefers_a_chart_not_already_in_the_body():
     """P4.2 — the dashboard hero should skip a chart already shown standalone in the body (cost-of-money's
     IG-split-twice), but never end up empty: if every candidate is in the body it keeps the first."""

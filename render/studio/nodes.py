@@ -202,6 +202,9 @@ def compile_node(state: StudioState) -> dict:
 def multimodal_critique(state: StudioState) -> dict:
     png = state["png_path"]
     b64 = _img_b64(png, max_px=2000)   # keep faceted panels legible to the vision model
+    chosen = state.get("chosen")
+    title = getattr(chosen, "title", "") or ""
+    subtitle = getattr(chosen, "subtitle", "") or ""
     llm = get_llm(model=VISION_MODEL, temperature=0.1).with_structured_output(VisualCritique)
     msg = [{"role": "user", "content": [
         {"type": "text", "text":
@@ -211,8 +214,18 @@ def multimodal_critique(state: StudioState) -> dict:
             "legend, a near-empty panel) and give specific encoding-level fixes. "
             "BUT if this is a SMALL-MULTIPLE / faceted grid, judge it as a whole: a plain-looking single panel on "
             "a shared scale is CORRECT, so do NOT flag panels as 'near-empty' or repeated axes as redundant — only "
-            "flag genuine cross-panel defects (inconsistent scales, per-panel label collisions). "
-            "If it is clean and reads well, set ok=true."},
+            "flag genuine cross-panel defects (inconsistent scales, per-panel label collisions).\n\n"
+            "CRUCIAL — read the TITLE and SUBTITLE against what the chart actually PLOTS. This chart is titled:\n"
+            f"  TITLE: {title!r}\n  SUBTITLE: {subtitle!r}\n"
+            "If the title makes a DIRECTIONAL or STATE claim that the chart's own endpoint/latest point "
+            "contradicts, that is a DEFECT — flag it and give the fix. Examples of the failure to catch: a title "
+            "says 'easing' / 'narrowing' / 'falling' while the line ENDS rising (or vice-versa); a title says "
+            "'in its danger zone' while the latest value is nowhere near the threshold drawn; a title says one "
+            "series has 'bolted past' another while at the right edge it sits BELOW it; a title says 'upward "
+            "contango' while the plotted curve slopes down. The title must match the chart's ENDPOINT, not a "
+            "mid-chart episode. If the title contradicts the data, set ok=false and put the correction in `fixes` "
+            "(e.g. 'retitle to match the endpoint: X is rising, not easing').\n"
+            "If it is clean, reads well, AND the title matches the data, set ok=true."},
         {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
     ]}]
     c: VisualCritique = llm.invoke(msg)

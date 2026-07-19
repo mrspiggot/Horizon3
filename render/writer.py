@@ -1066,8 +1066,13 @@ def _spread_overloaded_sections(bindings: list[SectionBinding], ci: dict, *, cap
 # legitimately mentions their topics (inflation, the output gap, the reaction function) — matching on
 # topic words pulls in every chart (the central banker "named" 19). We fire only on named exhibits, so
 # a chart is built when the prose promises a picture, not merely when it discusses a subject.
-_EXHIBIT_NOUN = {"curve", "index", "rule", "premium", "surface", "ladder", "quadrant", "fan",
+_EXHIBIT_BASE = {"curve", "index", "rule", "premium", "surface", "ladder", "quadrant", "fan",
                  "arch", "distribution", "cone", "band", "heatmap", "frontier", "dumbbell"}
+# v6: charts the prose named as a FORM but the gate never recognised, so they went "described but not
+# drawn" for rounds — the recession probit (Fed), the realized-vs-implied scatter (vol). These extend
+# the phrase-matching set BUT are kept OUT of the distinctive-word strip below (unlike the generic base,
+# "scatter"/"probit" are specific enough to stay distinctive for _prose_describes).
+_EXHIBIT_NOUN = _EXHIBIT_BASE | {"probit", "scatter"}
 
 
 def _named_phrases(cid: str, info: dict) -> list[str]:
@@ -1100,7 +1105,7 @@ _CHART_STOP2 = {"over", "time", "its", "versus", "through", "against", "today", 
 
 def _distinctive_words(cid: str) -> list[str]:
     return [w for w in re.findall(r"[a-z][a-z-]{3,}", (cid or "").lower())
-            if w not in _CHART_STOP2 and w not in _EXHIBIT_NOUN]
+            if w not in _CHART_STOP2 and w not in _EXHIBIT_BASE]
 
 
 def _prose_describes(cid: str, sents: list[str]) -> bool:
@@ -1176,7 +1181,7 @@ def _reconcile_prose_charts(full_text: str, bindings: list[SectionBinding], brie
                     continue
                 ci[cid] = {"model_id": mid, "insight": c.get("insight", ""),
                            "refs": c.get("data_contract", {}) or {}}
-                if _prose_names(cid, ci[cid], low):
+                if _prose_names(cid, ci[cid], low) or _prose_describes(cid, sents):
                     named.append(cid)
             print(f"PULLED — {mat['id']}: {mid} (prose names it; selection had dropped it)", file=sys.stderr)
 
