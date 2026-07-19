@@ -39,7 +39,8 @@ def spec_from_persona(persona_id: str, conn, *, n_tiles: int = 4, n_charts: int 
         return (s[:128] + "…") if len(s) > 128 else s
 
     charts: list[Block] = []
-    for png, insight in hero_charts(p, mat["runs"], n=n_charts):
+    for png, insight in hero_charts(p, mat["runs"], n=n_charts,
+                                    exclude=set((article or {}).get("body_chart_ids") or [])):
         charts.append(Block(id=f"ch{len(charts)}", type="chart_embed",
                             title=_cap(insight), chart_png=png))
     if not charts:                                          # fall back to a graph render of a stub

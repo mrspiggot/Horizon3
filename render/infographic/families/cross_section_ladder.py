@@ -37,20 +37,26 @@ def _rung_label(meaning: str, field: str) -> str:
     return m if len(m) <= 46 else humanise(field)
 
 
-def _cross_section(mat: dict) -> tuple[str, str] | None:
-    """(model_id, heatmap-chart-id) for the persona's cross-section model, or None."""
+def _cross_section(mat: dict, exclude: set | None = None) -> tuple[str, str] | None:
+    """(model_id, heatmap-chart-id) for the persona's cross-section model, preferring one not already
+    shown standalone in the body; falls back to the first if all are in the body."""
+    exclude = exclude or set()
+    first = None
     for mid in mat["p"].get("models", []):
         for c in (mat["runs"].get(mid, {}).get("charts") or []):
             if (c.get("data_contract", {}) or {}).get("kind") == "heatmap":
-                return mid, c["id"]
-    return None
+                if first is None:
+                    first = (mid, c["id"])
+                if c["id"] not in exclude:
+                    return mid, c["id"]
+    return first
 
 
 def spec_from_persona(persona_id: str, conn, *, min_rungs: int = 3,
                       article: dict | None = None) -> tuple[InfographicSpec, set[str]]:
     mat = persona_material(persona_id, conn)
     p, numbers, meanings = mat["p"], mat["numbers"], mat["meanings"]
-    xs = _cross_section(mat)
+    xs = _cross_section(mat, set((article or {}).get("body_chart_ids") or []))
     if not xs:
         raise ValueError(f"{persona_id}: no cross-section (heatmap) model — not a ladder persona")
     mid, chart_id = xs

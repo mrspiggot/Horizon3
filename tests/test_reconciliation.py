@@ -122,6 +122,18 @@ def test_prefer_form_keeps_gap_chart_when_prose_emphasizes_the_gap():
     assert _prefer_form(gap, fan, ci, "the rules broadly track the funds rate") == fan
 
 
+def test_dashboard_embed_prefers_a_chart_not_already_in_the_body():
+    """P4.2 — the dashboard hero should skip a chart already shown standalone in the body (cost-of-money's
+    IG-split-twice), but never end up empty: if every candidate is in the body it keeps the first."""
+    from render.infographic.families.decomposition_hero import _find_decomposition
+    mat = {"p": {"models": ["m"]},
+           "runs": {"m": {"charts": [{"id": "A", "data_contract": {"kind": "decomposition"}},
+                                     {"id": "B", "data_contract": {"kind": "decomposition"}}]}}}
+    assert _find_decomposition(mat)[1]["id"] == "A"                 # first by default
+    assert _find_decomposition(mat, {"A"})[1]["id"] == "B"         # A is in the body → pick B
+    assert _find_decomposition(mat, {"A", "B"})[1]["id"] == "A"    # all in body → fall back, never empty
+
+
 def test_cross_section_collapses_the_same_decomposition_twice_but_spares_gap_and_levels():
     """P2a — the SAME model's over-time decomposition shown in two sections (the double-EBP re-grown by a
     Role-2 import) collapses to one, kept where the prose reads it; a gap chart and its levels fan in two

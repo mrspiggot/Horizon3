@@ -1,7 +1,22 @@
 """Studio compile-layer rendering guards (P3/P4/P5 — the v6 chart-execution cluster)."""
+import numpy as np
 import pandas as pd
 
-from render.studio.compile import _ordinal_order, _sorted_for_x, _tenor_key
+from render.studio.compile import _ordinal_order, _robust_vlim, _sorted_for_x, _tenor_key
+
+
+def test_robust_vlim_clips_a_spike_so_the_surface_does_not_wash_out():
+    # a vol surface: ~130 months of 14-20 baseline, a 2-month COVID spike to ~75. The scale must anchor
+    # near the baseline top (~20), not the spike (~75), or the whole surface collapses into one band.
+    base = np.random.default_rng(0).uniform(14, 20, size=(4, 130))
+    base[:, 40:42] = 75.0
+    lo, hi = _robust_vlim(base, diverging=False)
+    assert 18 < hi < 30            # anchored on the bulk, not the 75 spike
+    assert lo < 16
+    # diverging: symmetric about 0, anchored on the 95th pct of |value|, not the max
+    d = np.concatenate([np.full(100, 0.4), np.full(3, 9.0)])
+    vlo, vhi = _robust_vlim(d, diverging=True)
+    assert vhi == -vlo and vhi < 9.0
 
 
 def test_tenor_key_parses_days_weeks_months_years_and_rates_slang():

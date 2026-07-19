@@ -79,6 +79,7 @@ def render_surface(dates: list, mat: np.ndarray, spec: SurfaceSpec, out: str) ->
     ye = np.arange(len(spec.items) + 1)
 
     finite = mat[np.isfinite(mat)]
+    vmin_u = vmax_u = None
     if spec.signed:
         # anchor the diverging scale at the 95th percentile of |value|, not the max — one outlier
         # stretching vmin/vmax to ±max washes the whole heatmap out to near-white (the review's
@@ -86,12 +87,16 @@ def render_surface(dates: list, mat: np.ndarray, spec: SurfaceSpec, out: str) ->
         m = float(np.nanpercentile(np.abs(finite), 95)) or float(np.nanmax(np.abs(finite))) or 1.0
         norm, cmap = TwoSlopeNorm(vcenter=0.0, vmin=-m, vmax=m), "RdBu_r"
     else:
+        # SAME wash-out on the UNSIGNED branch (the vol implied-vol surface, 6 rounds): a COVID vol
+        # spike pins vmax near 80 and the recent 12-20 range collapses into one dark band. Anchor on the
+        # robust 2nd-98th percentile so the bulk fills cividis; the spike still saturates the top.
+        vmin_u, vmax_u = float(np.nanpercentile(finite, 2)), float(np.nanpercentile(finite, 98))
+        if vmax_u <= vmin_u:
+            vmin_u, vmax_u = float(np.nanmin(finite)), float(np.nanmax(finite))
         norm, cmap = None, "cividis"
     # draw with items[0] at the TOP: reverse rows so top row is last in y
     mesh = ax.pcolormesh(xe, ye, mat[::-1], cmap=cmap, norm=norm,
-                         vmin=(None if spec.signed else float(np.nanmin(finite))),
-                         vmax=(None if spec.signed else float(np.nanmax(finite))),
-                         shading="flat")
+                         vmin=vmin_u, vmax=vmax_u, shading="flat")
     mesh.set_edgecolor("face")
 
     ax.set_yticks(np.arange(len(spec.items)) + 0.5)

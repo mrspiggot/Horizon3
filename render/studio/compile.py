@@ -290,6 +290,20 @@ def _mark_point(ax, enc, df):
                    lw=0.5, label=lbl, zorder=4)
 
 
+def _robust_vlim(values, diverging: bool) -> tuple[float, float]:
+    """Colour limits that resist a single outlier washing the surface out (the vol implied-vol heatmap,
+    6 rounds): the 95th pct of |value| for a diverging scale, the 2nd–98th pct for a sequential one —
+    so the bulk fills the colormap and a genuine spike merely saturates the end. Matches matrix_heatmap."""
+    finite = values[np.isfinite(values)]
+    if not len(finite):
+        return (0.0, 1.0)
+    if diverging:
+        m = float(np.nanpercentile(np.abs(finite), 95)) or float(np.nanmax(np.abs(finite))) or 1.0
+        return (-m, m)
+    lo, hi = float(np.nanpercentile(finite, 2)), float(np.nanpercentile(finite, 98))
+    return (lo, hi) if hi > lo else (float(np.nanmin(finite)), float(np.nanmax(finite)))
+
+
 def _mark_heatmap(ax, enc, df, fig):
     """x (temporal/ordinal) × y (nominal rows) → color = quantitative value."""
     xf, yf = enc.encoding.x.field, enc.encoding.y.field
@@ -301,8 +315,7 @@ def _mark_heatmap(ax, enc, df, fig):
     if row_order is not None:
         piv = piv.reindex(row_order)
     cmap = theme.cmap_for(enc.color_job)
-    vmax = np.nanmax(np.abs(piv.values)) if enc.color_job == "diverging" else np.nanmax(piv.values)
-    vmin = -vmax if enc.color_job == "diverging" else np.nanmin(piv.values)
+    vmin, vmax = _robust_vlim(piv.values, enc.color_job == "diverging")
     im = ax.imshow(piv.values, aspect="auto", cmap=cmap, vmin=vmin, vmax=vmax, origin="lower")
     ax.set_yticks(range(len(piv.index))); ax.set_yticklabels(piv.index)
     xt = np.linspace(0, piv.shape[1] - 1, min(8, piv.shape[1])).astype(int)

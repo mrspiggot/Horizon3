@@ -501,9 +501,14 @@ def chart_png(run: dict, chart_id: str, figsize=(6.4, 3.9)) -> str | None:
         plt.close(fig)
 
 
-def hero_charts(p: dict, runs: dict, n: int = 1) -> list[tuple[str, str]]:
+def hero_charts(p: dict, runs: dict, n: int = 1, exclude: set | None = None) -> list[tuple[str, str]]:
     """The best polished charts for a persona: family-routing charts, the author's stub picks first,
-    then any other family chart across the models. Returns [(base64_png, insight_caption), …]."""
+    then any other family chart across the models. Returns [(base64_png, insight_caption), …].
+
+    `exclude` is the set of chart-ids already shown standalone in the body — those candidates sink to the
+    back so the dashboard hero doesn't duplicate a body Fig (energy's real-WTI embed = Fig 5) unless
+    nothing else is available."""
+    exclude = exclude or set()
     seen: set[tuple] = set()
     candidates: list[tuple[str, str]] = []
     for mid, cid in p.get("stub_charts", []):              # author's picks first
@@ -512,6 +517,7 @@ def hero_charts(p: dict, runs: dict, n: int = 1) -> list[tuple[str, str]]:
         for c in (runs.get(mid, {}).get("charts") or []):
             if (mid, c["id"]) not in seen:
                 candidates.append((mid, c["id"])); seen.add((mid, c["id"]))
+    candidates.sort(key=lambda mc: mc[1] in exclude)       # body-duplicates last (stable), never dropped
     out: list[tuple[str, str]] = []
     for mid, cid in candidates:
         if len(out) >= n:

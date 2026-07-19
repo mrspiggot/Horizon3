@@ -23,19 +23,26 @@ def _field(ref: str) -> str:  # "output:risk_free_pct" / "input:foo.level" → "
     return ref.split(":", 1)[-1].split(".", 1)[0]
 
 
-def _find_decomposition(mat: dict) -> tuple[str, dict] | None:
-    """First (model_id, decomposition-chart) across the persona's models."""
+def _find_decomposition(mat: dict, exclude: set | None = None) -> tuple[str, dict] | None:
+    """(model_id, decomposition-chart) — preferring one NOT already shown standalone in the body, so the
+    dashboard hero doesn't duplicate a body Fig (the cost-of-money IG-all-in-split-twice). Falls back to
+    the first if every candidate is in the body (a dashboard with no hero is worse than one duplicate)."""
+    exclude = exclude or set()
+    first = None
     for mid in mat["p"].get("models", []):
         for c in (mat["runs"].get(mid, {}).get("charts") or []):
             if (c.get("data_contract", {}) or {}).get("kind") == "decomposition":
-                return mid, c
-    return None
+                if first is None:
+                    first = (mid, c)
+                if c.get("id") not in exclude:
+                    return mid, c
+    return first
 
 
 def spec_from_persona(persona_id: str, conn, *, article: dict | None = None) -> tuple[InfographicSpec, set[str]]:
     mat = persona_material(persona_id, conn)
     p, numbers = mat["p"], mat["numbers"]
-    found = _find_decomposition(mat)
+    found = _find_decomposition(mat, set((article or {}).get("body_chart_ids") or []))
     if not found:
         raise ValueError(f"{persona_id}: no decomposition model — not a decomposition_hero persona")
     mid, chart = found

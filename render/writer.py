@@ -1426,8 +1426,12 @@ def reconcile_dashboard(persona_id: str, conn, draft: dict, brief: dict, out_dir
     full_text = draft["full_text"]
     cited_keys = [no.source for no in brief["toks"].values()
                   if no.rendered() and (no.rendered() in full_text or no.rendered().lstrip("+") in full_text)]
+    def _sec_charts(s):
+        return s.chart_ids if hasattr(s, "chart_ids") else (s.get("chart_ids", []) if isinstance(s, dict) else [])
+    body_chart_ids = {c for s in draft.get("filled_sections", []) for c in _sec_charts(s)}
     article_ctx = {"exec_summary": draft["exec_summary"], "full_text": full_text,
-                   "thesis": draft["standfirst"], "cited_keys": cited_keys}
+                   "thesis": draft["standfirst"], "cited_keys": cited_keys,
+                   "body_chart_ids": body_chart_ids}
     infog_png = out_dir / "infographic.png"
     reasons = list(draft.get("reasons", []))
     fam = FAMILY.get(persona_id, decision_brief)
