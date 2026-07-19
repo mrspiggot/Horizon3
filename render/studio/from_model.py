@@ -180,9 +180,13 @@ _SHAPERS = {
 }
 
 
-def brief_for_chart(persona: str, decision: str, model_id: str, chart_id: str, run: dict) -> InsightBrief | None:
+def brief_for_chart(persona: str, decision: str, model_id: str, chart_id: str, run: dict,
+                    *, prose: str = "") -> InsightBrief | None:
     """Build a STRUCTURE-PRESERVING Studio brief from one authored chart: classify the insight type
-    from the authored data_contract.kind and shape the data so the matching complex form can bind."""
+    from the authored data_contract.kind and shape the data so the matching complex form can bind.
+    When `prose` is given (the article section that shows this exhibit), it is folded into the
+    interpretation so the framer picks the form the ARTICLE describes — a locus when the prose says the
+    curve 'jumped outward', a recent window when the claim is about 'today'."""
     chart = next((c for c in run.get("charts", []) if c.get("id") == chart_id), None)
     history = run.get("history") or []
     if chart is None or not history:
@@ -196,6 +200,9 @@ def brief_for_chart(persona: str, decision: str, model_id: str, chart_id: str, r
     meta = run["meta"]
     insight = " ".join((chart.get("insight") or "").split())
     interp = f"{chart_id}. {insight}" if insight else chart_id
+    if prose:
+        interp += (f"  ARTICLE PROSE that shows this exhibit (choose the form and window it describes; "
+                   f"if it points at 'now/today/currently', prefer a recent-window view): {prose[:500]}")
     return InsightBrief(
         persona=persona, decision=decision, model_id=model_id, papers=(meta.get("grounded_in") or []),
         interpretation=interp, insight_type=insight_type, form_hint=form_hint,

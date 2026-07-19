@@ -25,6 +25,7 @@ class SelectState(TypedDict, total=False):
     library: list[dict]           # every PROVEN executable model in the spine
     min_models: int
     max_models: int
+    add_budget: int               # models the selector may add BEYOND the hardcoded floor (scope budget)
     max_iterations: int
 
     # propose

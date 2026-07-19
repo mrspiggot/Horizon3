@@ -72,7 +72,7 @@ charts:
     role: input
     chart_type: series
     color_job: categorical
-    insight: "the single series the rule watches — the Sahm gap catches the EARLY upturn off the cycle low, before the level itself looks alarming"
+    insight: "the raw unemployment rate the rule is built on — note how the level looks benign near cycle lows, which is exactly why the Sahm GAP (not the level) is what catches the early upturn"
     data_contract:
       kind: series
       ylabel: "unemployment (%)"

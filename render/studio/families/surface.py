@@ -80,7 +80,10 @@ def render_surface(dates: list, mat: np.ndarray, spec: SurfaceSpec, out: str) ->
 
     finite = mat[np.isfinite(mat)]
     if spec.signed:
-        m = float(np.nanmax(np.abs(finite))) or 1.0
+        # anchor the diverging scale at the 95th percentile of |value|, not the max — one outlier
+        # stretching vmin/vmax to ±max washes the whole heatmap out to near-white (the review's
+        # "washed-out surface"). The bulk now fills the colormap; genuine extremes saturate the ends.
+        m = float(np.nanpercentile(np.abs(finite), 95)) or float(np.nanmax(np.abs(finite))) or 1.0
         norm, cmap = TwoSlopeNorm(vcenter=0.0, vmin=-m, vmax=m), "RdBu_r"
     else:
         norm, cmap = None, "cividis"

@@ -221,6 +221,7 @@ def build_brief(mat: dict, *, conn=None, limit: int = 24) -> dict:
                 chart_index[cid] = {
                     "model_id": mid, "insight": ins, "role": c.get("role"),
                     "refs": frozenset(_refs(c.get("data_contract") or {})),
+                    "kind": (c.get("data_contract") or {}).get("kind", ""),
                 }
         outs = "; ".join(f"{o['name']} ({o.get('unit','')}) — {o.get('meaning','')}"
                          for o in (meta.get("outputs") or []))
@@ -299,6 +300,11 @@ _VOICE = (
     "a digit of your own. Each token ALREADY carries its unit (it may render as '4.55 vol pts' or "
     "'14%') — write the token alone and NEVER restate the unit after it (never '{n} vol points', "
     "never '{n} percent').\n"
+    "      – ALWAYS CONNECT A FIGURE TO THE SENTENCE with a preposition or punctuation — 'at', 'of', "
+    "'to', 'near', 'by', or a comma. NEVER jam a bare descriptor straight into the token: write 'sits "
+    "at a loose {n}', 'positive, at {n}', 'the premium is only {n} of the yield' — NEVER 'sits loose "
+    "{n}', 'positive {n}', 'fifteen percent risk premium {n}'. A word run into a figure with no "
+    "connector reads as unfinished; it is the single most common blemish, so guard every token.\n"
     "      – When the prose genuinely needs a number FIGURATIVELY — a rough magnitude, a round "
     "threshold, a target, a rule of thumb — SPELL IT OUT IN WORDS and never in digits: 'more than a "
     "hundred basis points below its own rule', 'an r* of around one percent', 'the two percent "
@@ -407,10 +413,39 @@ _WORDED_ROUND_BP = re.compile(
     rf"\b((?:(?:{_QUAL})\s+)*)(?:a\s+)?(?:{_ONES})(?:[\s-]+(?:{_ONES}))*\s+basis\s+points?\s+"
     rf"([+\-]?\d[\d,]*(?:\.\d+)?\s?(?:bp|bps))", re.I)
 
+# v4 (N1) added two forms my adjacent guard missed. (a) a NOUN PHRASE between the spelled figure and its
+# numeral — "only fifteen percent risk premium 15%" (the 10-year deck). (b) a bare state DESCRIPTOR run
+# straight into a signed/σ token with no connector — "sits loose -0.52σ", "positive +0.35σ" (pervasive
+# in fin-conditions). The durable fix for (b) is the writer prompt; this is the backstop.
+_NUMWORD = {"zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
+            "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14,
+            "fifteen": 15, "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19, "twenty": 20,
+            "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90,
+            "hundred": 100}
+_WORDED_PHRASE_NUM = re.compile(
+    rf"\b((?:{_ONES})(?:[\s-]+(?:{_ONES}))*)\s+per\s?cent\s+((?:[a-z][a-z-]+\s+){{1,3}}?)"
+    rf"(\d+(?:\.\d+)?)\s?%", re.I)
+_STATE_ADJ = (r"loose|tight|elevated|depressed|positive|negative|high|low|firm|soft|hot|cold|cheap|"
+              r"rich|wide|narrow|steep|flat|inverted|extended|stretched|compressed|subdued|muted|benign")
+_ADJ_NUM = re.compile(rf"\b({_STATE_ADJ})\s+([+\-−][\d.]+\s?(?:σ|pp|bp|bps|%)|[\d.]+\s?σ)", re.I)
+
+
+def _spelled_value(phrase: str):
+    tot = cur = 0
+    for w in re.findall(r"[a-z]+", phrase.lower()):
+        if w not in _NUMWORD:
+            continue
+        v = _NUMWORD[w]
+        if v == 100:
+            cur = (cur or 1) * 100
+        else:
+            cur += v
+    return (tot + cur) or None
+
 
 def _one_figure_once(t: str, toks: dict) -> str:
-    """Collapse a figure that renders twice — an adjacent duplicate of the same value, or a worded
-    round number sitting immediately before its own numeral (keep the qualifier + the numeral)."""
+    """Collapse a figure that renders twice, and connect a descriptor jammed into a numeral. A figure
+    appears ONCE, with a connector — never doubled, never a bare word run into its own token."""
     for no in toks.values():                                   # exact adjacent dup (incl. word units)
         v = _render_for_prose(no)
         if v:
@@ -418,6 +453,14 @@ def _one_figure_once(t: str, toks: dict) -> str:
     t = _ADJ_DUP.sub(r"\1", t)                                 # any adjacent identical figure
     t = _WORDED_ROUND_PCT.sub(lambda m: (m.group(1) or "") + m.group(2), t)
     t = _WORDED_ROUND_BP.sub(lambda m: (m.group(1) or "") + m.group(2), t)
+
+    def _phrase(m):                                            # "fifteen percent risk premium 15%"
+        sv = _spelled_value(m.group(1))
+        if sv is not None and abs(sv - float(m.group(3))) < 0.5:   # same figure, spelled AND tokenised
+            return f"{m.group(1)} percent {m.group(2).strip()}"    # keep the spelled phrase, drop the numeral
+        return m.group(0)
+    t = _WORDED_PHRASE_NUM.sub(_phrase, t)
+    t = _ADJ_NUM.sub(lambda m: f"{m.group(1)}, at {m.group(2)}", t)   # "loose -0.52σ" → "loose, at -0.52σ"
     return t
 
 
@@ -631,37 +674,116 @@ def _chart_key(cid: str, ci: dict) -> tuple:
     return (e.get("model_id"), e.get("refs"))
 
 
-def _dedup_by_concept(cids: list[str], ci: dict) -> list[str]:
-    """Collapse a model's subset/superset chart chain to its RICHEST member — the double-EBP that
-    `_chart_key` misses because the two exhibits differ in FORM. `credit_excess_bond_premium` authors a
-    GZ decomposition AND a standalone excess-bond-premium series whose one referenced field is a subset
-    of the decomposition's; the decomposition already shows it, so the standalone is redundant. Only
-    within a model (cross-model same-series views can be legitimately different)."""
+_LOCUS_WORDS = ("scatter", "locus", "against", "outward", "shift", "corner", "top-left",
+                "bottom-right", "quadrant", "cloud")
+_SERIES_WORDS = ("over time", "through time", "two series", "history", "by tenor", "each leg", "legs")
+_GAP_WORDS = ("gap", "minus", "difference", "consequence", "how far", "the trade", "below its rule",
+              "above its rule", "shortfall", "distance from")
+_GAP_IDS = ("gap", "consequence", "minus", "how far", "difference", "shortfall")
+
+
+def _prefer_form(a: str, b: str, ci: dict, prose_l: str) -> str:
+    """Of two same-concept charts, keep the one the section's prose FORM cues point at (a locus/scatter
+    when the prose describes a shift/corner, a series when it describes movement over time); otherwise
+    the richer (more referenced fields). This is why the labour Okun SCATTER survives over its two-line
+    twin — the corrected prose describes the locus."""
+    ea, eb = ci.get(a) or {}, ci.get(b) or {}
+    a_rel = (ea.get("kind") or "").lower() in ("scatter", "pearson") or \
+        any(w in a.lower() for w in ("vs", "versus", "against"))
+    b_rel = (eb.get("kind") or "").lower() in ("scatter", "pearson") or \
+        any(w in b.lower() for w in ("vs", "versus", "against"))
+    if a_rel != b_rel and any(w in prose_l for w in _LOCUS_WORDS):
+        return a if a_rel else b
+    if a_rel != b_rel and any(w in prose_l for w in _SERIES_WORDS):
+        return b if a_rel else a
+    # gap/difference vs a levels chart of the same fields: keep the GAP when the prose is about the gap
+    # (macro_rates called "the consequence chart — prescription minus actual — the one to sit with", and
+    # the old "richer = more series" tie-break dropped it for the levels fan).
+    a_gap = (ea.get("kind") or "").lower() == "gap_series" or any(w in a.lower() for w in _GAP_IDS)
+    b_gap = (eb.get("kind") or "").lower() == "gap_series" or any(w in b.lower() for w in _GAP_IDS)
+    if a_gap != b_gap and any(w in prose_l for w in _GAP_WORDS):
+        return a if a_gap else b
+    return a if len(ea.get("refs") or ()) >= len(eb.get("refs") or ()) else b
+
+
+def _dedup_within(cids: list[str], ci: dict, prose: str) -> list[str]:
+    """Within ONE section, collapse a subset chain of same-concept charts to a single exhibit — the
+    double-EBP, or a locus and its two-series twin — keeping the prose-described form."""
+    prose_l = (prose or "").lower()
     out: list[str] = []
     for cid in cids:
-        e = ci.get(cid) or {}
-        refs, mid = e.get("refs") or frozenset(), e.get("model_id")
+        refs = (ci.get(cid) or {}).get("refs") or frozenset()
         if not refs:
             out.append(cid)
             continue
-        kept, redundant = [], False
+        drop_self, keep = False, []
         for kc in out:
-            ke = ci.get(kc) or {}
-            if ke.get("model_id") != mid:
-                kept.append(kc)
-                continue
-            kr = ke.get("refs") or frozenset()
-            if refs <= kr:                     # subsumed by an already-kept richer chart → drop this one
-                redundant = True
-                kept.append(kc)
-            elif kr < refs:                    # this chart is richer → drop the kept subset
-                continue
+            kr = (ci.get(kc) or {}).get("refs") or frozenset()
+            if refs <= kr or kr <= refs:                  # same concept (one set contains the other)
+                if _prefer_form(cid, kc, ci, prose_l) == kc:
+                    drop_self = True
+                    keep.append(kc)
+                # else drop kc (omit) — cid is the kept form, appended below
             else:
-                kept.append(kc)
-        out = kept
-        if not redundant:
+                keep.append(kc)
+        out = keep
+        if not drop_self:
             out.append(cid)
     return out
+
+
+def _dedup_bindings(bindings: list[SectionBinding], ci: dict) -> list[str]:
+    """Per-section subset-collapse (prose-form-aware), then across sections drop only near-EXACT
+    duplicates. NEVER a cross-section subset: a gap chart in one section and its parent levels-fan in
+    another are BOTH wanted (the Fed regression). Returns the ids dropped, for logging."""
+    before = [c for b in bindings for c in b.chart_ids]
+    for b in bindings:
+        b.chart_ids = _dedup_within(b.chart_ids, ci, b.prose)
+    # cross-section decomposition-collapse runs BEFORE the exact-dup pass so the survivor is chosen by
+    # which section ARGUES the concept, not by iteration order (an exact twin would else keep the opener).
+    _dedup_decomposition_cross_section(bindings, ci)
+    seen: dict = {}
+    for b in bindings:
+        keep = []
+        for c in b.chart_ids:
+            k = _chart_key(c, ci)
+            if k in seen:                                 # exact/near duplicate already shown earlier
+                continue
+            seen[k] = c
+            keep.append(c)
+        b.chart_ids = keep
+    kept = {c for b in bindings for c in b.chart_ids}
+    return [c for c in before if c not in kept]
+
+
+# Over-time decomposition FORMS only. A gap chart (`gap_series`) and its parent levels fan (`series`) in
+# two sections are BOTH wanted (the Fed regression) — they are not in this set, so they are never touched.
+_DECOMP_FORMS = ("decomposition", "stacked")
+
+
+def _dedup_decomposition_cross_section(bindings: list[SectionBinding], ci: dict) -> None:
+    """The double-EBP re-grows when Role-2 imports a model whose over-time decomposition already lives in
+    another section: the SAME model's spread-decomposition shown twice, once in the opener and once where
+    it's argued (6/8 reviews flagged it). Collapse those to ONE — kept in the section whose prose best
+    reads it — while leaving a snapshot bar, a gap chart, or a different model's decomposition alone.
+
+    Restricted to over-time decomposition forms of the SAME model so it can only ever fire on a genuine
+    same-concept duplicate, never on the gap/levels pair the per-section pass is explicitly told to keep."""
+    by_model: dict = {}
+    for b in bindings:
+        for c in b.chart_ids:
+            e = ci.get(c) or {}
+            if (e.get("kind") or "").lower() in _DECOMP_FORMS:
+                by_model.setdefault(e.get("model_id"), []).append((c, b))
+    for group in by_model.values():
+        if len(group) < 2:
+            continue
+        keeper = max(range(len(group)), key=lambda i: (_chart_matches_section(*group[i]),
+                                                        len((ci.get(group[i][0]) or {}).get("refs") or ())))
+        for i, (c, b) in enumerate(group):
+            if i != keeper and c in b.chart_ids:
+                b.chart_ids.remove(c)
+                b.origin.pop(c, None)
 
 
 def _greedy_diverse(chosen: list[str], pool: list[str], ci: dict, target: int) -> list[str]:
@@ -747,32 +869,44 @@ def _resolve_chart_id(cid: str, chart_index: dict) -> str | None:
     return m[0] if m else None
 
 
-def _studio_chart(brief: dict, cid: str, info: dict, run: dict, out_dir: Path) -> str | None:
+_STUDIO_CACHE: dict[tuple, str] = {}
+
+
+def _studio_chart(brief: dict, cid: str, info: dict, run: dict, out_dir: Path, prose: str = "") -> str | None:
     """Design ONE article chart through the agentic Chart Studio — the SoTA multimodal critique loop
-    (framer → proposer → vision critique → reviser → judge). Opt-in via ARTICLE_CHART_STUDIO=1; returns
-    a base64 PNG, or None to fall back to the deterministic family renderer. The defect fix (A–D) does
-    not depend on this — it is the chart-quality upgrade the graph unlocks, gated because a vision loop
-    per chart is expensive and the family renderers already produce good exhibits."""
+    (framer → proposer → vision critique → reviser → judge), PROSE-DRIVEN so the form matches what the
+    section says the chart shows. Returns a base64 PNG, or None to fall back to the deterministic family
+    renderer for that one chart. This is the default build path; disable the whole studio with
+    ARTICLE_CHART_STUDIO=0. Process-cached by (model, chart, as_of) to bound the vision-loop cost."""
+    key = (info.get("model_id"), cid, str(getattr(run.get("latest"), "as_of", "")))
+    if key in _STUDIO_CACHE:
+        return _STUDIO_CACHE[key]
     try:
         from .studio.from_model import brief_for_chart
         from .studio.graph import run_studio
         p = brief["mat"]["p"]
-        ib = brief_for_chart(p["name"], p.get("decision", ""), info["model_id"], cid, run)
+        ib = brief_for_chart(p["name"], p.get("decision", ""), info["model_id"], cid, run, prose=prose)
         if ib is None:
             return None
-        st = run_studio(ib, str(out_dir), max_iterations=2)
+        st = run_studio(ib, str(out_dir), max_iterations=2)   # 2 vision cycles — catch label/whitespace defects
         png = st.get("png_path")
         if png and Path(png).exists():
-            return base64.b64encode(Path(png).read_bytes()).decode()
+            b64 = base64.b64encode(Path(png).read_bytes()).decode()
+            _STUDIO_CACHE[key] = b64
+            return b64
     except Exception as exc:
         print(f"STUDIO fallback — {cid}: {type(exc).__name__}: {str(exc)[:60]}", file=sys.stderr)
     return None
 
 
-def _render_charts(brief: dict, chart_ids: list[str], out_dir: Path) -> dict[str, tuple[Path, str]]:
-    """Render each referenced chart once → {chart_id: (png_path, caption)}."""
+def _render_charts(brief: dict, chart_ids: list[str], out_dir: Path,
+                   prose_by_cid: dict | None = None) -> dict[str, tuple[Path, str]]:
+    """Render each referenced chart once → {chart_id: (png_path, caption)}. The Chart Studio is the
+    default build path (prose-driven form + vision critic); the deterministic family renderer is the
+    per-chart fallback when the Studio errs or is disabled (ARTICLE_CHART_STUDIO=0)."""
     runs = brief["mat"]["runs"]
-    use_studio = os.environ.get("ARTICLE_CHART_STUDIO") == "1"
+    studio_on = os.environ.get("ARTICLE_CHART_STUDIO", "1") != "0"
+    prose_by_cid = prose_by_cid or {}
     out: dict[str, tuple[Path, str]] = {}
     for i, cid in enumerate(dict.fromkeys(chart_ids)):
         info = brief["chart_index"].get(cid)
@@ -780,8 +914,8 @@ def _render_charts(brief: dict, chart_ids: list[str], out_dir: Path) -> dict[str
             continue
         run = runs.get(info["model_id"]) or {}
         b64, cap = None, None
-        if use_studio:
-            b64 = _studio_chart(brief, cid, info, run, out_dir)
+        if studio_on:
+            b64 = _studio_chart(brief, cid, info, run, out_dir, prose=prose_by_cid.get(cid, ""))
             cap = decisive(info.get("insight", "") or cid) if b64 else None
         if not b64:
             b64, cap = chart_png_family(run, cid)
@@ -845,7 +979,7 @@ def _dedup_keep(cids: list[str], ci: dict) -> list[str]:
     return out
 
 
-def _place_charts(bindings: list[SectionBinding], ci: dict, *, soft_cap: int = 12) -> None:
+def _place_charts(bindings: list[SectionBinding], ci: dict, *, soft_cap: int = 16) -> None:
     """Enforce the exhibit contract on the charts the sections ASKED FOR, then return each surviving
     chart to its home section — by identity, never by `i % len`.
 
@@ -861,14 +995,6 @@ def _place_charts(bindings: list[SectionBinding], ci: dict, *, soft_cap: int = 1
         for c in b.chart_ids:
             if c not in picked:
                 picked.append(c)
-    deduped = _dedup_by_concept(picked, ci)                         # collapse the double-EBP / one-decomp-twice
-    if len(deduped) != len(picked):
-        dropped = [c for c in picked if c not in deduped]
-        print(f"CONCEPT-DEDUP charts — dropped {len(dropped)} redundant: {', '.join(dropped)[:80]}",
-              file=sys.stderr)
-        for b in bindings:                                         # keep the bindings consistent
-            b.chart_ids = [c for c in b.chart_ids if c in deduped]
-        picked = deduped
 
     if len(picked) < _CHART_FLOOR:
         final = _exhibit_contract(picked, ci)                      # under floor → fill up to the floor
@@ -894,6 +1020,43 @@ def _place_charts(bindings: list[SectionBinding], ci: dict, *, soft_cap: int = 1
         home.chart_ids.append(cid)
         home.origin[cid] = "floor"
         placed.add(cid)
+
+    # dedup AFTER placement: within a section collapse a subset chain (the double-EBP, a locus + its
+    # two-series twin) keeping the prose form; across sections drop only near-exact duplicates. A
+    # cross-section subset (a gap chart and its parent fan) is never dropped — the v4 Fed regression.
+    dropped = _dedup_bindings(bindings, ci)
+    if dropped:
+        print(f"CONCEPT-DEDUP charts — dropped {len(dropped)} redundant: {', '.join(dropped)[:90]}",
+              file=sys.stderr)
+    _spread_overloaded_sections(bindings, ci)
+
+
+def _chart_matches_section(cid: str, sec: SectionBinding) -> int:
+    words = set(_distinctive_words(cid))
+    pl = (sec.prose or "").lower()
+    return sum(1 for w in words if w in pl)
+
+
+def _spread_overloaded_sections(bindings: list[SectionBinding], ci: dict, *, cap: int = 4) -> None:
+    """No section should carry a third of the article's charts — the v5 openings stuffed six. Move the
+    weakest-matching excess charts off an over-cap section to the best-matching under-cap section, so
+    charts land where their prose reads them, not clumped in the opener."""
+    for b in bindings:
+        guard = 0
+        while len(b.chart_ids) > cap and guard < 20:
+            guard += 1
+            others = [o for o in bindings if o is not b and len(o.chart_ids) < cap]
+            if not others:
+                break
+
+            def _gain(cid):                                   # how much better this chart fits elsewhere
+                return max(_chart_matches_section(cid, o) for o in others) - _chart_matches_section(cid, b)
+
+            mover = max(b.chart_ids, key=_gain)               # the chart most out of place here
+            dest = max(others, key=lambda o: (_chart_matches_section(mover, o), -len(o.chart_ids)))
+            b.chart_ids.remove(mover)
+            dest.chart_ids.append(mover)
+            dest.origin[mover] = b.origin.pop(mover, "planned")
 
 
 # ── prose↔chart completeness (B) ────────────────────────────────────────────────────────────────
@@ -926,18 +1089,53 @@ def _prose_names(cid: str, info: dict, low: str) -> bool:
     return any(len(ph) >= 6 and ph in low for ph in _named_phrases(cid, info))
 
 
-def _section_for_chart(bindings: list[SectionBinding], info: dict, low: str) -> SectionBinding | None:
-    """The section a prose-named chart belongs to: the one grounded in its model, else one whose prose
-    spells the model out, else the section that names the most of the chart's words."""
+# v4/N2: the prose also DESCRIBES charts that aren't proper-noun exhibits — "the slope chart", "the
+# realized-vs-implied scatter", "the now-vs-quarter curve". Catch them without the v3 over-match by
+# requiring a sentence that BOTH points at a visual AND names ≥2 of the chart's distinctive words.
+_VISUAL = re.compile(r"\b(chart|charts|scatter|plot|plots|panel|exhibit|figure|graph|shows?|showing|"
+                     r"decomposition|heatmap|surface)\b", re.I)
+_CHART_STOP2 = {"over", "time", "its", "versus", "through", "against", "today", "each", "both", "into",
+                "from", "with", "this", "that", "across", "between", "than", "and", "the", "now"}
+
+
+def _distinctive_words(cid: str) -> list[str]:
+    return [w for w in re.findall(r"[a-z][a-z-]{3,}", (cid or "").lower())
+            if w not in _CHART_STOP2 and w not in _EXHIBIT_NOUN]
+
+
+def _prose_describes(cid: str, sents: list[str]) -> bool:
+    """A described (non-exhibit) chart: some sentence points at a visual AND names ≥2 distinctive words
+    of the chart. Conservative — two words + a visual verb, so a bare topic mention never fires."""
+    words = _distinctive_words(cid)
+    if len(words) < 2:
+        return False
+    return any(_VISUAL.search(s) and sum(1 for w in words if w in s) >= 2 for s in sents)
+
+
+def _section_for_chart(bindings: list[SectionBinding], info: dict, low: str,
+                       cid: str = "") -> SectionBinding | None:
+    """The section a chart belongs to: grounded in its model, else the section whose PROSE best names
+    the chart's subject, else the LEAST-LOADED section. NEVER the opening by default — that front-loaded
+    four v5 articles (a chart that couldn't be homed fell to bindings[0], stuffing the first section)."""
     mid = info.get("model_id") or ""
     home = next((b for b in bindings if b.model_id and b.model_id == mid), None)
-    if home is None and mid:
+    if home is not None:
+        return home
+    if mid:
         home = next((b for b in bindings if mid.replace("_", " ") in (b.prose or "").lower()), None)
-    return home or (bindings[0] if bindings else None)
+        if home is not None:
+            return home
+    # score sections by how much of the chart's subject their prose actually discusses
+    words = set(_distinctive_words(cid)) | {w for w in re.findall(r"[a-z]{4,}", (info.get("insight") or "").lower())}
+    scored = [(sum(1 for w in words if w in (b.prose or "").lower()), -len(b.chart_ids), b) for b in bindings]
+    scored.sort(reverse=True)                                  # best prose match, then least-loaded
+    if scored and scored[0][0] > 0:
+        return scored[0][2]
+    return min(bindings, key=lambda b: len(b.chart_ids)) if bindings else None
 
 
 def _reconcile_prose_charts(full_text: str, bindings: list[SectionBinding], brief: dict,
-                            conn=None, mat=None, *, soft_cap: int = 12) -> list[str]:
+                            conn=None, mat=None, *, soft_cap: int = 16) -> list[str]:
     """Build every chart the finished prose names. The writer names charts in words (the Phillips
     curve, the Beveridge curve); nothing used to reconcile those words with the built set, so a chart
     the argument builds toward could simply not exist. Scan the prose against the persona's chart
@@ -945,10 +1143,12 @@ def _reconcile_prose_charts(full_text: str, bindings: list[SectionBinding], brie
     executing its model if selection had left it out. Returns the chart ids added."""
     ci = brief["chart_index"]
     low = (full_text or "").lower()
+    sents = re.split(r"(?<=[.!?])\s+", low)
     built = {c for b in bindings for c in b.chart_ids}
 
-    # 1) prose-named charts already in the index (their models ran) but never placed
-    named = [cid for cid, info in ci.items() if _prose_names(cid, info, low)]
+    # 1) prose-named (exhibit) OR prose-described (visual + ≥2 distinctive words) charts, in the index
+    named = [cid for cid, info in ci.items()
+             if _prose_names(cid, info, low) or _prose_describes(cid, sents)]
 
     # 2) prose-named charts whose model selection dropped entirely — pull and run it (best effort)
     if conn is not None and mat is not None:
@@ -980,7 +1180,7 @@ def _reconcile_prose_charts(full_text: str, bindings: list[SectionBinding], brie
     for cid in named:
         if cid in built:
             continue
-        home = _section_for_chart(bindings, ci[cid], low)
+        home = _section_for_chart(bindings, ci[cid], low, cid)
         if home is not None:
             home.chart_ids.append(cid)
             home.origin[cid] = "prose"
@@ -1243,7 +1443,8 @@ def assemble(persona_id: str, mat: dict, brief: dict, draft: dict, ill_png, ill_
     """Render each placed chart once and assemble the .docx; return the run's result dict."""
     p, filled_sections = mat["p"], draft["filled_sections"]
     all_chart_ids = [cid for s in filled_sections for cid in s.chart_ids]
-    charts = _render_charts(brief, all_chart_ids, out_dir)
+    prose_by_cid = {cid: s.prose for s in filled_sections for cid in s.chart_ids}  # prose-driven form
+    charts = _render_charts(brief, all_chart_ids, out_dir, prose_by_cid)
     docx_path = out_dir / "article.docx"
     _assemble_docx(docx_path, p, mat, draft["headline"], draft["standfirst"], draft["exec_summary"],
                    filled_sections, charts, ill_png, infog_png)

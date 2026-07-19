@@ -89,7 +89,7 @@ def _persona_state_points(mat: dict) -> list:
     from unified_market_data.analysis.state import state_tuple
     from ...studio.families.state_space import StatePoint
 
-    points, seen = [], set()
+    points, seen, seen_concept = [], set(), set()
     for mid in mat["p"].get("models", []):
         run = mat["runs"].get(mid, {})
         hist, latest = run.get("history") or [], run.get("latest")
@@ -97,6 +97,11 @@ def _persona_state_points(mat: dict) -> list:
             continue
         for iid in getattr(latest, "inputs", {}) or {}:
             if iid in seen:
+                continue
+            # collapse same-concept inputs from different models to ONE point — the scatter must not
+            # show a "CPI 3.41" node AND an "Inflation 2.39" node arguing with each other (v4 defect).
+            ckey = frozenset(_concept_words(_badge_label(iid)))
+            if ckey and ckey in seen_concept:
                 continue
             series = []
             for rec in hist:
@@ -113,6 +118,8 @@ def _persona_state_points(mat: dict) -> list:
             except Exception:
                 continue
             seen.add(iid)
+            if ckey:
+                seen_concept.add(ckey)
             reading = f"{st.level:.2f} · {st.zscore:+.1f}σ · mom {momz:+.1f}σ/3m"
             points.append(StatePoint(label=_badge_label(iid), x=st.zscore, y=momz,
                                      accel=(st.acceleration or 0.0), reading=reading))
@@ -192,51 +199,72 @@ def _state_words(st) -> tuple[str, str]:
 # that says inflation is low and its momentum has bled out. We suppress a badge ONLY when the body
 # clearly says the opposite for the same concept (the opposite cue present, the confirming cue absent),
 # never on ambiguity: a factual badge is not convicted on a fuzzy read, and the floor still holds.
-_FALLING = re.compile(r"\b(fall\w*|fell|declin\w*|deceler\w*|eas(?:e|ed|ing)|cool\w*|bled out|"
-                      r"drop\w*|lower|receded|soften\w*|softer|slow\w*|subsid\w*)\b", re.I)
-_RISING = re.compile(r"\b(ris\w*|rose|acceler\w*|climb\w*|higher|hotter|surg\w*|jump\w*|firm\w*)\b", re.I)
+_FALLING = re.compile(r"\b(fall\w*|fell|declin\w*|deceler\w*|eas(?:e|ed|ing)|cool\w*|bled?\s*out|"
+                      r"bleed\w*|drop\w*|lower|receded?|recedin\w*|soften\w*|softer|slow\w*|subsid\w*|"
+                      r"drain\w*|ebb\w*|come\s+down|coming\s+down|abat\w*|fad\w*)\b", re.I)
+_RISING = re.compile(r"\b(ris\w*|rose|acceler\w*|climb\w*|higher|hotter|surg\w*|jump\w*|"
+                     r"firm(?:ing|er|ed)|pick\w*\s+up|heat\w*\s+up)\b", re.I)
 _LOWWORD = re.compile(r"\b(low|lowest|bottom|subdued|depressed|below|weak\w*|muted)\b", re.I)
 _HIGHWORD = re.compile(r"\b(high|highest|elevated|above|strong\w*|hot)\b", re.I)
 
 # the body and the badge often use different words for one concept (a "CPI" badge vs an "inflation"
 # body). Expand a label to its synonym group so the concept's sentences are actually found.
+# synonym groups kept TIGHT — only words that unambiguously name the concept. Generic words that
+# collide with other subjects ("price"/"prices" → "oil prices", "rate" → any rate) are excluded, so a
+# badge is never suppressed on a sentence that is actually about something else.
 _SYN = [
-    {"cpi", "inflation", "pce", "price", "prices", "disinflation", "inflationary"},
-    {"unemployment", "jobless", "payroll", "payrolls", "labour", "labor", "employment"},
-    {"vacancy", "vacancies", "openings", "tightness"},
-    {"growth", "gdp", "output", "activity"},
-    {"policy", "funds", "rate", "rates"},
-    {"spread", "slope", "curve", "premium"},
+    {"cpi", "inflation", "pce", "disinflation", "inflationary"},
+    {"unemployment", "jobless", "payroll", "payrolls"},
+    {"vacancy", "vacancies", "openings"},
+    {"gdp", "output"},
     {"vol", "volatility", "vix"},
-    {"gap", "slack"},
 ]
 
 
+# words that are shared across DIFFERENT concepts and so must never be the thing a badge matches on:
+# "subindex" (risk/credit/leverage all carry it), "real" (real GDP vs real rate), "curve"/"spread"/
+# "yield" (many), "gauge". Matching only DISTINCTIVE words stops a badge firing on a sentence that is
+# really about a sibling concept — the v6 over-suppression (Leverage fired on "risk subindex").
+_GENERIC = {"rate", "rates", "index", "gauge", "the", "subindex", "real", "nominal", "curve",
+            "spread", "yield", "level", "change", "growth"}
+
+
 def _concept_words(label: str) -> set[str]:
-    ws = set(re.findall(r"[a-z]{3,}", label.lower())) - {"rate", "index", "gauge", "the"}
+    ws = set(re.findall(r"[a-z]{3,}", label.lower())) - _GENERIC
     for grp in _SYN:
         if ws & grp:
             ws = ws | grp
     return ws
 
 
-def _badge_contradicts_body(label: str, lvl: str, mom: str, body: str) -> bool:
+def _badge_contradicts_body(label: str, lvl: str, mom: str, body: str) -> str:
+    """The body text proving it says the OPPOSITE of this badge for the same concept, or "". Tightened
+    to PROXIMITY: the opposite cue must sit within ~8 words of the concept word, with no confirming cue
+    in that window — so a long sentence that merely mentions the concept and, elsewhere, an unrelated
+    direction word does not fire. Returns the window for an auditable log."""
     concept = _concept_words(label)
     if not concept or not body:
-        return False
-    sents = [s for s in re.split(r"(?<=[.!?])\s+", body) if any(w in s.lower() for w in concept)]
-    if not sents:
-        return False
-    t = " ".join(sents)
-    if mom == "rising" and _FALLING.search(t) and not _RISING.search(t):
-        return True
-    if mom == "falling" and _RISING.search(t) and not _FALLING.search(t):
-        return True
-    if lvl == "elevated" and _LOWWORD.search(t) and not _HIGHWORD.search(t):
-        return True
-    if lvl == "depressed" and _HIGHWORD.search(t) and not _LOWWORD.search(t):
-        return True
-    return False
+        return ""
+    toks = body.split()
+    low = [w.lower().strip(".,;:—()") for w in toks]
+    for i, w in enumerate(low):
+        if w not in concept:
+            continue
+        lo, hi = max(0, i - 8), min(len(toks), i + 9)
+        window = " ".join(low[lo:hi])
+        opp = confirm = False
+        if mom == "rising":
+            opp, confirm = bool(_FALLING.search(window)), bool(_RISING.search(window))
+        elif mom == "falling":
+            opp, confirm = bool(_RISING.search(window)), bool(_FALLING.search(window))
+        if not (opp and not confirm):                          # try the LEVEL contradiction too
+            if lvl == "elevated":
+                opp, confirm = bool(_LOWWORD.search(window)), bool(_HIGHWORD.search(window))
+            elif lvl == "depressed":
+                opp, confirm = bool(_HIGHWORD.search(window)), bool(_LOWWORD.search(window))
+        if opp and not confirm:
+            return " ".join(toks[lo:hi])
+    return ""
 
 
 def _badges(mat: dict, limit: int = 5, *, article: dict | None = None, floor: int = 3) -> list[Block]:
@@ -257,14 +285,15 @@ def _badges(mat: dict, limit: int = 5, *, article: dict | None = None, floor: in
                 continue
             seen.add(iid)
             label = _badge_label(iid)
+            trig = _badge_contradicts_body(label, lvl, mom, body)
             cands.append({"iid": iid, "label": label, "lvl": lvl, "mom": mom,
-                          "contra": _badge_contradicts_body(label, lvl, mom, body)})
+                          "contra": bool(trig), "trig": trig})
     clean = [c for c in cands if not c["contra"]]
     kept = clean + [c for c in cands if c["contra"]][: max(0, floor - len(clean))]
     for c in cands:
         if c["contra"] and c not in kept:
-            print(f"BADGE suppressed (contradicts body) — {c['label']}: "
-                  f"{', '.join(w for w in (c['lvl'], c['mom']) if w)}", file=sys.stderr)
+            print(f"BADGE suppressed — {c['label']}: {', '.join(w for w in (c['lvl'], c['mom']) if w)} "
+                  f"| body: “{c['trig'][:70]}”", file=sys.stderr)
     out = []
     for c in kept[:limit]:
         words = ", ".join(w for w in (c["lvl"], c["mom"]) if w)

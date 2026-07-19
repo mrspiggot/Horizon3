@@ -36,7 +36,11 @@ def _series_groups(df: pd.DataFrame, enc: ChartEncoding):
     elif enc.encoding.color and enc.encoding.color.type in ("nominal", "ordinal"):
         key = enc.encoding.color.field
     if key and key in df:
-        return [(str(k), g) for k, g in df.groupby(key, sort=False)]
+        # A CONTINUOUS TIME RAMP or high-cardinality field is an ENCODING, not an identity to split
+        # on. Grouping it makes every point its own "series" and labels each — the Beveridge locus
+        # shipped ~300 index labels ("231, 254, …") over an unreadable cluster. Treat as one series.
+        if key not in ("order", "date", "t", "time", "index") and df[key].nunique() <= 12:
+            return [(str(k), g) for k, g in df.groupby(key, sort=False)]
     lbl = enc.encoding.y.title if (enc.encoding.y and enc.encoding.y.title) else (enc.encoding.y.field if enc.encoding.y else "value")
     return [(lbl, df)]
 
@@ -127,7 +131,17 @@ def _mark_connected_scatter(ax, enc, df):
                              mutation_scale=15, lw=0, color=col, alpha=0.9, zorder=5))
         ax.scatter(X[0], Y[0], s=55, facecolor="white", edgecolor=col, linewidth=2, zorder=6)
         ax.scatter(X[-1], Y[-1], s=140, color=col, edgecolor="white", linewidth=1.5, zorder=7)
-        ax.annotate(f"  {lbl}", (X[-1], Y[-1]), fontsize=10.5, fontweight="bold", color=col,
+        # label the endpoint with WHERE-IN-TIME the path ends, not the y-axis title (which is redundant
+        # with the axis — the v6 Beveridge locus ended in a bare "Job vacancy rate (%)"). Keep a real
+        # series identity when there is one (multi-group paths).
+        ytitle = (enc.encoding.y.title or "").strip().lower()
+        end = lbl if (lbl and lbl.strip().lower() != ytitle) else ""
+        if not end and tf in ("date", "t", "time"):
+            try:
+                end = pd.to_datetime(g[tf].iloc[-1]).strftime("%b %Y")
+            except Exception:
+                end = "latest"
+        ax.annotate(f"  {end or 'latest'}", (X[-1], Y[-1]), fontsize=10.5, fontweight="bold", color=col,
                     va="center", zorder=8)
 
 
@@ -253,6 +267,24 @@ def _mark_heatmap(ax, enc, df, fig):
         fig.colorbar(im, ax=ax, pad=0.01).set_label(enc.encoding.color.title or cf, fontsize=8)
 
 
+def _drop_total_from_stack(piv):
+    """NUMERIC SANITY (rule #2 at the chart layer): if one column IS the sum of the others, it is the
+    TOTAL mistakenly included as a stackable band — stacking it on its own components DOUBLES the
+    reading (the GZ spread shipped at ~16pp vs a true ~8). Drop it; the cumulative line draws the total."""
+    cols = list(piv.columns)
+    if len(cols) < 3:
+        return piv
+    for c in cols:
+        others = piv[[x for x in cols if x != c]].sum(axis=1)
+        scale = float(others.abs().mean()) + 1e-9
+        if float((piv[c].fillna(0) - others.fillna(0)).abs().mean()) < 0.05 * scale:
+            import sys as _sys
+            print(f"CHART SANITY — dropped total-among-components {c!r} from the stack (it equals the "
+                  f"sum of the others; stacking it would double-count)", file=_sys.stderr)
+            return piv.drop(columns=[c])
+    return piv
+
+
 def _mark_stacked(ax, enc, df):
     """True part-to-whole over time: cumulatively stack the components so they SUM to the total,
     with a total line on top. Handles signed components (a negative component dips the stack
@@ -265,6 +297,7 @@ def _mark_stacked(ax, enc, df):
     if not catf or catf not in df:
         return _mark_line_area(ax, enc, df, fill=True)
     piv = df.pivot_table(index=xf, columns=catf, values=yf, aggfunc="sum").sort_index()
+    piv = _drop_total_from_stack(piv)                          # rule #2 at the chart layer (below)
     order = piv.mean().sort_values(ascending=False).index      # steadiest/largest as the base
     piv = piv[order]
     x = pd.to_datetime(piv.index) if (enc.encoding.x and enc.encoding.x.type == "temporal") else piv.index
@@ -385,6 +418,13 @@ def compile_encoding(enc: ChartEncoding, out_path: str, *, figsize=(11, 7.2)) ->
     (small multiples: one panel per facet value)."""
     theme.use_theme()
     df = _df(enc)
+    # NUMERIC SANITY: refuse an empty / all-NaN chart rather than ship a blank panel (the labour
+    # Sahm-gap shipped with no data series). Raising here → the caller falls back to the deterministic
+    # renderer, and if that also has no data the chart is dropped-and-logged, never shipped blank.
+    yf = enc.encoding.y.field if enc.encoding.y else None
+    n_valid = int(df[yf].notna().sum()) if (df is not None and yf and yf in df) else (0 if df is None else len(df))
+    if n_valid < 2:
+        raise ValueError(f"compile: empty/near-empty data for {enc.title[:40]!r} ({n_valid} valid points)")
     mark = enc.mark.value if hasattr(enc.mark, "value") else enc.mark
     if mark not in _DISPATCH:
         raise ValueError(f"compile: unsupported mark '{mark}'")

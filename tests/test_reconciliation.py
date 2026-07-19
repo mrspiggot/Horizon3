@@ -32,6 +32,18 @@ def test_one_figure_once_collapses_doubles_but_spares_distinct_numbers():
     assert _one_figure_once("an r* of around one percent anchors it", toks) == "an r* of around one percent anchors it"
 
 
+def test_number_sweep_v4_forms_phrase_and_descriptor():
+    from render.writer import _one_figure_once
+    toks = {"n1": _N("n1", -0.52, "σ", "{:+.2f}"), "n2": _N("n2", 0.35, "σ", "{:+.2f}")}
+    # worded number + noun phrase + matching numeral (10-year deck): keep the phrase, drop the numeral
+    assert _one_figure_once("only fifteen percent risk premium 15%", toks) == "only fifteen percent risk premium"
+    # bare state-descriptor jammed into a signed/σ token (fin-conditions): insert a connector
+    assert _one_figure_once("sits loose -0.52σ", toks) == "sits loose, at -0.52σ"
+    assert _one_figure_once("momentum positive +0.35σ", toks) == "momentum positive, at +0.35σ"
+    # clean prose with a real connector is untouched
+    assert _one_figure_once("the premium is at 15% of the yield", toks) == "the premium is at 15% of the yield"
+
+
 # ── Pass 1 — one concept once, extended (cross-model numbers + subset charts) ──────────────────────
 def test_concept_registry_merges_same_concept_different_field_names():
     from render.infographic.from_persona import _concept_registry
@@ -47,17 +59,122 @@ def test_concept_registry_merges_same_concept_different_field_names():
     assert canon["funding_quality.hy_all_in_pct"] != canon["funding_quality.ig_all_in_pct"]  # IG≠HY
 
 
-def test_chart_dedup_collapses_subset_within_model_keeps_other_models():
-    from render.writer import _dedup_by_concept
+def test_dedup_within_section_collapses_but_cross_section_subset_survives():
+    """The v4 fix: same-section subset collapses (double-EBP), but a cross-section subset (Fed gap chart
+    vs its parent fan) is BOTH kept — and a locus survives over its two-series twin (labour Okun)."""
+    from render.writer import SectionBinding, _dedup_bindings
     gz = frozenset({"gz_spread", "expected_default", "excess_bond_premium"})
-    ci = {"GZ decomposition": {"model_id": "credit_ebp", "refs": gz},
-          "The excess bond premium": {"model_id": "credit_ebp", "refs": frozenset({"excess_bond_premium"})},
-          "Decomposition, again": {"model_id": "credit_ebp", "refs": gz},
-          "Quality ladder": {"model_id": "ladder", "refs": frozenset({"ig_oas", "hy_oas", "em_oas"})}}
-    out = _dedup_by_concept(list(ci), ci)
-    assert "The excess bond premium" not in out          # subsumed by the decomposition
-    assert sum("ecomposition" in c for c in out) == 1     # one decomposition, not two
-    assert "Quality ladder" in out                        # a different model is untouched
+    okun = frozenset({"gdp_growth", "unemployment_change"})
+    ci = {
+        "GZ decomposition": {"model_id": "credit_ebp", "refs": gz, "kind": "decomposition"},
+        "The excess bond premium": {"model_id": "credit_ebp", "refs": frozenset({"excess_bond_premium"}), "kind": "gap_series"},
+        "The prescription-minus-actual gap": {"model_id": "reaction", "refs": frozenset({"taylor", "actual"}), "kind": "gap_series"},
+        "The prescription fan": {"model_id": "reaction", "refs": frozenset({"taylor", "balanced", "inertial", "actual"}), "kind": "series"},
+        "Okun's Law (growth vs change in unemployment)": {"model_id": "okun", "refs": okun, "kind": "scatter"},
+        "The two series Okun relates over time": {"model_id": "okun", "refs": okun, "kind": "series"},
+    }
+    bindings = [
+        SectionBinding(heading="splitting the spread", prose="the GZ decomposition and the excess bond premium",
+                       model_id="credit_ebp", chart_ids=["GZ decomposition", "The excess bond premium"]),
+        SectionBinding(heading="two verdicts", prose="the prescription-minus-actual gap makes the point",
+                       model_id="reaction", chart_ids=["The prescription-minus-actual gap"]),
+        SectionBinding(heading="the rule's outcome", prose="the prescription fan across every cycle",
+                       model_id="reaction", chart_ids=["The prescription fan"]),
+        SectionBinding(heading="the corner", prose="recessions pinned to the top-left corner of the scatter",
+                       model_id="okun", chart_ids=["Okun's Law (growth vs change in unemployment)",
+                                                   "The two series Okun relates over time"]),
+    ]
+    _dedup_bindings(bindings, ci)
+    kept = {c for b in bindings for c in b.chart_ids}
+    assert "The excess bond premium" not in kept          # same-section subset → collapsed
+    assert "The prescription-minus-actual gap" in kept    # cross-section subset → KEPT (the Fed fix)
+    assert "The prescription fan" in kept
+    assert "Okun's Law (growth vs change in unemployment)" in kept   # locus kept over its series twin
+    assert "The two series Okun relates over time" not in kept       # (prose says corner/scatter)
+
+
+def test_chart_sanity_drops_total_among_stack_components():
+    """P0 — rule #2 at the chart layer: a stacked chart must never include the TOTAL as a band alongside
+    its own components (the GZ spread shipped at ~16pp vs a true ~8)."""
+    import pandas as pd, numpy as np
+    from render.studio.compile import _drop_total_from_stack
+    idx = pd.date_range("2007-01-01", periods=12, freq="MS")
+    default, ebp = np.linspace(1, 3, 12), np.linspace(2, 5, 12)
+    piv = pd.DataFrame({"gz spread": default + ebp, "expected default": default, "ebp": ebp}, index=idx)
+    out = _drop_total_from_stack(piv)
+    assert "gz spread" not in out.columns                       # the total is dropped
+    assert abs(float(out.sum(axis=1).iloc[-1]) - float((default + ebp)[-1])) < 1e-6  # stack = true spread
+    # a genuine 2-component stack (no total among them) is untouched
+    piv2 = pd.DataFrame({"expected default": default, "ebp": ebp}, index=idx)
+    assert list(_drop_total_from_stack(piv2).columns) == ["expected default", "ebp"]
+
+
+def test_prefer_form_keeps_gap_chart_when_prose_emphasizes_the_gap():
+    from render.writer import _prefer_form
+    ci = {"The consequence — how far the Fed is from its own rule":
+          {"kind": "gap_series", "refs": frozenset({"taylor", "actual"})},
+          "The prescription fan":
+          {"kind": "series", "refs": frozenset({"taylor", "balanced", "inertial", "actual"})}}
+    gap, fan = "The consequence — how far the Fed is from its own rule", "The prescription fan"
+    # prose about the gap → keep the gap, not the richer levels fan (the macro_rates regression)
+    assert _prefer_form(gap, fan, ci, "the consequence chart — prescription minus actual — that gap is the trade") == gap
+    # neutral prose → the richer fan wins (unchanged tie-break)
+    assert _prefer_form(gap, fan, ci, "the rules broadly track the funds rate") == fan
+
+
+def test_cross_section_collapses_the_same_decomposition_twice_but_spares_gap_and_levels():
+    """P2a — the SAME model's over-time decomposition shown in two sections (the double-EBP re-grown by a
+    Role-2 import) collapses to one, kept where the prose reads it; a gap chart and its levels fan in two
+    sections (the Fed regression) are NOT decomposition forms and must both survive."""
+    from render.writer import SectionBinding, _dedup_bindings
+    # same GZ decomposition imported into the opener AND argued in the credit section → one survives
+    O, A = "credit spread decomposition opener", "credit spread decomposition argued"
+    ci = {
+        O: {"model_id": "credit_ebp", "kind": "decomposition", "refs": frozenset({"gz", "default", "ebp"})},
+        A: {"model_id": "credit_ebp", "kind": "decomposition", "refs": frozenset({"gz", "default", "ebp"})},
+        "rates gap": {"model_id": "taylor", "kind": "gap_series", "refs": frozenset({"rule", "actual"})},
+        "rates fan": {"model_id": "taylor", "kind": "series",
+                      "refs": frozenset({"rule", "actual", "balanced", "inertial"})},
+    }
+    opener = SectionBinding(heading="opening", prose="the setup and the stakes", chart_ids=[O],
+                            origin={O: "planned"})
+    credit = SectionBinding(heading="credit", prose="the credit spread decomposition into default and premium",
+                            chart_ids=[A], origin={A: "planned"})
+    rates1 = SectionBinding(heading="the trade", prose="the gap versus the rule", chart_ids=["rates gap"],
+                            origin={"rates gap": "planned"})
+    rates2 = SectionBinding(heading="the fan", prose="every rule variant as a levels fan", chart_ids=["rates fan"],
+                            origin={"rates fan": "planned"})
+    dropped = _dedup_bindings([opener, credit, rates1, rates2], ci)
+    assert O in dropped and A not in dropped       # kept in the section that argues it, not the opener
+    assert credit.chart_ids == [A]
+    assert rates1.chart_ids == ["rates gap"] and rates2.chart_ids == ["rates fan"]   # gap/levels both live
+
+
+def test_placement_never_defaults_to_opening_and_spreads_overflow():
+    """P1 — a chart homes to the section whose prose discusses it, never the opening by default; an
+    over-stuffed opener spreads its out-of-place charts to their sections (the v5 front-loading)."""
+    from render.writer import SectionBinding, _section_for_chart, _spread_overloaded_sections
+    bindings = [SectionBinding(heading="opening", prose="the setup and the stakes", chart_ids=[]),
+                SectionBinding(heading="the curve", prose="the yield curve slope and its inversion", chart_ids=[])]
+    ci = {"The yield-curve slope": {"model_id": "x", "insight": "the slope of the yield curve"}}
+    assert _section_for_chart(bindings, ci["The yield-curve slope"], "", "The yield-curve slope").heading == "the curve"
+    # an over-cap opener sheds the chart that belongs elsewhere
+    op = SectionBinding(heading="opening", prose="the setup",
+                        chart_ids=["c1", "c2", "c3", "c4", "The unemployment recession sahm chart"])
+    lab = SectionBinding(heading="labour", prose="unemployment and the recession call and the sahm rule", chart_ids=[])
+    ci2 = {c: {"model_id": "m", "insight": ""} for c in op.chart_ids}
+    _spread_overloaded_sections([op, lab], ci2, cap=4)
+    assert len(op.chart_ids) <= 4
+    assert "The unemployment recession sahm chart" in lab.chart_ids
+
+
+def test_prose_describes_catches_visual_plus_two_distinctive_words():
+    from render.writer import _prose_describes
+    sents = ["the scatter of realized against implied volatility puts today in an unusual quadrant".lower()]
+    assert _prose_describes("The realized-vs-implied volatility scatter", sents) is True
+    # a bare topic mention (no visual verb, or <2 distinctive words) does not fire
+    assert _prose_describes("The realized-vs-implied volatility scatter",
+                            ["implied volatility has been calm all year"]) is False
 
 
 # ── Pass 1 — dashboard badge suppressed only on a clear contradiction with the body ────────────────
@@ -65,9 +182,12 @@ def test_badge_suppressed_only_on_clear_contradiction():
     from render.infographic.families.regime_dashboard import _badge_contradicts_body
     body = ("Inflation has fallen to 2.39%, near the bottom of its recent range; its momentum has bled "
             "out and decelerated hard. The labour market is still tight and vacancies remain high.")
-    assert _badge_contradicts_body("CPI", "elevated", "rising", body) is True       # CPI↔inflation synonym
-    assert _badge_contradicts_body("Vacancy rate", "elevated", "rising", body) is False  # body agrees → keep
-    assert _badge_contradicts_body("CPI", "elevated", "rising", "cpi feeds the model") is False  # ambiguous
+    assert _badge_contradicts_body("CPI", "elevated", "rising", body)         # CPI↔inflation synonym, falls
+    assert not _badge_contradicts_body("Vacancy rate", "elevated", "rising", body)  # body agrees → keep
+    assert not _badge_contradicts_body("CPI", "elevated", "rising", "cpi feeds the model")  # ambiguous
+    # proximity: a concept mention with the opposite cue FAR away (different clause) must NOT fire
+    far = "Inflation is the model's key input. Separately, oil prices have fallen sharply this month."
+    assert not _badge_contradicts_body("CPI", "elevated", "rising", far)
 
 
 # ── D — one concept → one number ──────────────────────────────────────────────────────────────────

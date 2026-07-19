@@ -50,14 +50,17 @@ def build_graph():
 
 
 def select_models(persona_id: str, decision: str, default_models: list[str], *,
-                  min_models: int = 3, max_models: int = 6, max_iterations: int = 2) -> dict:
+                  min_models: int = 3, max_models: int = 5, add_budget: int = 2,
+                  max_iterations: int = 2) -> dict:
     """Choose the models this decision-maker should run. Returns {selected, reasons, rejected}.
 
-    `default_models` is personas.yaml's hardcoded list — the floor if selection produces nothing.
+    `default_models` is personas.yaml's hardcoded list — the floor if selection produces nothing, and the
+    proven core the scope budget biases toward. `add_budget` caps how many models may be added beyond it,
+    so a regeneration cannot sprawl (the v5 regression); `max_models` is the hard ceiling on the total.
     """
     return build_graph().invoke(
         {"persona_id": persona_id, "decision": decision, "default_models": default_models,
-         "min_models": min_models, "max_models": max_models, "max_iterations": max_iterations,
-         "iterations": 0, "feedback": ""},
+         "min_models": min_models, "max_models": max_models, "add_budget": add_budget,
+         "max_iterations": max_iterations, "iterations": 0, "feedback": ""},
         config={"recursion_limit": 12},
     )

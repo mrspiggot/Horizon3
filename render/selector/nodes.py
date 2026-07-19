@@ -29,15 +29,23 @@ REASONING_MODEL = "claude-opus-4-8"
 CATALOG = "horizon3"
 
 
-def _invoke(llm, prompt: str, tries: int = 3):
-    """Retry the known `.with_structured_output` flake, where the model serialises a nested list as a
-    string and pydantic rejects it. Already documented and handled the same way in writer._invoke;
-    this prompt is long enough to hit it, and it did on the first run."""
+_ARRAY_NUDGE = ("\n\nIMPORTANT — FORMAT: return `picks` as a JSON ARRAY of objects, each with string "
+                "fields `model_id` and `why`. Do NOT encode the array, or any field, as a single quoted "
+                "string; emit real JSON structure.")
+
+
+def _invoke(llm, prompt: str, tries: int = 4):
+    """Retry the known `.with_structured_output` flake, where the model serialises the nested `picks`
+    list as a STRING and pydantic rejects it. The reasoning model runs at a FIXED temperature (Opus 4.8
+    deprecates the knob, and get_llm is cached), so a plain re-ask reproduces the identical bad
+    serialisation — which is exactly why this ValidationError 'recurred' every run instead of clearing.
+    Nudge the PROMPT harder toward a well-formed array each try; changing the input is what actually
+    changes a deterministic model's output."""
     last = None
-    for _ in range(tries):
+    for i in range(tries):
         try:
-            return llm.invoke(prompt)
-        except Exception as exc:
+            return llm.invoke(prompt + _ARRAY_NUDGE * i)
+        except Exception as exc:                            # ValidationError / parse error → re-ask, firmer
             last = exc
     raise last
 
@@ -96,6 +104,12 @@ informs their decision, not just the few someone once listed.
 RULES
 - Choose {min_models}-{max_models} models. Fewer than {min_models} makes a thin article; more than
   {max_models} makes an unfocused one.
+- SCOPE DISCIPLINE. The floor is your default set; you may add AT MOST {add_budget} models beyond it,
+  so spend them well. Do NOT add a model that merely decomposes, re-cuts, or offers a second view of a
+  concept a floor model already carries — a spread model plus a second model that decomposes the SAME
+  spread is one idea shown twice, not two readings. That exact over-reach (importing an extra
+  decomposition an article did not need) is what broke the last batch. A model earns an addition only
+  by bringing a reading the floor cannot show at all.
 - Choose for the DECISION, not for topical adjacency. A commodity analyst forecasting growth and
   inflation is served by a copper/gold growth signal even though it is not "a commodity model"; a
   volatility trader is not served by a labour-market model merely because both are macro.
@@ -122,9 +136,11 @@ def propose(state: SelectState) -> dict:
     prompt = _PROPOSE.format(
         persona=state["persona_id"], decision=state["decision"], library=lib,
         defaults=", ".join(state["default_models"]),
-        min_models=state.get("min_models", 3), max_models=state.get("max_models", 6),
+        min_models=state.get("min_models", 3), max_models=state.get("max_models", 5),
+        add_budget=state.get("add_budget", 2),
         feedback=(f"YOUR LAST ATTEMPT WAS REJECTED: {fb}\nFix it.\n" if fb else ""))
-    llm = get_llm(model=REASONING_MODEL, temperature=0).with_structured_output(Picks)
+
+    llm = get_llm(model=REASONING_MODEL).with_structured_output(Picks)
     got: Picks = _invoke(llm, prompt)
     return {"picks": got.picks, "iterations": state.get("iterations", 0) + 1}
 
@@ -142,11 +158,25 @@ def validate(state: SelectState) -> dict:
         selected.append(p.model_id)
         reasons[p.model_id] = p.why
 
-    lo, hi = state.get("min_models", 3), state.get("max_models", 6)
+    # SCOPE BUDGET (P2b). Bias to the proven floor: keep every floor model the LLM selected, then admit
+    # additions only up to `add_budget`. This is what stops a regeneration sprawling four models deep —
+    # the credit/labour/cost pieces regressed by importing 3 extra decompositions; here they keep at most
+    # two. Enforced deterministically so the ceiling holds even when the prompt rule is ignored.
+    lo, hi = state.get("min_models", 3), state.get("max_models", 5)
+    add_budget = state.get("add_budget", 2)
+    floor = set(state.get("default_models") or [])
+    kept_floor = [m for m in selected if m in floor]
+    additions = [m for m in selected if m not in floor]
+    if len(additions) > add_budget:
+        rejected.append(f"scope budget: {len(additions)} additions beyond the floor trimmed to "
+                        f"{add_budget} (bias to the proven core)")
+        additions = additions[:add_budget]
+    selected = (kept_floor + additions)[:hi]
     if len(selected) > hi:
         selected, rejected = selected[:hi], rejected + [f"capped at {hi} (picked {len(selected)})"]
     if len(selected) < lo:
         rejected.append(f"only {len(selected)} valid picks — need at least {lo}")
+    reasons = {m: reasons[m] for m in selected if m in reasons}
 
     # THE FLOOR. A selector that returns nothing usable must not silently produce an article with no
     # models: the planner did exactly that on 2026-07-16 (offered 13 charts, shipped 1) and the net
