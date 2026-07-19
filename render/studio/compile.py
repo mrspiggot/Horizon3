@@ -8,6 +8,9 @@ express the differentiated charts a "muppet with the FT" cannot reproduce.
 """
 from __future__ import annotations
 
+import re
+import textwrap
+
 import matplotlib
 
 matplotlib.use("Agg")
@@ -43,6 +46,41 @@ def _series_groups(df: pd.DataFrame, enc: ChartEncoding):
             return [(str(k), g) for k, g in df.groupby(key, sort=False)]
     lbl = enc.encoding.y.title if (enc.encoding.y and enc.encoding.y.title) else (enc.encoding.y.field if enc.encoding.y else "value")
     return [(lbl, df)]
+
+
+_TENOR_UNIT_DAYS = {"d": 1.0, "w": 7.0, "m": 30.0, "y": 365.0, "s": 365.0}   # 's' = rates slang for years (2s/5s/10s)
+
+
+def _tenor_key(label) -> float | None:
+    """Days-to-maturity for a tenor label ('9d','1m','3m','6m','1y','10y','2Y','5s'); None if not a tenor."""
+    m = re.fullmatch(r"\s*(\d+(?:\.\d+)?)\s*([dwmysDWMYS])\s*", str(label))
+    return float(m.group(1)) * _TENOR_UNIT_DAYS[m.group(2).lower()] if m else None
+
+
+def _ordinal_order(values) -> list | None:
+    """A monotonic ordering for tenor-like categorical labels; None if ANY value is not a tenor. Used to
+    stop lexical sorts stranding '10y' before '1y' and '9d' after '6m' — the self-contradictory axes the
+    v6 review flagged on the vol curve and the term-premium heatmaps. Non-tenor categoricals return None,
+    so their authored order is preserved untouched."""
+    uniq = list(dict.fromkeys(values))
+    keyed = [(_tenor_key(v), v) for v in uniq]
+    if any(k is None for k, _ in keyed):
+        return None
+    return [v for _, v in sorted(keyed, key=lambda kv: kv[0])]
+
+
+def _sorted_for_x(g: pd.DataFrame, xf: str, xtype: str | None) -> pd.DataFrame:
+    """Order a series along its x-axis: chronological for temporal/quantitative, tenor-monotonic for a
+    tenor categorical, else the authored order (never lexical — that is the bug)."""
+    if xf not in g or not len(g):
+        return g
+    if xtype in ("temporal", "quantitative"):
+        return g.sort_values(xf)
+    order = _ordinal_order(list(g[xf]))
+    if order is None:
+        return g
+    rank = {v: i for i, v in enumerate(order)}
+    return g.assign(_ord=g[xf].map(rank)).sort_values("_ord", kind="stable").drop(columns="_ord")
 
 
 def _apply_refs_events(ax, enc: ChartEncoding, df: pd.DataFrame):
@@ -94,8 +132,9 @@ def _apply_refs_events(ax, enc: ChartEncoding, df: pd.DataFrame):
 
 def _mark_line_area(ax, enc, df, fill: bool):
     xf, yf = enc.encoding.x.field, enc.encoding.y.field
+    xtype = enc.encoding.x.type if enc.encoding.x else None
     for i, (lbl, g) in enumerate(_series_groups(df, enc)):
-        g = g.sort_values(xf)
+        g = _sorted_for_x(g, xf, xtype)
         col = theme.cat(i)
         ax.plot(g[xf], g[yf], color=col, lw=2.2, label=lbl, zorder=4, solid_capstyle="round")
         if fill:
@@ -212,7 +251,7 @@ def _mark_bar(ax, enc, df, grouped: bool):
     colors = [theme.DIVERGING[3] if v >= 0 else theme.DIVERGING[1] for v in vals] \
         if enc.color_job == "diverging" else [theme.cat(0)] * len(vals)
     ax.bar(range(len(cats)), vals, color=colors, zorder=3, width=0.68)
-    ax.set_xticks(range(len(cats))); ax.set_xticklabels(cats, rotation=30, ha="right")
+    _thin_cat_ticks(ax, cats)
     ax.axhline(0, color=theme.GRID, lw=0.8)
 
 
@@ -256,6 +295,11 @@ def _mark_heatmap(ax, enc, df, fig):
     xf, yf = enc.encoding.x.field, enc.encoding.y.field
     cf = enc.encoding.color.field
     piv = df.pivot_table(index=yf, columns=xf, values=cf, aggfunc="mean")
+    # rows are usually tenors — reindex them monotonically so the long end sits where the eye expects,
+    # instead of pivot_table's lexical order ("10Y" before "1Y"). The two-round tenor mis-sort.
+    row_order = _ordinal_order(list(piv.index))
+    if row_order is not None:
+        piv = piv.reindex(row_order)
     cmap = theme.cmap_for(enc.color_job)
     vmax = np.nanmax(np.abs(piv.values)) if enc.color_job == "diverging" else np.nanmax(piv.values)
     vmin = -vmax if enc.color_job == "diverging" else np.nanmin(piv.values)
@@ -356,12 +400,65 @@ _DISPATCH = {
 }
 
 
+# Glyphs Helvetica Neue lacks (they render as ▯ boxes). Map to ASCII/words rather than ship an empty box —
+# the v6 review found arrow-boxes in subtitles and axis labels across the batch ("short → long", "2s → 5s").
+_GLYPH_MAP = {"→": " to ", "⟶": " to ", "➜": " to ", "⇒": " to ", "⟹": " to ", "←": " from ",
+              "↔": " vs ", "↑": " up", "↓": " down", "▸": ">", "‣": ">", "•": "-", "·": "-"}
+
+
+def _glyph_safe(s: str | None) -> str | None:
+    if not s:
+        return s
+    hit = False
+    for k, v in _GLYPH_MAP.items():
+        if k in s:
+            s = s.replace(k, v)
+            hit = True
+    return re.sub(r" {2,}", " ", s) if hit else s     # collapse the double space " to " introduces
+
+
+def _sanitise_fig_text(fig) -> None:
+    """Final sweep: replace font-missing glyphs on EVERY text artist (title, subtitle, ticks, legend,
+    annotations, axis labels) so nothing ships an empty box, wherever the text was authored."""
+    import matplotlib.text as _mtext
+    for t in fig.findobj(_mtext.Text):
+        try:
+            safe = _glyph_safe(t.get_text())
+            if safe != t.get_text():
+                t.set_text(safe)
+        except Exception:
+            pass
+
+
+def _thin_cat_ticks(ax, cats, *, rotation: int = 30, max_ticks: int = 12) -> None:
+    """Label at most ~max_ticks categories — every month-label printed turns a multi-year bar axis into an
+    unreadable black smear (the energy TSMOM 'barcode' axis the v6 review flagged)."""
+    n = len(cats)
+    idx = list(range(n)) if n <= max_ticks else [int(i) for i in np.linspace(0, n - 1, max_ticks)]
+    ax.set_xticks(idx)
+    ax.set_xticklabels([str(cats[i]) for i in idx], rotation=rotation, ha="right")
+
+
 def _cap(s: str | None, n: int) -> str | None:
     """Cap text — an over-long unwrapped title/subtitle/note blows the tight bbox to an impossible size."""
     if not s:
         return s
-    s = " ".join(str(s).split())
+    s = _glyph_safe(" ".join(str(s).split()))
     return s if len(s) <= n else s[: n - 1].rstrip() + "…"
+
+
+def _sub(s: str | None, per_line: int, *, max_lines: int = 2) -> str | None:
+    """Wrap a subtitle to at most `max_lines` lines at WORD boundaries — never the mid-word '…' cut the
+    v6 review flagged. Glyph-sanitised first so the width is measured on the text that actually renders."""
+    if not s:
+        return s
+    s = _glyph_safe(" ".join(str(s).split()))
+    lines = textwrap.wrap(s, width=per_line)
+    if len(lines) <= max_lines:
+        return "\n".join(lines)
+    kept = lines[:max_lines]
+    kept[-1] = kept[-1].rstrip() + "…"
+    return "\n".join(kept)
 
 
 def _coerce_domain(ch, dom):
@@ -454,7 +551,7 @@ def compile_encoding(enc: ChartEncoding, out_path: str, *, figsize=(11, 7.2)) ->
             fig.supylabel(ey.title or ey.field, fontsize=11)
         fig.suptitle(_cap(enc.title, 95), fontsize=15, fontweight="bold", x=0.01, ha="left", y=0.995)
         if enc.subtitle:
-            fig.text(0.01, 0.945, _cap(enc.subtitle, 140), fontsize=10, color=theme.MUTED, ha="left")
+            fig.text(0.01, 0.945, _sub(enc.subtitle, 150, max_lines=1), fontsize=10, color=theme.MUTED, ha="left")
         if enc.source_note:
             fig.text(0.99, 0.005, _cap(enc.source_note, 130), fontsize=7.8, color=theme.MUTED, ha="right")
         fig.tight_layout(rect=[0, 0.02, 1, 0.90])
@@ -465,17 +562,21 @@ def compile_encoding(enc: ChartEncoding, out_path: str, *, figsize=(11, 7.2)) ->
                     art.set_clip_on(True)
                 except Exception:
                     pass
+        _sanitise_fig_text(fig)
         return _savefig(fig, out_path, tight=False)
 
     # ── single panel ─────────────────────────────────────────────────────────────────────────
     fig, ax = plt.subplots(figsize=figsize)
     _draw_on_axes(ax, enc, df, fig, mark, panel=False)
+    sub = _sub(enc.subtitle, 108) if enc.subtitle else None
+    nlines = (sub.count("\n") + 1) if sub else 0
     ax.set_title(_cap(enc.title, 95), fontsize=15, fontweight="bold", loc="left",
-                 pad=(20 if enc.subtitle else 8), wrap=True)
-    if enc.subtitle:
-        ax.text(0, 1.02, _cap(enc.subtitle, 150), transform=ax.transAxes, fontsize=10.5,
-                color=theme.MUTED, va="bottom")
+                 pad=(8 + 15 * nlines if sub else 8), wrap=True)
+    if sub:
+        ax.text(0, 1.015, sub, transform=ax.transAxes, fontsize=10.5,
+                color=theme.MUTED, va="bottom", linespacing=1.3)
     if enc.source_note:
         ax.text(1.0, -0.13, _cap(enc.source_note, 130), transform=ax.transAxes, fontsize=7.8,
                 color=theme.MUTED, va="top", ha="right")
+    _sanitise_fig_text(fig)
     return _savefig(fig, out_path)

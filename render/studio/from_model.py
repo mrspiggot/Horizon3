@@ -31,7 +31,25 @@ def _parse_ref(s: str):
 
 
 def _label(field: str, state: str | None) -> str:
-    return field.replace("_", " ") + (f" ({state})" if state and state != "level" else "")
+    # Reader labels, not raw DB column names: humanise() expands ig→IG, gz→GZ, ebp→"excess bond premium",
+    # rf→"risk-free" and strips _pct/_pp suffixes, so a legend reads "GZ spread" not "gz spread". The v6
+    # review flagged raw-column legends ("risk free pct", "sahm gap pp", "rf") across the batch.
+    from ..infographic.from_persona import humanise
+    return humanise(field) + (f" ({state})" if state and state != "level" else "")
+
+
+def _authored_labels(dc: dict) -> dict:
+    """field → author's display label, harvested from any {label, from} pairs in the data_contract, so a
+    chart's own catalogued label wins over the humanised field name (the melt-to-series path dropped it)."""
+    out: dict = {}
+    for v in dc.values():
+        if isinstance(v, list):
+            for item in v:
+                if isinstance(item, dict) and item.get("label") and item.get("from"):
+                    ref = _parse_ref(item["from"])
+                    if ref:
+                        out[ref[1]] = item["label"]
+    return out
 
 
 def _refs(data_contract: dict) -> list[tuple[str, str, str | None]]:
@@ -151,13 +169,15 @@ def _shape_series(dc: dict, history: list):
     refs = _refs(dc)
     if not refs:
         return None
+    authored = _authored_labels(dc)
     rows = []
     for r in history:
         d = str(r.as_of)[:10]
         for kind, field, state in refs:
             v = _value(r, kind, field, state)
             if v is not None:
-                rows.append({"date": d, "series": _label(field, state), "value": round(float(v), 4)})
+                lab = authored.get(field) or _label(field, state)
+                rows.append({"date": d, "series": lab, "value": round(float(v), 4)})
     if not rows:
         return None
     n = len({x["series"] for x in rows})
