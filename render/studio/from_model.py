@@ -301,7 +301,10 @@ def _det_cross_jurisdiction(brief, out_path: str) -> str | None:
         return None
     n_banks = len({r["jurisdiction"] for r in rows})
     enc = ChartEncoding(
-        title=(brief.interpretation.split(".")[0][:90] if brief.interpretation else f"{yf} across central banks"),
+        # title from the ACTUAL field plotted, not the model's chart-id (which may name several variables
+        # a single-series render can't show — the 'inflation and unemployment' title over an unemployment-
+        # only line is the very title-vs-chart mismatch this round is fixing).
+        title=f"{yf} across {n_banks} central banks — one model, four economies",
         subtitle=f"{yf} — the same model run for {n_banks} central banks; the divergence is the point.",
         message="compare the same reading across jurisdictions",
         mark="line", color_job="categorical",
