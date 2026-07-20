@@ -358,21 +358,22 @@ def _concept_registry(numbers: dict, meanings: dict, *, template_keys=(), runs=N
 _MATERIAL_CACHE: dict[str, dict] = {}
 
 
-def persona_material(persona_id: str, conn, *, use_cache: bool = True, select: bool = True) -> dict:
-    """Executed material for a persona. Process-level memoised by persona_id (the data is fixed for a
-    run) so multi-family harnesses don't re-execute every model four times; pass use_cache=False to
-    force a fresh execution.
+def persona_material(persona_id: str, conn, *, use_cache: bool = True, select: bool = True,
+                     instance: str = "US", models: list | None = None) -> dict:
+    """Executed material for a persona, IN A JURISDICTION. Memoised by (persona_id, instance) so a US
+    and a euro run of the same decision-maker don't collide.
 
-    `select` runs §06 role 2: the models come from a query over the PROVEN executable spine rather
-    than from the hand-typed list in personas.yaml. That list stays as the floor — if selection
-    produces nothing usable it is used, loudly. Pass select=False to pin the hardcoded set (harnesses
-    that compare renderings need the models held still).
+    `instance` is the currency the models run in — every model is executed with `run_model(..., instance=)`
+    so the same catalogue produces a euro-area or UK article, not only US (the steering rebuild's
+    generalisation). `models`, if given, is an explicit model-set (the graph enumerator's pick) and pins
+    selection off. Otherwise `select` runs §06 role 2 over the proven spine, floored by personas.yaml.
     """
-    if use_cache and persona_id in _MATERIAL_CACHE:
-        return _MATERIAL_CACHE[persona_id]
+    key = (persona_id, instance)
+    if use_cache and key in _MATERIAL_CACHE:
+        return _MATERIAL_CACHE[key]
     p = yaml.safe_load((GRAPH_DIR / "personas.yaml").read_text())["personas"][persona_id]
-    model_ids, why = list(p["models"]), {}
-    if select:
+    model_ids, why = list(models if models is not None else p["models"]), {}
+    if select and models is None:
         try:
             sel = select_models(persona_id, p.get("decision", ""), list(p["models"]))
             model_ids, why = sel["selected"], sel.get("reasons", {})
@@ -393,7 +394,7 @@ def persona_material(persona_id: str, conn, *, use_cache: bool = True, select: b
     model_names: list[str] = []
     papers, sources = set(), set()
     for mid in model_ids:
-        run = graph_corpus.run_model(mid, conn)
+        run = graph_corpus.run_model(mid, conn, instance=instance)
         runs[mid] = run
         latest = run["latest"]
         if latest is None:
@@ -467,13 +468,13 @@ def persona_material(persona_id: str, conn, *, use_cache: bool = True, select: b
     # `p["models"]` must be the models we ACTUALLY RAN, not the YAML's list — everything downstream
     # (build_brief, the exhibit contract, the data-window firewall) iterates it, so leaving the
     # hardcoded list here would compute a selection and then quietly ignore it.
-    mat = {"id": persona_id, "p": {**p, "models": model_ids}, "runs": runs, "numbers": numbers,
-           "meanings": meanings, "selection_why": why, "concepts": concepts, "canon": canon,
-           "salient": salient, "papers": sorted(papers), "sources": sorted(sources),
+    mat = {"id": persona_id, "instance": instance, "p": {**p, "models": model_ids}, "runs": runs,
+           "numbers": numbers, "meanings": meanings, "selection_why": why, "concepts": concepts,
+           "canon": canon, "salient": salient, "papers": sorted(papers), "sources": sorted(sources),
            "source_labels": source_labels, "model_names": model_names,
            "as_of": max((n.as_of for n in numbers.values()), default="")}
     if use_cache:
-        _MATERIAL_CACHE[persona_id] = mat
+        _MATERIAL_CACHE[key] = mat
     return mat
 
 

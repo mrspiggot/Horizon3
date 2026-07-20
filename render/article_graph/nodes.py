@@ -14,7 +14,9 @@ from ..infographic.from_persona import persona_material
 
 
 def material(state: dict) -> dict:
-    return {"mat": persona_material(state["persona_id"], state["conn"])}
+    return {"mat": persona_material(state["persona_id"], state["conn"],
+                                    instance=state.get("jurisdiction", "US"),
+                                    models=state.get("model_ids"))}
 
 
 def brief(state: dict) -> dict:

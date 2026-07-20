@@ -17,6 +17,8 @@ class ArticleState(TypedDict, total=False):
     out_dir: str
     backend: str
     max_iter: int
+    jurisdiction: str            # the currency the models run in (US default) — the steering contract
+    model_ids: list              # explicit model-set (graph enumerator's pick); None → Role-2 selection
 
     # material + plan
     mat: dict                    # executed models, numbers, concept registry (D)

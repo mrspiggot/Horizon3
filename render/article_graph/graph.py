@@ -33,16 +33,17 @@ def build_graph():
     return g.compile()
 
 
-def run_article(persona_id: str, conn, out_dir, *, backend: str = "auto", max_iter: int = 3) -> dict:
-    """Compile and invoke the article graph for one persona; returns the final ArticleState."""
+def run_article(persona_id: str, conn, out_dir, *, backend: str = "auto", max_iter: int = 3,
+                jurisdiction: str = "US", model_ids: list | None = None) -> dict:
+    """Compile and invoke the article graph for one (decision-maker, currency); returns the final
+    ArticleState. `jurisdiction` runs the models in that currency; `model_ids` pins an explicit set (the
+    graph enumerator's pick) instead of Role-2 selection. Defaults reproduce the US persona behaviour."""
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    # Trace the whole article graph (not just the studio) under its own LangSmith project. Set
-    # explicitly so an earlier studio import can't pin the process to horizon3-chart-studio.
     os.environ["LANGSMITH_PROJECT"] = os.environ.get("HORIZON3_LANGSMITH_PROJECT", "horizon3-article")
     return build_graph().invoke(
         {"persona_id": persona_id, "conn": conn, "out_dir": str(out_dir),
-         "backend": backend, "max_iter": max_iter},
-        config={"recursion_limit": 24, "run_name": f"article:{persona_id}",
-                "metadata": {"persona": persona_id, "component": "article_graph"}},
+         "backend": backend, "max_iter": max_iter, "jurisdiction": jurisdiction, "model_ids": model_ids},
+        config={"recursion_limit": 24, "run_name": f"article:{persona_id}:{jurisdiction}",
+                "metadata": {"persona": persona_id, "jurisdiction": jurisdiction, "component": "article_graph"}},
     )

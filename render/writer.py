@@ -1574,9 +1574,12 @@ def assemble(persona_id: str, mat: dict, brief: dict, draft: dict, ill_png, ill_
 
 
 # ── the orchestrator ─────────────────────────────────────────────────────────────────────────────
-def build_article_full(persona_id: str, conn, out_dir, *, backend: str = "auto", max_iter: int = 3) -> dict:
+def build_article_full(persona_id: str, conn, out_dir, *, backend: str = "auto", max_iter: int = 3,
+                       jurisdiction: str = "US", model_ids: list | None = None) -> dict:
     """Compile and run the article StateGraph, returning its result dict. The graph threads a single
     ArticleState through material → brief → plan → draft → reconcile_charts → reconcile_dashboard →
-    assemble, with every node LangSmith-traced; the stage functions above are its node bodies."""
+    assemble. `jurisdiction`/`model_ids` are the steering contract — run a decision-maker's models in a
+    chosen currency (defaults reproduce the US persona article)."""
     from .article_graph import run_article
-    return run_article(persona_id, conn, out_dir, backend=backend, max_iter=max_iter)["result"]
+    return run_article(persona_id, conn, out_dir, backend=backend, max_iter=max_iter,
+                       jurisdiction=jurisdiction, model_ids=model_ids)["result"]
