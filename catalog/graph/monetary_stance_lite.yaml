@@ -1,0 +1,74 @@
+model_id: monetary_stance_lite
+name: "How restrictive is policy, really (the real policy rate)"
+family: macro
+persona: global_macro_strategist
+grounded_in: []
+method: harmonised
+canonical: true
+method_note: >
+  The REAL policy rate — the central-bank rate minus headline inflation — against a common assumed neutral
+  real rate, so 'how tight is the ECB vs the Fed vs the BoE vs the BoJ' is one comparable reading. Unlike
+  the US policy_stance model this needs no country-specific r* (HLW is US-only); it uses only the policy
+  rate and inflation, both bound across the majors, so it runs for every central bank.
+spec:
+  equations: "real_policy = policy - inflation; stance = real_policy - neutral_real (assumed 0.5%)"
+instances: [US, EU, GB, JP]
+history: {start: "1996-01", end: "2026-06", cadence: monthly}
+inputs:
+  - {id: policy, role: policy_rate,  state: level, context_window: 120}
+  - {id: infl,   role: headline_cpi, transform: yoy, state: level, context_window: 120}
+execution:
+  implemented_by: unified_market_data.analysis.macro_signals.monetary_stance_lite
+  args: {policy_rate_pct: policy.level, inflation_pct: infl.level}
+outputs:
+  - {name: policy_rate_pct,       unit: "%",  meaning: "central-bank policy rate"}
+  - {name: inflation_pct,         unit: "%",  meaning: "headline inflation, YoY"}
+  - {name: real_policy_rate_pct,  unit: "%",  meaning: "policy rate minus inflation — the real stance"}
+  - {name: stance_vs_neutral_pp,  unit: "pp", meaning: "real policy rate minus an assumed 0.5% neutral real rate"}
+interpretations:
+  - id: restrictive
+    when: "stance_vs_neutral_pp > 0.25"
+    says: >
+      Policy is genuinely restrictive — the real policy rate sits above a neutral real rate, so the brakes
+      are on in real terms, not just nominally. How long that can hold depends on how fast inflation falls.
+  - id: accommodative
+    when: "stance_vs_neutral_pp < -0.25"
+    says: >
+      Policy is still accommodative in real terms — the real policy rate is below neutral, leaning against
+      any slowdown even at a high nominal rate.
+charts:
+  - id: "The real policy rate vs neutral"
+    role: outcome
+    chart_type: series
+    color_job: diverging
+    interpretation: restrictive
+    insight: "the real policy rate (policy minus inflation) — above zero, and above a neutral real rate, is where policy actually bites"
+    data_contract:
+      kind: series
+      ylabel: "real policy rate (%)"
+      zero_line: true
+      hline: 0.5
+      hline_label: "assumed neutral (0.5%)"
+      series:
+        - {label: "real policy rate", from: "output:real_policy_rate_pct"}
+  - id: "Nominal policy rate and inflation"
+    role: input
+    chart_type: series
+    color_job: categorical
+    insight: "the nominal policy rate against inflation — the gap between them is the real stance"
+    data_contract:
+      kind: series
+      ylabel: "%"
+      series:
+        - {label: "policy rate", from: "output:policy_rate_pct"}
+        - {label: "inflation (YoY)", from: "output:inflation_pct"}
+  - id: "Policy stance today"
+    role: outcome
+    chart_type: bar
+    color_job: diverging
+    insight: "the current policy rate, inflation, real policy rate and how far it sits from neutral"
+    data_contract:
+      kind: named_values
+      ylabel: "% / pp"
+      labels: ["policy rate", "inflation", "real policy", "vs neutral"]
+      values: ["output:policy_rate_pct", "output:inflation_pct", "output:real_policy_rate_pct", "output:stance_vs_neutral_pp"]

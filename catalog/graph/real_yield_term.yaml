@@ -1,0 +1,76 @@
+model_id: real_yield_term
+name: "The long end in real terms, and the shape of the curve"
+family: rates
+persona: global_macro_strategist
+grounded_in: []
+method: harmonised
+canonical: true
+method_note: >
+  The 10y government yield minus inflation (does the long bond pay you in real terms?) and the curve slope
+  (10y minus the policy rate). Jurisdiction-generic — the 10y benchmark, inflation and policy rate are all
+  bound across the majors — so the real long rate and the curve's shape are comparable Bund-vs-Treasury-
+  vs-Gilt-vs-JGB. A positive real yield with an upward curve is the bond market pricing growth back; a
+  negative real yield with an inverted curve is the recession / financial-repression read.
+spec:
+  equations: "real_10y = long_yield - inflation; curve_slope = long_yield - policy_rate"
+instances: [US, EU, GB, JP]
+history: {start: "1996-01", end: "2026-06", cadence: monthly}
+inputs:
+  - {id: yield10, role: long_yield_10y, state: level, context_window: 120}
+  - {id: infl,    role: headline_cpi,  transform: yoy, state: level, context_window: 120}
+  - {id: policy,  role: policy_rate,   state: level, context_window: 120}
+execution:
+  implemented_by: unified_market_data.analysis.macro_signals.real_yield_term
+  args: {long_yield_pct: yield10.level, inflation_pct: infl.level, policy_rate_pct: policy.level}
+outputs:
+  - {name: long_yield_pct,       unit: "%",  meaning: "10y government benchmark yield"}
+  - {name: inflation_pct,        unit: "%",  meaning: "headline inflation, YoY"}
+  - {name: policy_rate_pct,      unit: "%",  meaning: "central-bank policy rate"}
+  - {name: real_long_yield_pct,  unit: "%",  meaning: "10y yield minus inflation — the real long rate"}
+  - {name: curve_slope_pp,       unit: "pp", meaning: "10y minus policy rate — the curve slope (>0 upward)"}
+interpretations:
+  - id: real_positive
+    when: "real_long_yield_pct > 0.5"
+    says: >
+      The long bond pays a real yield again — a positive real 10y after years of financial repression means
+      duration compensates the holder, and the curve's shape says whether the market expects growth or cuts.
+  - id: inverted
+    when: "curve_slope_pp < 0"
+    says: >
+      The curve is inverted — the 10y sits below the policy rate, the bond market pricing that policy is too
+      tight and cuts are coming. Historically among the most reliable recession signals.
+charts:
+  - id: "The real 10y yield"
+    role: outcome
+    chart_type: series
+    color_job: diverging
+    interpretation: real_positive
+    insight: "the 10y yield minus inflation — negative for the repression years, positive again as real rates normalised"
+    data_contract:
+      kind: series
+      ylabel: "real 10y yield (%)"
+      zero_line: true
+      series:
+        - {label: "real 10y", from: "output:real_long_yield_pct"}
+  - id: "The curve slope (10y minus policy)"
+    role: consequence
+    chart_type: series
+    color_job: diverging
+    interpretation: inverted
+    insight: "the curve slope — inversions (below zero) preceded recessions; the re-steepening is the market pricing the cutting cycle"
+    data_contract:
+      kind: series
+      ylabel: "10y - policy (pp)"
+      zero_line: true
+      series:
+        - {label: "curve slope", from: "output:curve_slope_pp"}
+  - id: "Nominal and real long rates today"
+    role: outcome
+    chart_type: bar
+    color_job: diverging
+    insight: "the current 10y yield, inflation, real 10y and curve slope"
+    data_contract:
+      kind: named_values
+      ylabel: "% / pp"
+      labels: ["10y yield", "inflation", "real 10y", "curve slope"]
+      values: ["output:long_yield_pct", "output:inflation_pct", "output:real_long_yield_pct", "output:curve_slope_pp"]

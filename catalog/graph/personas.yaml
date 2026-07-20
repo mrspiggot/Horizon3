@@ -212,3 +212,52 @@ personas:
       {economies_scorecard.unemployment_pct}% and the 10y at {economies_scorecard.long_yield_pct}%. The
       cross-country scorecard puts each economy's inflation, jobs, rates and growth pulse side by side, so
       the divergence between them — not any single number — is the position.
+
+  ecb_watcher:
+    name: "ECB / euro-area strategist"
+    decision: "Read the euro-area cycle and the ECB's stance."
+    title: "The euro area: how tight is the ECB, and is the Bund paying you to wait?"
+    models: [monetary_stance_lite, real_yield_term, economies_scorecard]
+    stub_charts:
+      - [monetary_stance_lite, "The real policy rate vs neutral"]
+      - [real_yield_term, "The curve slope (10y minus policy)"]
+      - [economies_scorecard, "The five macro readings today"]
+    summary_template: >
+      The euro area sits with the ECB's real policy rate at {monetary_stance_lite.real_policy_rate_pct}% —
+      {monetary_stance_lite.stance_vs_neutral_pp}pp from a neutral real rate — while the Bund's real 10y
+      yield is {real_yield_term.real_long_yield_pct}% and the curve slope {real_yield_term.curve_slope_pp}pp.
+      Growth reads through unemployment at {economies_scorecard.unemployment_pct}% and inflation at
+      {economies_scorecard.inflation_pct}%. The stance and the curve together say how much room the ECB has,
+      and whether duration compensates the holder.
+
+  uk_macro:
+    name: "UK macro strategist"
+    decision: "Read the UK cycle — labour, inflation and the Bank of England."
+    title: "The UK: a tight labour market, sticky inflation, and how restrictive the Bank really is"
+    models: [sahm_rule, phillips_curve, monetary_stance_lite]
+    stub_charts:
+      - [sahm_rule, "Headroom to the recession trigger"]
+      - [phillips_curve, "The Phillips curve (unemployment vs inflation)"]
+      - [monetary_stance_lite, "The real policy rate vs neutral"]
+    summary_template: >
+      The UK labour market leaves the Sahm rule {sahm_rule.headroom_pp}pp of headroom to its recession
+      trigger, with unemployment at {phillips_curve.unemployment_pct}% against {phillips_curve.inflation_pct}%
+      inflation on a Phillips curve that has flattened. The Bank of England's real policy rate sits at
+      {monetary_stance_lite.real_policy_rate_pct}%, {monetary_stance_lite.stance_vs_neutral_pp}pp from
+      neutral — genuinely restrictive if inflation keeps falling, less so if it sticks.
+
+  boj_watcher:
+    name: "Japan rates strategist"
+    decision: "Read Japan's exit from ultra-low rates."
+    title: "Japan's exit: the real long rate, the curve, and where the cycle stands"
+    models: [real_yield_term, economies_scorecard, phillips_curve]
+    stub_charts:
+      - [real_yield_term, "The real 10y yield"]
+      - [economies_scorecard, "The five macro readings today"]
+      - [phillips_curve, "The Phillips curve (unemployment vs inflation)"]
+    summary_template: >
+      Japan's real 10y yield is {real_yield_term.real_long_yield_pct}% with a curve slope of
+      {real_yield_term.curve_slope_pp}pp as the BoJ inches its policy rate up from zero. Inflation runs at
+      {economies_scorecard.inflation_pct}% and unemployment at {economies_scorecard.unemployment_pct}% — low
+      by any standard — while the Phillips curve reads {phillips_curve.inflation_pct}% inflation against
+      {phillips_curve.unemployment_pct}% unemployment. The question is whether the exit is real or stalls.
