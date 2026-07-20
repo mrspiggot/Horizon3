@@ -1,38 +1,26 @@
-"""Seed the model spine with what is TRUE — a graph that proves executability instead of asserting it.
+"""Seed the model spine with what is TRUE — a graph that proves executability instead of asserting it,
+NOW ACROSS CURRENCIES, so the graph can steer which analyses are grounded in which jurisdiction.
 
-WHY THIS REPLACES seed_neo4j_spine.py's CLAIM
----------------------------------------------
-The old spine seeds `catalog/models` (38 design specs) and reports "CONVICTION: ALL PERSONAS PASS".
-Its test checks that each model HAS `inputs`, HAS `visualizations`, HAS an `implemented_by` string —
-that the YAML has fields. It never asks whether the model runs. It cannot: those 38 hold a prose
-`spec` ("Principal-component decomposition of the curve…"), and none of them has `history`,
-`db_sources` or `charts`. `render.graph_corpus.run_model('curve_pca')` raises FileNotFoundError,
-because the article engine reads `catalog/graph` and they are not there.
+WHAT THIS DOES
+--------------
+`executable` is not read off a YAML field. Every candidate is EXECUTED here, now, and per JURISDICTION,
+and the graph carries the evidence:
 
-Meanwhile the 28 models in `catalog/graph` — the ones that executed 8 articles on 2026-07-17 — are
-INVISIBLE to the graph. The overlap between the two catalogs is 3.
+    (:Model)-[:EXECUTABLE_IN {points:281, as_of:'2026-05', run_id:'…'}]->(:Jurisdiction {id:'US'})
+    (:Model)-[:EXECUTABLE_IN {points:216, as_of:'2026-05'}]->(:Jurisdiction {id:'EU'})   ← ran on euro data
 
-So §09's gate ("the Neo4j model spine seeded; every persona traces cleanly decision → model → inputs
-→ execution → outputs") passes green over a library that has never produced an artifact, while the
-library that produces everything is absent. That is the Horizon2 disease the charter names: a
-validation box that lies. Selecting models from that graph — which is what §06 role 2 is FOR — would
-select models the engine cannot even locate.
+A US-welded model (concrete series_id, no roles) is US-only by construction — attempted only in US. A
+jurisdiction-generic model (inputs carry `role:`) is attempted in every jurisdiction; the role→series
+resolver decides — a missing binding is NOT a crash but the recorded gap (:Role)-[:MISSING_IN]->(:J),
+which is the owner's "report loudly where we need more data" applied per currency.
 
-WHAT THIS DOES INSTEAD
-----------------------
-`executable` is not read off a YAML field. Every candidate is EXECUTED here, now, and the node
-carries the evidence:
+The currency + data-binding structure (Jurisdiction, DataSeries, BOUND_TO, MISSING_IN) recovers what the
+now-orphaned seed_graph.py / seed_neo4j_spine.py encoded and the narrow live spine had dropped.
 
-    (:Model {executable:true,  points:281, as_of:'2026-05-28', run_id:'…'})   ← ran, proof recorded
-    (:Model {executable:false, why:'no history block — design-stage spec'})    ← honest backlog
+`m.executable` (the single US boolean the existing selector reads) is kept for backward-compat = the US
+cell of the matrix; the per-currency truth is the EXECUTABLE_IN relationships.
 
-The design catalog is still seeded, because knowing what we WANT and cannot yet do is worth having in
-the graph — it is the owner's "REPORT LOUDLY where we need to find more" applied to models rather than
-data. It is simply never labelled executable.
-
-A model that fails to run is recorded as a failure, not skipped. Silence is how the old spine passed.
-
-    ~/venv/bin/python scripts/seed_spine.py            # prove + seed
+    ~/venv/bin/python scripts/seed_spine.py            # prove per (model,currency) + seed
     ~/venv/bin/python scripts/seed_spine.py --dry-run  # prove only, no writes
 """
 from __future__ import annotations
@@ -55,6 +43,7 @@ from render.model_store import record_run  # noqa: E402
 REPO = Path(__file__).resolve().parents[1]
 GRAPH_DIR = REPO / "catalog" / "graph"          # the executable catalog — what writes articles
 MODELS_DIR = REPO / "catalog" / "models"        # the design catalog — specs, no execution path
+JURIS_FILE = REPO / "catalog" / "jurisdictions.yaml"
 CATALOG = "horizon3"
 
 
@@ -67,64 +56,125 @@ def _load(dir_: Path) -> dict[str, dict]:
     return out
 
 
-def prove(conn, executable_ids: list[str], instance: str = "US") -> dict[str, dict]:
-    """Run every candidate. The graph records what happened, never what was hoped for."""
-    proof: dict[str, dict] = {}
-    for mid in executable_ids:
-        try:
-            run = run_model(mid, conn, instance=instance)
-            hist = run.get("history") or []
-            if not hist:
-                proof[mid] = {"executable": False, "why": "ran but produced no observations"}
-                print(f"  EMPTY  {mid:30} ran, delivered nothing", file=sys.stderr)
-                continue
-            rid = record_run(conn, run, instance=instance)
-            proof[mid] = {"executable": True, "points": len(hist),
-                          "as_of": str(hist[-1].as_of)[:10], "run_id": rid,
-                          "outputs": [o.get("name") for o in (run.get("meta", {}).get("outputs") or [])]}
-            print(f"  ok     {mid:30} {len(hist):4} points → {str(hist[-1].as_of)[:10]}")
-        except Exception as exc:
-            # A model that will not run is a FINDING. The old spine's silence here is exactly how 35
-            # unexecutable models came to be certified.
-            proof[mid] = {"executable": False, "why": f"{type(exc).__name__}: {str(exc)[:80]}"}
-            print(f"  FAIL   {mid:30} {type(exc).__name__}: {str(exc)[:60]}", file=sys.stderr)
-    return proof
+def _load_jurisdictions() -> tuple[dict, list]:
+    j = yaml.safe_load(JURIS_FILE.read_text())
+    return j.get("roles") or {}, j.get("jurisdictions") or []
+
+
+def _is_generic(doc: dict) -> bool:
+    """A model is jurisdiction-generic iff it declares instances OR any input carries a semantic role.
+    Otherwise its inputs name concrete US series and it is US-only by construction."""
+    return bool(doc.get("instances")) or any(i.get("role") for i in (doc.get("inputs") or []))
+
+
+def prove_matrix(conn, graph_docs: dict, jur_ids: list[str]) -> dict[str, dict]:
+    """Per (model, jurisdiction) executability, PROVEN by running. Returns {mid: {jur: cell}} where a
+    cell is {executable, points, as_of, run_id} or {executable:False, why}. A generic model is attempted
+    in every jurisdiction; a missing role-binding raises KeyError in the resolver and is recorded as the
+    gap, not a failure of the model."""
+    matrix: dict[str, dict] = {}
+    for mid, doc in graph_docs.items():
+        candidates = jur_ids if _is_generic(doc) else ["US"]
+        cells: dict[str, dict] = {}
+        for jid in candidates:
+            try:
+                run = run_model(mid, conn, instance=jid)
+                hist = run.get("history") or []
+                if not hist:
+                    cells[jid] = {"executable": False, "why": "ran, no observations"}
+                    continue
+                rid = record_run(conn, run, instance=jid)
+                cells[jid] = {"executable": True, "points": len(hist),
+                              "as_of": str(hist[-1].as_of)[:10], "run_id": rid}
+            except KeyError as exc:                       # missing role binding = the data gap, not a bug
+                cells[jid] = {"executable": False, "why": f"unbound: {str(exc).strip(chr(39))[:110]}"}
+            except Exception as exc:
+                cells[jid] = {"executable": False, "why": f"{type(exc).__name__}: {str(exc)[:80]}"}
+        matrix[mid] = cells
+        ok = [j for j, c in cells.items() if c["executable"]]
+        tag = "generic" if _is_generic(doc) else "US-welded"
+        print(f"  {mid:32} [{tag:9}] executable in: {', '.join(ok) or 'NONE'}", file=sys.stderr)
+    return matrix
 
 
 def _why_not(doc: dict) -> str:
-    """Why a design-catalog model cannot execute — stated concretely, not as a shrug."""
     missing = [k for k in ("history", "charts") if k not in doc]
     if not (doc.get("execution") or {}).get("implemented_by") and not doc.get("implemented_by"):
         missing.append("implemented_by")
     return ("design-stage spec — missing " + ", ".join(missing)) if missing else "not in catalog/graph"
 
 
-def seed(driver, graph_docs: dict, design_docs: dict, proof: dict, personas: dict) -> None:
+def seed_jurisdictions(s, roles: dict, jurisdictions: list) -> None:
+    """Jurisdiction + DataSeries + role→series binding per jurisdiction; a null/absent binding is a
+    recorded MISSING_IN gap. This is the currency+data layer the vision needs and the live spine lacked."""
+    for rname, rmeta in roles.items():
+        s.run("MERGE (r:Role {name:$r, catalog:$cat}) SET r.kind=$k, r.desc=$d",
+              cat=CATALOG, r=rname, k=(rmeta or {}).get("kind", ""), d=((rmeta or {}).get("desc", "") or "")[:220])
+    for j in jurisdictions:
+        s.run("""MERGE (jn:Jurisdiction {id:$id, catalog:$cat})
+                 SET jn.central_bank=$cb, jn.ccy=$ccy, jn.scope=$scope""",
+              cat=CATALOG, id=j["id"], cb=j.get("central_bank", ""), ccy=j.get("ccy", ""),
+              scope=j.get("scope", ""))
+        binds = j.get("bindings") or {}
+        for rname in roles:                               # iterate the whole vocabulary → absent == missing
+            b = binds.get(rname)
+            if b and b.get("ref"):
+                s.run("""MATCH (r:Role {name:$r, catalog:$cat}), (jn:Jurisdiction {id:$jid, catalog:$cat})
+                         MERGE (d:DataSeries {ref:$ref, catalog:$cat}) SET d.source=$src
+                         MERGE (r)-[bt:BOUND_TO {jurisdiction:$jid}]->(d) SET bt.source=$src
+                         MERGE (jn)-[:HAS_SERIES]->(d)""",
+                      cat=CATALOG, r=rname, jid=j["id"], ref=b["ref"], src=b.get("source", ""))
+            else:
+                s.run("""MATCH (r:Role {name:$r, catalog:$cat}), (jn:Jurisdiction {id:$jid, catalog:$cat})
+                         MERGE (r)-[:MISSING_IN]->(jn)""", cat=CATALOG, r=rname, jid=j["id"])
+
+
+def seed(driver, graph_docs, design_docs, matrix, personas, roles, jurisdictions) -> None:
     with driver.session() as s:
         s.run("MATCH (n {catalog:$cat}) DETACH DELETE n", cat=CATALOG)
+        seed_jurisdictions(s, roles, jurisdictions)
 
         for mid, d in graph_docs.items():
-            p = proof.get(mid, {"executable": False, "why": "never attempted"})
+            cells = matrix.get(mid, {})
+            us = cells.get("US", {"executable": False, "why": "never attempted"})
             s.run(
                 """MERGE (m:Model {id:$id, catalog:$cat})
-                   SET m.name=$name, m.family=$family, m.source='catalog/graph',
+                   SET m.name=$name, m.family=$family, m.source='catalog/graph', m.generic=$gen,
                        m.executable=$ex, m.points=$pts, m.as_of=$as_of, m.run_id=$rid,
                        m.why_not=$why, m.method=$method""",
                 cat=CATALOG, id=mid, name=d.get("name", mid), family=d.get("family", "?"),
-                ex=p["executable"], pts=p.get("points"), as_of=p.get("as_of"),
-                rid=p.get("run_id"), why=p.get("why"), method=d.get("method_note") or d.get("method", ""))
+                gen=_is_generic(d), ex=us["executable"], pts=us.get("points"), as_of=us.get("as_of"),
+                rid=us.get("run_id"), why=us.get("why"),
+                method=d.get("method_note") or d.get("method", ""))
+
+            # the currency truth: one EXECUTABLE_IN per jurisdiction the model actually ran in
+            for jid, c in cells.items():
+                if c.get("executable"):
+                    s.run("""MATCH (m:Model {id:$id, catalog:$cat}), (jn:Jurisdiction {id:$jid, catalog:$cat})
+                             MERGE (m)-[e:EXECUTABLE_IN]->(jn)
+                             SET e.points=$pts, e.as_of=$as_of, e.run_id=$rid""",
+                          cat=CATALOG, id=mid, jid=jid, pts=c.get("points"), as_of=c.get("as_of"),
+                          rid=c.get("run_id"))
+
             for o in d.get("outputs") or []:
                 s.run("""MATCH (m:Model {id:$id, catalog:$cat})
                          MERGE (o:Output {name:$n, model:$id, catalog:$cat})
-                         SET o.unit=$u, o.meaning=$mean
-                         MERGE (m)-[:PRODUCES]->(o)""",
-                      cat=CATALOG, id=mid, n=o.get("name"), u=o.get("unit", ""),
-                      mean=o.get("meaning", ""))
+                         SET o.unit=$u, o.meaning=$mean MERGE (m)-[:PRODUCES]->(o)""",
+                      cat=CATALOG, id=mid, n=o.get("name"), u=o.get("unit", ""), mean=o.get("meaning", ""))
+
+            # model → required data: a generic model NEEDS a semantic Role; a welded one NEEDS_SERIES a
+            # concrete DataSeries. This is what lets the enumerator compute per-currency groundedness.
             for i in d.get("inputs") or []:
-                if role := (i.get("role") or i.get("name")):
+                if i.get("role"):
                     s.run("""MATCH (m:Model {id:$id, catalog:$cat})
-                             MERGE (r:Role {name:$r, catalog:$cat})
-                             MERGE (m)-[:HAS_INPUT]->(r)""", cat=CATALOG, id=mid, r=role)
+                             MERGE (r:Role {name:$r, catalog:$cat}) MERGE (m)-[:NEEDS]->(r)""",
+                          cat=CATALOG, id=mid, r=i["role"])
+                elif i.get("series_id"):
+                    s.run("""MATCH (m:Model {id:$id, catalog:$cat})
+                             MERGE (ds:DataSeries {ref:$sid, catalog:$cat}) SET ds.source=$src
+                             MERGE (m)-[:NEEDS_SERIES]->(ds)""",
+                          cat=CATALOG, id=mid, sid=i["series_id"], src=i.get("db_source", ""))
+
             for ch in d.get("charts") or []:
                 if cid := ch.get("id"):
                     s.run("""MATCH (m:Model {id:$id, catalog:$cat})
@@ -134,65 +184,60 @@ def seed(driver, graph_docs: dict, design_docs: dict, proof: dict, personas: dic
                           cat=CATALOG, id=mid, c=cid, t=ch.get("chart_type", ""),
                           ins=ch.get("insight", ""), role=ch.get("role", ""))
 
-        # The design catalog: what we want and cannot yet do. Seeded, never labelled executable.
         for mid, d in design_docs.items():
             if mid in graph_docs:
                 continue
-            s.run(
-                """MERGE (m:Model {id:$id, catalog:$cat})
-                   SET m.name=$name, m.family=$family, m.source='catalog/models',
-                       m.executable=false, m.why_not=$why, m.umd_impl=$impl""",
-                cat=CATALOG, id=mid, name=d.get("name", mid), family=d.get("family", "?"),
-                why=_why_not(d), impl=d.get("implemented_by"))
+            s.run("""MERGE (m:Model {id:$id, catalog:$cat})
+                     SET m.name=$name, m.family=$family, m.source='catalog/models',
+                         m.executable=false, m.why_not=$why, m.umd_impl=$impl""",
+                  cat=CATALOG, id=mid, name=d.get("name", mid), family=d.get("family", "?"),
+                  why=_why_not(d), impl=d.get("implemented_by"))
 
         for pid, p in personas.items():
-            s.run(
-                """MERGE (dm:DecisionMaker {id:$pid, catalog:$cat}) SET dm.name=$name
-                   MERGE (dec:Decision {id:$pid, catalog:$cat}) SET dec.text=$decision
-                   MERGE (dm)-[:MAKES]->(dec)
-                   WITH dm, dec
-                   UNWIND $uses AS mid
-                     MATCH (m:Model {id:mid, catalog:$cat})
-                     MERGE (dm)-[:USES]->(m)
-                     MERGE (m)-[:INFORMS]->(dec)""",
-                cat=CATALOG, pid=pid, name=p.get("name", pid),
-                decision=p.get("decision", ""), uses=p.get("models") or [])
+            s.run("""MERGE (dm:DecisionMaker {id:$pid, catalog:$cat}) SET dm.name=$name
+                     MERGE (dec:Decision {id:$pid, catalog:$cat}) SET dec.text=$decision
+                     MERGE (dm)-[:MAKES]->(dec)
+                     WITH dm, dec
+                     UNWIND $uses AS mid
+                       MATCH (m:Model {id:mid, catalog:$cat})
+                       MERGE (dm)-[:USES]->(m) MERGE (m)-[:INFORMS]->(dec)""",
+                  cat=CATALOG, pid=pid, name=p.get("name", pid),
+                  decision=p.get("decision", ""), uses=p.get("models") or [])
 
 
 def report(driver) -> int:
-    """The conviction test, asked honestly: can every persona reach a model that RAN?"""
+    """The conviction test, now per currency: how wide is the grounded (model × jurisdiction) matrix?"""
     with driver.session() as s:
-        tot = s.run("MATCH (m:Model {catalog:$cat}) RETURN count(m) AS n", cat=CATALOG).single()["n"]
-        ex = s.run("MATCH (m:Model {catalog:$cat, executable:true}) RETURN count(m) AS n",
-                   cat=CATALOG).single()["n"]
-        print(f"\nSPINE: {tot} models — {ex} PROVEN executable, {tot - ex} design-stage/failed")
+        tot = s.run("MATCH (m:Model {catalog:$cat, source:'catalog/graph'}) RETURN count(m) AS n",
+                    cat=CATALOG).single()["n"]
+        cells = s.run("MATCH (:Model {catalog:$cat})-[:EXECUTABLE_IN]->(:Jurisdiction) RETURN count(*) AS n",
+                      cat=CATALOG).single()["n"]
+        print(f"\nSPINE: {tot} executable-catalog models — {cells} proven (model × currency) cells")
 
-        rows = s.run(
-            """MATCH (dm:DecisionMaker {catalog:$cat})-[:MAKES]->(dec:Decision)
-               OPTIONAL MATCH (dm)-[:USES]->(m:Model)
-               WITH dm, dec, collect(m) AS ms
-               RETURN dm.id AS pid,
-                      size([x IN ms WHERE x.executable]) AS ok,
-                      size(ms) AS n,
-                      [x IN ms WHERE NOT x.executable | x.id] AS dead
-               ORDER BY pid""", cat=CATALOG).data()
-        bad = 0
-        print("\nPER PERSONA (models that actually ran / models bound)")
+        rows = s.run("""MATCH (jn:Jurisdiction {catalog:$cat})
+                        OPTIONAL MATCH (m:Model)-[:EXECUTABLE_IN]->(jn)
+                        RETURN jn.id AS jid, jn.ccy AS ccy, count(m) AS n ORDER BY n DESC""",
+                     cat=CATALOG).data()
+        print("\nGROUNDED MODELS PER CURRENCY (proven by a real run):")
         for r in rows:
-            flag = "PASS" if r["ok"] else "FAIL"
-            bad += 0 if r["ok"] else 1
-            note = f"  dead: {', '.join(r['dead'][:3])}" if r["dead"] else ""
-            print(f"  {flag}  {r['pid']:26} {r['ok']}/{r['n']}{note}")
+            print(f"  {r['jid']:3} {r['ccy']:4} {r['n']:3} models")
 
-        # The whole point of role 2: a persona may reach ANY proven model, not just its hardcoded few.
-        reach = s.run(
-            """MATCH (m:Model {catalog:$cat, executable:true})
-               WHERE NOT (:DecisionMaker {catalog:$cat})-[:USES]->(m)
-               RETURN collect(m.id) AS orphans""", cat=CATALOG).single()["orphans"]
-        if reach:
-            print(f"\n{len(reach)} PROVEN models no persona is bound to — invisible to every article "
-                  f"today, and exactly what role 2 exists to reach:\n  {', '.join(sorted(reach))}")
-        return bad
+        multi = s.run("""MATCH (m:Model {catalog:$cat})-[:EXECUTABLE_IN]->(jn:Jurisdiction)
+                         WITH m, collect(jn.id) AS js WHERE size(js) > 1
+                         RETURN m.id AS id, js ORDER BY id""", cat=CATALOG).data()
+        print(f"\nMULTI-CURRENCY MODELS ({len(multi)} run in more than one jurisdiction):")
+        for r in multi:
+            print(f"  {r['id']:32} {', '.join(sorted(r['js']))}")
+
+        # data-gap signal: a generic model needs a role that is MISSING in some jurisdiction
+        gaps = s.run("""MATCH (m:Model {catalog:$cat})-[:NEEDS]->(r:Role)-[:MISSING_IN]->(jn:Jurisdiction)
+                        RETURN jn.id AS jid, r.name AS role, collect(DISTINCT m.id) AS models
+                        ORDER BY jid, role""", cat=CATALOG).data()
+        if gaps:
+            print(f"\nDATA GAPS (a generic model blocked in a currency by a missing series — sourcing targets):")
+            for g in gaps[:20]:
+                print(f"  {g['jid']:3} missing '{g['role']}' → blocks {', '.join(g['models'][:4])}")
+        return 0
 
 
 def main() -> None:
@@ -201,29 +246,30 @@ def main() -> None:
     args = ap.parse_args()
 
     graph_docs, design_docs = _load(GRAPH_DIR), _load(MODELS_DIR)
+    roles, jurisdictions = _load_jurisdictions()
+    jur_ids = [j["id"] for j in jurisdictions]
     personas = yaml.safe_load((GRAPH_DIR / "personas.yaml").read_text())["personas"]
-    print(f"catalog/graph: {len(graph_docs)} models   catalog/models: {len(design_docs)} models   "
-          f"overlap: {len(set(graph_docs) & set(design_docs))}")
-    print(f"\nPROVING EXECUTABILITY — running all {len(graph_docs)} candidates")
+    print(f"catalog/graph: {len(graph_docs)} models   jurisdictions: {', '.join(jur_ids)}")
+    print(f"\nPROVING EXECUTABILITY per (model × currency) — running candidates", file=sys.stderr)
 
     conn = psycopg2.connect(host="localhost", port=5434, dbname="unified_market_data",
                             user="postgres", password="devpassword")
-    proof = prove(conn, list(graph_docs))
-    ran = sum(1 for p in proof.values() if p["executable"])
-    print(f"\n{ran}/{len(graph_docs)} models proven executable by running them")
+    matrix = prove_matrix(conn, graph_docs, jur_ids)
+    cells = sum(1 for c in matrix.values() for x in c.values() if x["executable"])
+    print(f"\n{cells} proven (model × currency) cells across {len(graph_docs)} models")
     if args.dry_run:
-        for mid, p in sorted(proof.items()):
-            if not p["executable"]:
-                print(f"  NOT EXECUTABLE  {mid:30} {p['why']}")
+        for mid, c in sorted(matrix.items()):
+            ok = [j for j, x in c.items() if x["executable"]]
+            print(f"  {mid:32} {', '.join(ok) or 'NONE'}")
         return
 
     driver = GraphDatabase.driver(os.getenv("NEO4J_URI", "bolt://localhost:7688"),
                                   auth=(os.getenv("NEO4J_USERNAME", "neo4j"),
                                         os.getenv("NEO4J_PASSWORD", "devpassword")))
-    seed(driver, graph_docs, design_docs, proof, personas)
-    bad = report(driver)
+    seed(driver, graph_docs, design_docs, matrix, personas, roles, jurisdictions)
+    rc = report(driver)
     driver.close()
-    sys.exit(1 if bad else 0)
+    sys.exit(rc)
 
 
 if __name__ == "__main__":
