@@ -122,6 +122,52 @@ def test_prefer_form_keeps_gap_chart_when_prose_emphasizes_the_gap():
     assert _prefer_form(gap, fan, ci, "the rules broadly track the funds rate") == fan
 
 
+def test_lead_hook_off_when_blank_on_when_filled(tmp_path):
+    """Agency round B — the byline + closing 'work with me' block appear only when byline.yaml is filled;
+    a blank config ships NOTHING half-written, and a filled one adds the byline, About block and CTA link."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import docx
+    import render.writer as W
+    hdr = tmp_path / "hdr.png"
+    fig, ax = plt.subplots(figsize=(2, 1)); ax.plot([0, 1], [0, 1]); fig.savefig(hdr); plt.close(fig)
+    mat = {"as_of": "2026-07-20", "papers": [], "source_labels": ["UMD"], "model_names": ["x"]}
+
+    def _render(byline):
+        W._byline = lambda: byline
+        out = tmp_path / "a.docx"
+        W._assemble_docx(out, {"name": "Rates trader"}, mat, "H", "SF", "Exec.", [], {}, hdr, None)
+        return [x.text for x in docx.Document(out).paragraphs], docx.Document(out)
+
+    off_texts, off_doc = _render({})                       # blank → hook OFF
+    assert not any(t.startswith("By ") for t in off_texts)
+    assert "About the author" not in off_texts
+
+    on_texts, on_doc = _render({"author": "Richard Walker", "credential": "Lucidate",
+                                "bio": "Builds model-driven research.", "cta_text": "Work with me —",
+                                "cta_url": "https://example.com", "cta_link_text": "get in touch"})
+    assert any(t.startswith("By Richard Walker") for t in on_texts)
+    assert "About the author" in on_texts
+    assert any("hyperlink" in r.reltype for r in on_doc.part.rels.values())
+    W._byline.cache_clear() if hasattr(W._byline, "cache_clear") else None
+
+
+def test_docx_caption_truncates_at_a_word_boundary_not_mid_word():
+    """Agency round A — the docx figure caption was a bare [:160] slice that cut mid-word ('publish seams').
+    It now ends at a word boundary with an ellipsis, and short captions pass through untouched."""
+    from render.writer import _docx_caption
+    long = ("The GZ credit spread decomposed into compensation for expected default and the excess bond "
+            "premium, a fear gauge that spiked hard at Lehman and again at COVID but sits benign today "
+            "right across the whole sample window and beyond, a decomposition every credit desk should read")
+    out = _docx_caption(long, width=120)
+    assert out.endswith("…")
+    words = out.rstrip("…").split()
+    assert words[-1].isalpha() and len(words[-1]) >= 2      # last kept word is whole, not a mid-word chop
+    assert _docx_caption("A short caption.", width=120) == "A short caption."     # short passes through
+    assert _docx_caption("") == ""
+
+
 def test_probit_and_scatter_are_named_exhibits_but_stay_distinctive():
     """P5.4 — the recession probit was 'described but not drawn' for 3 rounds because 'probit' wasn't an
     exhibit noun. It now is (so _prose_names fires), while staying a distinctive word for _prose_describes."""

@@ -1,0 +1,15 @@
+# Author identity for every Horizon article — the byline above the fold and the closing
+# "About the author / work with me" block that turns a great read into a consulting lead
+# (the pipeline hook the marketing review flagged as the #1 gap for lead-gen).
+#
+# Fill these with real copy. Any field left BLANK is simply omitted from the article — so an
+# unfinished byline never ships. When author is blank the whole hook is off; when cta_url is
+# blank the CTA renders as plain text (no link). Nothing here is a number, so it never touches
+# the figure firewall.
+
+author: ""          # e.g. "Richard Walker"
+credential: ""      # affiliation shown after the name, e.g. "Lucidate"
+bio: ""             # 2-3 sentences, About the author — who you are, what you do
+cta_text: ""        # the soft call to action, e.g. "Work with me on bespoke market research —"
+cta_url: ""         # where the CTA links, e.g. "https://lucidate.co.uk"
+cta_link_text: ""   # the linked words, e.g. "get in touch" (defaults to the URL if blank)

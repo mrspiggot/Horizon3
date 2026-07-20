@@ -20,6 +20,7 @@ import difflib
 import os
 import re
 import sys
+import textwrap
 from functools import lru_cache
 from pathlib import Path
 
@@ -597,6 +598,17 @@ def _add_hyperlink(paragraph, url: str, text: str):
     link.append(run); paragraph._p.append(link)
 
 
+@lru_cache(maxsize=1)
+def _byline() -> dict:
+    """The author identity (catalog/byline.yaml) for the byline + closing 'work with me' block. Blank
+    fields are omitted so an unfinished byline never ships; missing file → no hook at all."""
+    try:
+        d = yaml.safe_load((GRAPH_DIR.parent / "byline.yaml").read_text()) or {}
+    except Exception:
+        return {}
+    return {k: (str(v).strip() if v is not None else "") for k, v in d.items()}
+
+
 def _strip_stray(text: str) -> str:
     """Final safety net: remove any leftover {…} marker (e.g. an invented figure ref) and tidy spacing —
     so a broken placeholder can never ship even if the writer keeps re-inserting them."""
@@ -925,8 +937,15 @@ def _render_charts(brief: dict, chart_ids: list[str], out_dir: Path,
         if b64:
             pth = out_dir / f"chart_{i}.png"
             pth.write_bytes(base64.b64decode(b64))
-            out[cid] = (pth, (cap or info.get("insight", ""))[:160])
+            out[cid] = (pth, _docx_caption(cap or info.get("insight", "")))
     return out
+
+
+def _docx_caption(text: str, width: int = 200) -> str:
+    """A figure caption for the .docx: whole words only, ellipsis at a word boundary — never the bare
+    `[:160]` mid-word chop that shipped 'truncated captions' the agency flagged as publish seams."""
+    t = " ".join((text or "").split())
+    return textwrap.shorten(t, width=width, placeholder="…") if t else t
 
 
 # ── semantic chart↔section binding (A) ──────────────────────────────────────────────────────────
@@ -1210,20 +1229,29 @@ def _assemble_docx(path: Path, p: dict, mat: dict, headline: str, standfirst: st
 
     def _fig(png: Path, caption: str = "", width: float = 6.5) -> None:
         doc.add_picture(str(png), width=Inches(width))
-        doc.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        img_para = doc.paragraphs[-1]
+        img_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
         if caption:
+            # bind the image to its caption so a page break can't strand the caption on the next page
+            # (the 'orphaned captions' the agency flagged) — keep_with_next holds the pair together.
+            img_para.paragraph_format.keep_with_next = True
             c = doc.add_paragraph(caption)
             try:
                 c.style = doc.styles["Caption"]
             except KeyError:
                 pass
             c.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            c.paragraph_format.keep_together = True
 
     doc = Document()
     doc.add_heading(headline, level=0)
     sf = doc.add_paragraph()
     r = sf.add_run(standfirst); r.italic = True; r.font.size = Pt(13)
+    by = _byline()
     dl = doc.add_paragraph()
+    if by.get("author"):                                   # human byline above the fold
+        who = by["author"] + (f", {by['credential']}" if by.get("credential") else "")
+        dl.add_run(f"By {who}  ·  ").bold = True
     dl.add_run(f"{p['name']}.  Data as of {mat.get('as_of','')}.").italic = True
 
     _fig(ill_png)                                          # the Van Gogh header
@@ -1254,6 +1282,24 @@ def _assemble_docx(path: Path, p: dict, mat: dict, headline: str, standfirst: st
                 para.add_run(r["title"]).bold = True
             tail = " — " + (f"{r['byline']}. " if r["byline"] else "") + (r["summary"] or "")
             para.add_run(tail)
+
+    # the pipeline hook: a soft About-the-author + call-to-action, after the analysis so it never
+    # interrupts the read (the lead-gen gap the marketing review named). Static prose — no figure tokens.
+    if by.get("bio") or by.get("cta_text"):
+        doc.add_heading("About the author", level=2)
+        if by.get("bio"):
+            bp = doc.add_paragraph()
+            who = by.get("author", "")
+            if who:
+                bp.add_run(f"{who}. ").bold = True
+            bp.add_run(by["bio"])
+        if by.get("cta_text"):
+            cta = doc.add_paragraph()
+            r = cta.add_run(by["cta_text"] + " "); r.italic = True
+            if by.get("cta_url"):
+                _add_hyperlink(cta, by["cta_url"], by.get("cta_link_text") or by["cta_url"])
+            elif by.get("cta_link_text"):
+                cta.add_run(by["cta_link_text"]).italic = True
 
     foot = doc.add_paragraph()
     fr = foot.add_run(f"Source: {', '.join(mat.get('source_labels', [])) or 'UMD'}. "
