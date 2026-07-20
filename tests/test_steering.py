@@ -36,6 +36,24 @@ def test_data_gaps_group_by_role_and_currency():
     assert jp[("JP", "headline_cpi")] == ["phillips"]
 
 
+def test_scorecard_zscore_and_regime():
+    from render.steering.scorecard import _regime, _zscore
+
+    class _Pt:
+        def __init__(self, v): self.outputs = {"x": v}
+    hist = [_Pt(v) for v in [1, 1, 1, 1, 1, 1, 1, 1, 5]]          # latest 5 is high vs a ~1 history
+    lv, z = _zscore(hist, "x")
+    assert lv == 5.0 and z is not None and z > 1.5               # elevated → positive z
+    assert _zscore([_Pt(1)], "x") == (1.0, None)                 # too short → no z, level only
+
+    class _P2:
+        def __init__(self, cli, infl): self.outputs = {"leading_indicator": cli, "inflation_pct": infl}
+    assert _regime(_P2(101, 3.0)) == "reflation"                  # growing + hot
+    assert _regime(_P2(101, 1.0)) == "goldilocks"                 # growing + cool
+    assert _regime(_P2(98, 3.0)) == "stagflation"                 # slowing + hot
+    assert _regime(_P2(98, 1.0)) == "slowdown"                    # slowing + cool
+
+
 def test_port_backlog_is_the_us_welded_models():
     uses, execin, generic, _ = _facts()
     back = port_backlog(generic, execin, ["US", "EU", "JP"])

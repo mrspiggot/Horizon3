@@ -1,0 +1,94 @@
+model_id: economies_scorecard
+name: "The major economies, side by side"
+family: macro
+persona: global_macro_strategist
+grounded_in: [oecd-cli]
+method: harmonised
+canonical: true   # a cross-country indicator panel; the comparison IS the model
+method_note: >
+  One economy's macro state on indicators harmonised so the SAME reading is comparable across central
+  banks: headline inflation (YoY), unemployment, the policy rate, the 10y government yield, and the OECD
+  composite leading indicator (the growth pulse, ~100 = trend). Plus the two decision-relevant real
+  rates (policy − inflation, 10y − inflation) and a growth×inflation regime label. Run across US/EU/GB/JP
+  it becomes the cross-country scorecard — who is tight, who is slowing, who is reflating.
+spec:
+  equations: "real_policy = policy - inflation; real_10y = 10y - inflation; regime = f(CLI vs 100, inflation vs 2.5%)"
+# Jurisdiction-generic from the start (the steering rebuild's data-first, cross-country exemplar): every
+# input is a role bound for US/EU/GB/JP in jurisdictions.yaml, so the same panel runs for four central
+# banks (run_model_instances) and the DIVERGENCE across them is the article.
+instances: [US, EU, GB, JP]
+history: {start: "1996-01", end: "2026-06", cadence: monthly}
+inputs:
+  - {id: infl,    role: headline_cpi,      transform: yoy, state: level, context_window: 120}
+  - {id: unemp,   role: unemployment_rate, state: level, context_window: 120}
+  - {id: policy,  role: policy_rate,       state: level, context_window: 120}
+  - {id: yield10, role: long_yield_10y,    state: level, context_window: 120}
+  - {id: cli,     role: leading_indicator, state: level, context_window: 120}
+execution:
+  implemented_by: unified_market_data.analysis.macro_signals.economies_scorecard
+  args:
+    inflation_pct: infl.level
+    unemployment_pct: unemp.level
+    policy_rate_pct: policy.level
+    long_yield_pct: yield10.level
+    leading_indicator: cli.level
+outputs:
+  - {name: inflation_pct,        unit: "%",     meaning: "headline CPI/HICP inflation, YoY"}
+  - {name: unemployment_pct,     unit: "%",     meaning: "harmonised unemployment rate"}
+  - {name: policy_rate_pct,      unit: "%",     meaning: "central-bank policy rate"}
+  - {name: long_yield_pct,       unit: "%",     meaning: "10y government benchmark yield"}
+  - {name: leading_indicator,    unit: "idx",   meaning: "OECD composite leading indicator (~100 = trend; >100 expanding)"}
+  - {name: real_policy_rate_pct, unit: "%",     meaning: "policy rate minus inflation — the real stance"}
+  - {name: real_long_yield_pct,  unit: "%",     meaning: "10y yield minus inflation — the real long rate"}
+interpretations:
+  - id: reflation
+    when: "leading_indicator >= 100 and inflation_pct >= 2.5"
+    says: >
+      Growing and hot — the leading indicator is above trend while inflation runs above target. A
+      reflationary mix that keeps the central bank cautious about cutting.
+  - id: stagflationary
+    when: "leading_indicator < 100 and inflation_pct >= 2.5"
+    says: >
+      The uncomfortable quadrant: the growth pulse has rolled below trend while inflation is still hot.
+      Slowing-but-sticky is the hardest backdrop for a central bank to navigate.
+  - id: restrictive_real
+    when: "real_policy_rate_pct > 1.5"
+    says: >
+      The real policy rate is firmly positive — policy is genuinely restrictive here, not just nominally
+      high, and the room to stay there depends on how fast the leading indicator is fading.
+charts:
+  - id: "The real policy rate vs the growth pulse"
+    role: outcome
+    chart_type: series
+    color_job: categorical
+    interpretation: restrictive_real
+    insight: "how tight policy really is (policy minus inflation) against the OECD leading indicator — restrictive policy into a fading growth pulse is where cuts start to price"
+    data_contract:
+      kind: series
+      ylabel: "real policy rate (%)  /  CLI (idx)"
+      zero_line: true
+      series:
+        - {label: "real policy rate", from: "output:real_policy_rate_pct"}
+        - {label: "leading indicator", from: "output:leading_indicator"}
+  - id: "Inflation and the 10y, in real terms"
+    role: input
+    chart_type: series
+    color_job: categorical
+    insight: "headline inflation against the real 10y yield — whether long rates compensate for inflation or not"
+    data_contract:
+      kind: series
+      ylabel: "%"
+      zero_line: true
+      series:
+        - {label: "inflation (YoY)", from: "output:inflation_pct"}
+        - {label: "real 10y yield", from: "output:real_long_yield_pct"}
+  - id: "The five macro readings today"
+    role: outcome
+    chart_type: bar
+    color_job: diverging
+    insight: "this economy's current inflation, unemployment, policy rate, 10y yield and real policy rate — the row that becomes one column of the cross-country scorecard"
+    data_contract:
+      kind: named_values
+      ylabel: "% / idx"
+      labels: ["inflation", "unemployment", "policy rate", "10y yield", "real policy"]
+      values: ["output:inflation_pct", "output:unemployment_pct", "output:policy_rate_pct", "output:long_yield_pct", "output:real_policy_rate_pct"]

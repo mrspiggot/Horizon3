@@ -32,6 +32,7 @@ roles:
   unemployment_rate:        {kind: observations, desc: "Harmonised unemployment rate (%). The Phillips/Okun/Beveridge/Sahm slack variable."}
   headline_cpi:             {kind: observations, desc: "Headline CPI index (yoy computed = headline inflation). The Phillips-curve price variable."}
   long_yield_10y:           {kind: observations, desc: "10y government benchmark yield (%). US=Treasury, EU=Bund, GB=Gilt, JP=JGB."}
+  leading_indicator:        {kind: observations, desc: "OECD composite leading indicator (amplitude-adjusted, ~100 = long-run trend; >100 expanding). The cross-country growth pulse where quarterly real GDP is thin."}
 
 # ---------------------------------------------------------------------------------------------
 # Jurisdictions. `scope: major` = the G7-ish OIS majors we instantiate first (user priority:
@@ -63,6 +64,7 @@ jurisdictions:
       unemployment_rate:        {ref: "UNRATE",             source: fred, note: "US civilian unemployment, monthly from 1948."}
       headline_cpi:             {ref: "CPIAUCSL",           source: fred, note: "US CPI-U index; yoy = headline inflation, from 1947."}
       long_yield_10y:           {ref: "IRLTLT01USM156N",    source: fred, note: "US 10y Treasury benchmark (OECD-harmonised), from 1953."}
+      leading_indicator:        {ref: "OECD_CLI_USA",        source: oecd, note: "OECD composite leading indicator, US."}
 
   - id: EU
     central_bank: "European Central Bank"
@@ -87,6 +89,7 @@ jurisdictions:
       unemployment_rate:        {ref: "ECB_UNEMPLOYMENT",   source: ecb, note: "Euro-area unemployment (ECB SDW), from 2000, live. Replaces the discontinued OECD LRHUTTTTEZM156S (dead 2023-01)."}
       headline_cpi:             {ref: "CP0000EZ19M086NEST", source: fred, note: "Euro-area HICP (Eurostat), from 1996; yoy = HICP inflation."}
       long_yield_10y:           {ref: "IRLTLT01DEM156N",    source: fred, note: "German 10y Bund (the euro-area risk-free benchmark), from 1956."}
+      leading_indicator:        {ref: "OECD_CLI_DEU",        source: oecd, note: "OECD CLI, Germany as the euro-area proxy (consistent with the Bund long-yield binding)."}
 
   - id: GB
     central_bank: "Bank of England"
@@ -104,6 +107,7 @@ jurisdictions:
       unemployment_rate:        {ref: "LRHUTTTTGBM156S",    source: fred, note: "UK harmonised unemployment (OECD), from 1983."}
       headline_cpi:             {ref: "GBRCPIALLMINMEI",    source: fred, note: "UK CPI (OECD), from 1955; yoy = headline inflation."}
       long_yield_10y:           {ref: "IRLTLT01GBM156N",    source: fred, note: "UK 10y gilt benchmark (OECD-harmonised), from 1960."}
+      leading_indicator:        {ref: "OECD_CLI_GBR",        source: oecd, note: "OECD CLI, UK."}
 
   - id: JP
     central_bank: "Bank of Japan"
@@ -119,8 +123,11 @@ jurisdictions:
       pm_implied_rate:          null
       equity_vol:               null
       unemployment_rate:        {ref: "LRUN64TTJPM156S",    source: fred, note: "Japan harmonised unemployment (OECD), from 1970."}
-      headline_cpi:             {ref: "JPNCPIALLMINMEI",    source: fred, note: "Japan CPI (OECD), from 1955; yoy = headline inflation."}
+      # Repointed 2026-07-20: JPNCPIALLMINMEI (fred/OECD) is DEAD — latest 2021-06, ~5yr stale. IMF IFS
+      # carries live Japan CPI to 2026-05. The dead binding was silently capping every JP inflation model.
+      headline_cpi:             {ref: "IMF_IFS_JP_CPI",     source: imf, note: "Japan CPI (IMF IFS), live to 2026; yoy = headline inflation. Replaces the dead OECD JPNCPIALLMINMEI."}
       long_yield_10y:           {ref: "IRLTLT01JPM156N",    source: fred, note: "Japan 10y JGB benchmark (OECD-harmonised), from 1989."}
+      leading_indicator:        {ref: "OECD_CLI_JPN",        source: oecd, note: "OECD CLI, Japan."}
 
   - id: CH
     central_bank: "Swiss National Bank"

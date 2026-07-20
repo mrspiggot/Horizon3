@@ -195,3 +195,20 @@ personas:
       to the 0.5-point trigger that has flagged every recession since 1970. One reading: growth and jobs
       are consistent, the labour market is off its extreme tightness, and the recession trigger is close
       but not yet tripped.
+
+  global_macro_strategist:
+    name: "Global macro strategist"
+    decision: "Compare the major economies and position across them."
+    title: "The major economies, side by side: who is tight, who is slowing, who is reflating"
+    models: [economies_scorecard, phillips_curve, sahm_rule]
+    stub_charts:
+      - [economies_scorecard, "The real policy rate vs the growth pulse"]
+      - [economies_scorecard, "The five macro readings today"]
+    summary_template: >
+      Read across the majors, the same five indicators tell four different stories. Headline inflation
+      runs at {economies_scorecard.inflation_pct}% against a {economies_scorecard.policy_rate_pct}%
+      policy rate — a real stance of {economies_scorecard.real_policy_rate_pct}% — while the OECD leading
+      indicator sits at {economies_scorecard.leading_indicator}, unemployment at
+      {economies_scorecard.unemployment_pct}% and the 10y at {economies_scorecard.long_yield_pct}%. The
+      cross-country scorecard puts each economy's inflation, jobs, rates and growth pulse side by side, so
+      the divergence between them — not any single number — is the position.
