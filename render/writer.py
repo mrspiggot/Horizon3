@@ -1298,6 +1298,9 @@ def _assemble_docx(path: Path, p: dict, mat: dict, headline: str, standfirst: st
         who = by["author"] + (f", {by['credential']}" if by.get("credential") else "")
         dl.add_run(f"By {who}  ·  ").bold = True
     dl.add_run(f"{p['name']}.  Data as of {mat.get('as_of','')}.").italic = True
+    if by.get("tagline"):                                  # the one-line credential under the byline
+        tl = doc.add_paragraph()
+        tr = tl.add_run(by["tagline"]); tr.italic = True; tr.font.size = Pt(9.5)
 
     _fig(ill_png)                                          # the Van Gogh header
 
@@ -1335,7 +1338,8 @@ def _assemble_docx(path: Path, p: dict, mat: dict, headline: str, standfirst: st
         if by.get("bio"):
             bp = doc.add_paragraph()
             who = by.get("author", "")
-            if who:
+            # only lead with the name when the bio doesn't already open with it (third-person bios do)
+            if who and not by["bio"].lstrip().lower().startswith(who.split()[0].lower()):
                 bp.add_run(f"{who}. ").bold = True
             bp.add_run(by["bio"])
         if by.get("cta_text"):
