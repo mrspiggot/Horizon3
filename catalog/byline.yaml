@@ -11,7 +11,7 @@ credential: ""          # short chip after the name in the byline; blank → jus
 tagline: "Thirty years in rates and derivatives (UBS, Lehman, Nomura, LCH SwapClear, CurveGlobal), PhD in AI — and I build the models behind every chart myself."
 bio: "Richard Walker spent thirty years trading and building rates and derivatives markets — Swiss Bank/UBS, Lehman, Nomura, running sales at LCH SwapClear, and co-founding CurveGlobal — before a PhD in AI. He now builds the analytical systems behind every chart here himself. Desk-grade reads on macro, market structure and AI. No hype, no AI-washing."
 
-# The call to action — the actual lead-gen line. cta_url is still needed (Substack? Lucidate? contact).
-cta_text: ""            # e.g. "Rather see the working than be handed a conclusion?"
-cta_url: ""             # e.g. "https://lucidate.co.uk" or your Substack/contact link
-cta_link_text: ""       # linked words, e.g. "Work with me"
+# The call to action — the actual lead-gen line.
+cta_text: "Rather see the working than be handed a conclusion?"
+cta_url: "https://lucidate.co.uk"
+cta_link_text: "Work with me"
