@@ -122,6 +122,24 @@ def test_prefer_form_keeps_gap_chart_when_prose_emphasizes_the_gap():
     assert _prefer_form(gap, fan, ci, "the rules broadly track the funds rate") == fan
 
 
+def test_cross_jurisdiction_freshness_guard_drops_stale_bindings(capsys):
+    """C1 — rule #5 at the jurisdiction boundary: an instance whose latest point is far behind the freshest
+    is refused (JP CPI ends 2021 → out of a Phillips comparison), but a fresh one stays (JP unemployment →
+    in a Sahm comparison). Never plot stale data as current."""
+    from render.graph_corpus import _drop_stale_instances
+
+    class _Pt:
+        def __init__(self, a): self.as_of = a
+
+    phillips = {"US": {"latest": _Pt("2026-06-28")}, "EU": {"latest": _Pt("2026-05-28")},
+                "GB": {"latest": _Pt("2026-04-28")}, "JP": {"latest": _Pt("2021-06-28")}}
+    kept = _drop_stale_instances(phillips, "phillips_curve")
+    assert set(kept) == {"US", "EU", "GB"}                  # JP (dead CPI) refused
+    assert "refusing to plot stale data" in capsys.readouterr().err
+    sahm = {j: {"latest": _Pt("2026-05-28")} for j in ("US", "EU", "GB", "JP")}
+    assert set(_drop_stale_instances(sahm, "sahm_rule")) == {"US", "EU", "GB", "JP"}   # all fresh → all kept
+
+
 def test_lead_hook_off_when_blank_on_when_filled(tmp_path):
     """Agency round B — the byline + closing 'work with me' block appear only when byline.yaml is filled;
     a blank config ships NOTHING half-written, and a filled one adds the byline, About block and CTA link."""

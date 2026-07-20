@@ -101,8 +101,42 @@ def run_model_instances(model_id: str, conn) -> dict:
         out[jid] = {"history": h, "latest": h[-1] if h else None, "dates": dates,
                     "coverage": _coverage(dates, h),
                     "cb": meta.get("central_bank", jid), "ccy": meta.get("ccy", "")}
+    out = _drop_stale_instances(out, model_id)
     return {"meta": d, "charts": d.get("charts", []), "instances": out,
             "common": _common_window(out)}
+
+
+_STALE_MONTHS = 9   # a binding whose latest point is this far behind the freshest instance is refused
+
+
+def _months_between(a: str, b: str) -> int:
+    ya, ma = int(a[:4]), int(a[5:7])
+    yb, mb = int(b[:4]), int(b[5:7])
+    return abs((yb - ya) * 12 + (mb - ma))
+
+
+def _drop_stale_instances(out: dict, model_id: str) -> dict:
+    """Rule #5 at the jurisdiction boundary: refuse a stale binding rather than plot old data as current.
+    `jurisdictions.yaml` claims all refs are fresh, but some are dead (JP CPI ends 2021, euro unemployment
+    was dead before its re-point). Drop any instance whose latest observation is >_STALE_MONTHS behind the
+    freshest — so JP falls out of a Phillips comparison (dead CPI) but stays in a Sahm one (live
+    unemployment), automatically and loudly, instead of truncating everyone to 2021."""
+    live = {j: v for j, v in out.items() if v.get("latest")}
+    if len(live) < 2:
+        return out
+    newest = max(v["latest"].as_of[:7] for v in live.values())
+    kept = {}
+    for j, v in out.items():
+        if not v.get("latest"):
+            print(f"CROSS-JUR — {model_id}: dropped {j} (no data for this jurisdiction)", file=sys.stderr)
+            continue
+        stale = _months_between(v["latest"].as_of[:7], newest)
+        if stale > _STALE_MONTHS:
+            print(f"CROSS-JUR — {model_id}: dropped {j} — data ends {v['latest'].as_of[:7]}, {stale}mo "
+                  f"behind {newest}; refusing to plot stale data as current.", file=sys.stderr)
+            continue
+        kept[j] = v
+    return kept
 
 
 def _common_window(instances: dict) -> dict:

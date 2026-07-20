@@ -286,13 +286,52 @@ def brief_for_model_instances(persona: str, decision: str, model_id: str, chart_
                         profile=profile_rows(rows, series_field="jurisdiction"), rows=rows)
 
 
+def _det_cross_jurisdiction(brief, out_path: str) -> str | None:
+    """Render a cross-jurisdiction TIME SERIES deterministically as one line per central bank — reliable,
+    not a studio coin-toss. The agentic path mis-picked a per-date form here and exploded a Sahm-gap
+    comparison to a 25,000px strip; a multi-line chart (x=date, y=value, one line per jurisdiction) is the
+    honest, legible exhibit and reuses the P3-hardened compile path (≤12 series → clean legend)."""
+    from .compile import compile_encoding
+    from .encoding import ChartEncoding
+    rows = brief.rows or []
+    if not rows:
+        return None
+    yf = next((c for c in rows[0] if c not in ("date", "jurisdiction", "order")), None)
+    if yf is None or "date" not in rows[0] or "jurisdiction" not in rows[0]:
+        return None
+    n_banks = len({r["jurisdiction"] for r in rows})
+    enc = ChartEncoding(
+        title=(brief.interpretation.split(".")[0][:90] if brief.interpretation else f"{yf} across central banks"),
+        subtitle=f"{yf} — the same model run for {n_banks} central banks; the divergence is the point.",
+        message="compare the same reading across jurisdictions",
+        mark="line", color_job="categorical",
+        encoding={"x": {"field": "date", "type": "temporal"},
+                  "y": {"field": yf, "type": "quantitative", "title": yf},
+                  "detail": {"field": "jurisdiction", "type": "nominal"},
+                  "color": {"field": "jurisdiction", "type": "nominal"}},
+        annotations={"label_last": True},
+        data=rows)
+    try:
+        return compile_encoding(enc, out_path)
+    except Exception:
+        return None
+
+
 def studio_cross_jurisdiction(model_id: str, chart_id: str, conn, out_dir: str,
-                              persona: str = "Macro strategist", decision: str = "") -> dict:
-    """Design a cross-jurisdiction chart with the Studio for one generic model's chart."""
+                              persona: str = "Macro strategist", decision: str = "", *,
+                              deterministic: bool = True) -> dict:
+    """A cross-jurisdiction chart for one generic model's chart. Default: a DETERMINISTIC multi-line render
+    (one line per central bank) — the agentic studio mis-picks the form for this shape. Set
+    deterministic=False to let the Studio design it (scatter cross-sections may want small multiples)."""
     brief = brief_for_model_instances(persona, decision, model_id, chart_id, conn)
     if brief is None:
         return {"error": "not jurisdiction-generic or no data"}
     Path(out_dir).mkdir(parents=True, exist_ok=True)
+    if deterministic and brief.insight_type == "cross_section":
+        png = _det_cross_jurisdiction(brief, str(Path(out_dir) / "studio_chart.png"))
+        if png:
+            return {"model_id": model_id, "chart_id": chart_id, "insight_type": brief.insight_type,
+                    "mark": "line", "title": None, "png": png, "judge_pass": None, "deterministic": True}
     final = run_studio(brief, out_dir, max_iterations=3)
     ch = final.get("chosen")
     return {"model_id": model_id, "chart_id": chart_id, "insight_type": brief.insight_type,
