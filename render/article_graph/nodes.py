@@ -55,5 +55,5 @@ def reconcile_dashboard(state: dict) -> dict:
 def assemble(state: dict) -> dict:
     result = W.assemble(state["persona_id"], state["mat"], state["brief"], state["draft"],
                         state["ill_png"], state["ill_meta"], state.get("infog_png"),
-                        Path(state["out_dir"]))
+                        Path(state["out_dir"]), conn=state["conn"])
     return {"result": result}

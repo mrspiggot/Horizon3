@@ -941,6 +941,51 @@ def _render_charts(brief: dict, chart_ids: list[str], out_dir: Path,
     return out
 
 
+def _inject_cross_jurisdiction(persona_id: str, mat: dict, conn, out_dir: Path,
+                               filled_sections: list, charts: dict) -> str | None:
+    """Render ONE cross-country exhibit for the persona's first jurisdiction-generic model and place it in
+    the section that discusses it (else the last section). Defensive — any failure just means no bonus
+    chart. Uses the deterministic multi-line render, and the freshness guard drops stale jurisdictions."""
+    if conn is None:
+        return None
+    from .studio.from_model import GRAPH_DIR as _GD
+    from .studio.from_model import studio_cross_jurisdiction
+    models = (mat.get("p") or {}).get("models") or []
+    for mid in models:
+        try:
+            d = yaml.safe_load((_GD / f"{mid}.yaml").read_text())
+        except Exception:
+            continue
+        if not (d.get("instances") and (d.get("generic_over") or len(d.get("instances")) > 1)):
+            continue
+        chart = next((c for c in d.get("charts", [])
+                      if (c.get("data_contract", {}) or {}).get("kind") not in ("scatter", "pearson")), None)
+        if not chart:
+            continue
+        xdir = out_dir / "_xjur"
+        r = studio_cross_jurisdiction(mid, chart["id"], conn, str(xdir),
+                                      persona=(mat["p"].get("name") or persona_id),
+                                      decision=(mat["p"].get("decision") or ""))
+        png = r.get("png")
+        if not png or not Path(png).exists():
+            continue
+        dest = out_dir / "chart_xjur.png"
+        dest.write_bytes(Path(png).read_bytes())
+        cid = f"xjur::{mid}"
+        charts[cid] = (dest, _docx_caption(
+            f"The same model, run across central banks — {chart['id'].lower()}. The divergence between "
+            f"economies, not any one line, is the point."))
+        # place in the section whose prose names the model's topic, else the last content section
+        low_mid = mid.replace("_", " ")
+        home = next((s for s in filled_sections if low_mid in (s.prose or "").lower()), None)
+        home = home or (filled_sections[-1] if filled_sections else None)
+        if home is not None:
+            home.chart_ids.append(cid)
+            print(f"XJUR — {persona_id}: added cross-country {mid} exhibit to «{home.heading}»", file=sys.stderr)
+            return cid
+    return None
+
+
 def _docx_caption(text: str, width: int = 200) -> str:
     """A figure caption for the .docx: whole words only, ellipsis at a word boundary — never the bare
     `[:160]` mid-word chop that shipped 'truncated captions' the agency flagged as publish seams."""
@@ -1498,12 +1543,18 @@ def reconcile_dashboard(persona_id: str, conn, draft: dict, brief: dict, out_dir
 
 
 def assemble(persona_id: str, mat: dict, brief: dict, draft: dict, ill_png, ill_meta: dict,
-             infog_png, out_dir: Path) -> dict:
+             infog_png, out_dir: Path, conn=None) -> dict:
     """Render each placed chart once and assemble the .docx; return the run's result dict."""
     p, filled_sections = mat["p"], draft["filled_sections"]
     all_chart_ids = [cid for s in filled_sections for cid in s.chart_ids]
     prose_by_cid = {cid: s.prose for s in filled_sections for cid in s.chart_ids}  # prose-driven form
     charts = _render_charts(brief, all_chart_ids, out_dir, prose_by_cid)
+    # global-macro exhibit: if a persona runs a jurisdiction-generic model, add ONE cross-country chart so
+    # the article is literally multi-country, not US-shaped (the agency's "global macro is US macro").
+    try:
+        _inject_cross_jurisdiction(persona_id, mat, conn, out_dir, filled_sections, charts)
+    except Exception as exc:
+        print(f"XJUR — {persona_id}: skipped ({type(exc).__name__}: {str(exc)[:70]})", file=sys.stderr)
     docx_path = out_dir / "article.docx"
     _assemble_docx(docx_path, p, mat, draft["headline"], draft["standfirst"], draft["exec_summary"],
                    filled_sections, charts, ill_png, infog_png)
