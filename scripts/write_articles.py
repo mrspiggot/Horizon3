@@ -32,31 +32,40 @@ def main() -> None:
     backend = os.environ.get("VANGOGH_BACKEND", "auto")
     conn = psycopg2.connect(host="localhost", port=5434, dbname="unified_market_data",
                             user="postgres", password="devpassword")
-    personas = list(yaml.safe_load((GRAPH_DIR / "personas.yaml").read_text())["personas"].keys())
+    # The batch is driven by the GRAPH, not a hardcoded persona list: every groundable
+    # (decision-maker × jurisdiction) the spine proves — US/EU/GB/JP as peers. This is the whole point
+    # of the steering rebuild; iterating personas.yaml keys produced US-only articles by construction.
+    from render.steering.enumerate import groundable_analyses
+    analyses = groundable_analyses()
+    print(f"batch: {len(analyses)} groundable (decision-maker × jurisdiction) analyses from the spine\n")
 
     rows = []
-    for pid in personas:
+    for a in analyses:
+        pid, jur = a.decision_maker, a.jurisdiction
+        tag = f"{pid} [{jur}]"
         try:
-            r = build_article_full(pid, conn, article_dir(pid), backend=backend)
+            r = build_article_full(pid, conn, article_dir(f"{pid}_{jur}"), jurisdiction=jur,
+                                   model_ids=a.grounded_models, backend=backend)
+            r["_tag"] = tag
             rows.append(r)
             note = (" | " + "; ".join(r["reasons"])) if r["reasons"] else ""
             # `grounded` first, and it is not the same thing as critic_ok. critic_ok is a style score
             # from an editor that has never seen a number; grounded is whether the arithmetic agrees
             # with the prose. The CB article shipped critic_ok=True with two sentences that
             # contradicted their own series.
-            print(f"{'PASS ' if r.get('grounded') else 'CHECK'} {pid:26} {r['words']}w  "
+            print(f"{'PASS ' if r.get('grounded') else 'CHECK'} {tag:34} {r['words']}w  "
                   f"{r['sections']}sec  charts={r['n_charts']}  grounded={r.get('grounded')}  "
                   f"critic_ok={r['critic_ok']}  “{r['headline'][:60]}”{note}")
             for v in r.get("ungrounded") or []:
                 print(f"      UNGROUNDED “{v['quote'][:66]}”\n        {v['detail']}")
         except Exception as exc:
             import traceback
-            print(f"FAIL  {pid:26} {type(exc).__name__}: {str(exc)[:160]}")
+            print(f"FAIL  {tag:34} {type(exc).__name__}: {str(exc)[:160]}")
             traceback.print_exc()
 
     ok = sum(1 for r in rows if r.get("critic_ok"))
     gr = sum(1 for r in rows if r.get("grounded"))
-    print(f"\n{len(rows)}/{len(personas)} articles   GROUNDED: {gr}/{len(rows)}   "
+    print(f"\n{len(rows)}/{len(analyses)} articles   GROUNDED: {gr}/{len(rows)}   "
           f"critic-clean: {ok}/{len(rows)}")
     if gr < len(rows):
         # Hard rule #1: done is a human looking at the output and it being good. The gate does not get

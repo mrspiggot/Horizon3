@@ -148,7 +148,7 @@ def build_spec(mat: dict, nar: Narration, toks: dict) -> tuple[InfographicSpec, 
 
 def run_agentic(persona_id: str, conn, out_png: str, *, max_iter: int = 3) -> dict:
     """Narrate → render → tier-1 gate → vision critic → revise, bounded. Returns a result dict."""
-    mat = persona_material(persona_id, conn)
+    mat = persona_material(persona_id, conn, instance="US")
     toks, menu = _citable(mat)
     nar = narrate(mat, toks, menu)
     feedback, iters = "", 0

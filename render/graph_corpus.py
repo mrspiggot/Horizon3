@@ -55,7 +55,15 @@ def _load_model(model_id: str, instance: str | None = None) -> dict:
     jurisdiction axis — `instance` defaults to the model's first declared instance, so the US is one
     instance among the Fed/ECB/BoE/BoJ, never the definition."""
     d = yaml.safe_load((GRAPH_DIR / f"{model_id}.yaml").read_text())
-    instances = d.get("instances") or ["US"]
+    instances = d.get("instances")
+    if not instances:
+        # A role-based (jurisdiction-generic) model MUST declare its instances — refusing to silently
+        # run US-only is the whole point. A legacy concrete-series model is US-only by construction
+        # (its series ARE US), so ["US"] is honest there; a generic one without `instances:` is a bug.
+        if any(i.get("role") for i in d["inputs"]):
+            raise ValueError(f"{model_id}: role-based model must declare `instances:` — "
+                             f"refusing to default to US")
+        instances = ["US"]
     inst = instance or instances[0]
     jbind = _jurisdictions().get(inst, {}).get("bindings", {})
     db_sources: dict[str, str] = {}
@@ -87,7 +95,10 @@ def run_model_instances(model_id: str, conn) -> dict:
     each resolving its own roles→series. Returns {instance_id: {history, latest, cb, ccy}} — the raw
     material for the cross-jurisdiction comparison where the DIVERGENCE is the insight."""
     d = yaml.safe_load((GRAPH_DIR / f"{model_id}.yaml").read_text())
-    instances = d.get("instances") or ["US"]
+    instances = d.get("instances")
+    if not instances:
+        raise ValueError(f"{model_id}: run_model_instances needs a generic model with `instances:` — "
+                         f"refusing to default to US")
     jur = _jurisdictions()
     hist = d.get("history", {})
     out = {}

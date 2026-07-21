@@ -73,7 +73,10 @@ def record_run(conn, run: dict, *, instance: str | None = None) -> str | None:
 
     cov = run.get("coverage") or {}
     hist_spec = meta.get("history") or {}
-    inst = instance or run.get("instance") or "US"
+    inst = instance or run.get("instance")
+    if not inst:
+        raise ValueError(f"record_run: model {model_id!r} run carries no instance — "
+                         f"refusing to persist it as US")
     run_id = str(uuid.uuid4())
     status = "failed" if not history else ("starved" if cov.get("starved") else "ok")
 
@@ -119,7 +122,7 @@ def output_series(conn, run_id: str, name: str) -> list[tuple]:
         return cur.fetchall()
 
 
-def latest_run(conn, model_id: str, instance: str = "US") -> str | None:
+def latest_run(conn, model_id: str, instance: str) -> str | None:
     with conn.cursor() as cur:
         cur.execute("SELECT run_id FROM model_run WHERE model_id=%s AND instance=%s "
                     "ORDER BY run_ts DESC LIMIT 1", (model_id, instance))

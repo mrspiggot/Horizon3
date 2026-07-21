@@ -31,16 +31,16 @@ _TONES = ["mid", "up", "dn", "mid"]
 _MACRO = {"central_bank_policymaker", "macro_rates_trader", "economist_forecaster",
           "equity_multiasset_pm"}
 
-# the shared macro backdrop: eight variables read as §10 states (mirrors scripts/state_space_dashboard)
-_VARS = [
-    ("Core PCE inflation", "PCEPILFE", "%", "yoy"),
-    ("CPI inflation", "CPIAUCSL", "%", "yoy"),
-    ("Unemployment", "UNRATE", "%", "level"),
-    ("Fed funds", "FEDFUNDS", "%", "level"),
-    ("10y Treasury yield", "DGS10", "%", "level"),
-    ("2s10s slope", "__SLOPE__", "pp", "level"),
-    ("10y term premium", "ACMTP10", "pp", "level"),
-    ("Equity vol (VIX)", "VIXCLS", "pt", "level"),
+# the shared macro backdrop as §10 states — resolved via ROLES for the article's jurisdiction, never
+# hardcoded US series. These six macro roles are bound for every major (US/EU/GB/JP), so the fallback
+# quadrant is jurisdiction-correct — a euro-area article can never show a Fed-funds/PCE/Treasury backdrop.
+_BACKDROP_ROLES = [
+    ("Headline inflation", "headline_cpi", "%", "yoy"),
+    ("Unemployment", "unemployment_rate", "%", "level"),
+    ("Policy rate", "policy_rate", "%", "level"),
+    ("10y yield", "long_yield_10y", "%", "level"),
+    ("Leading indicator", "leading_indicator", "idx", "level"),
+    ("Output gap", "output_gap", "%", "level"),
 ]
 
 
@@ -57,17 +57,21 @@ def _series(conn, sid):
     return s.resample("MS").last()
 
 
-def _macro_backdrop_points(conn) -> list:
-    """The shared 8-variable macro backdrop as §10 states — the fallback when a persona's own inputs
-    can't fill the quadrant."""
+def _macro_backdrop_points(conn, instance: str) -> list:
+    """The shared macro backdrop as §10 states — the fallback when a persona's own inputs can't fill the
+    quadrant. Series are resolved via each role's binding for THIS jurisdiction (never hardcoded US)."""
     import numpy as np
     from unified_market_data.analysis.state import state_tuple
     from ...studio.families.state_space import StatePoint
+    from ...graph_corpus import _jurisdictions
 
-    dgs10, dgs2 = _series(conn, "DGS10"), _series(conn, "DGS2")
+    jbind = _jurisdictions().get(instance, {}).get("bindings", {})
     points = []
-    for label, sid, unit, kind in _VARS:
-        s = (dgs10 - dgs2).dropna() if sid == "__SLOPE__" else _series(conn, sid)
+    for label, role, unit, kind in _BACKDROP_ROLES:
+        binding = jbind.get(role)
+        if not binding:
+            continue                                           # role not bound here — omit, don't fake
+        s = _series(conn, binding[0])
         if s is None or len(s.dropna()) < 40:
             continue
         v = (100.0 * (s / s.shift(12) - 1.0)) if kind == "yoy" else s
@@ -126,9 +130,9 @@ def _persona_state_points(mat: dict) -> list:
     return points
 
 
-def macro_regime_png(conn, mat: dict | None = None) -> str | None:
+def macro_regime_png(conn, mat: dict | None = None, *, instance: str) -> str | None:
     """Render the §10 regime quadrant → base64 PNG. Plots the PERSONA's own model inputs when they
-    fill the quadrant (≥3 readable states); otherwise the shared 8-variable macro backdrop."""
+    fill the quadrant (≥3 readable states); otherwise the jurisdiction's role-resolved macro backdrop."""
     sys.path.insert(0, str(Path.home() / "PycharmProjects" / "unified_market_data" / "src"))
     from ...studio.families.state_space import StateSpaceSpec, render_state_space
 
@@ -137,7 +141,7 @@ def macro_regime_png(conn, mat: dict | None = None) -> str | None:
         points = _persona_state_points(mat)
         own = len(points) >= 3
     if not own:
-        points = _macro_backdrop_points(conn)
+        points = _macro_backdrop_points(conn, instance)
     if len(points) < 3:
         return None
     subtitle = ("Each of this decision's own model inputs read as a state, not a level: how "
@@ -150,7 +154,7 @@ def macro_regime_png(conn, mat: dict | None = None) -> str | None:
         subtitle=subtitle,
         xlabel="level vs own history  (z-score, σ)",
         ylabel="momentum: 3-month change  (σ)",
-        source="Source: FRED, NY Fed ACM.  State = level, 3-month momentum, acceleration.",
+        source="Source: UMD.  State = level, 3-month momentum, acceleration.",
         footer="Every value is executed on data — nothing on this chart is authored.")
     out = os.path.join(tempfile.gettempdir(), "ais_regime.png")
     try:
@@ -302,10 +306,11 @@ def _badges(mat: dict, limit: int = 5, *, article: dict | None = None, floor: in
     return out
 
 
-def spec_from_persona(persona_id: str, conn, *, article: dict | None = None) -> tuple[InfographicSpec, set[str]]:
+def spec_from_persona(persona_id: str, conn, *, instance: str,
+                      article: dict | None = None) -> tuple[InfographicSpec, set[str]]:
     if persona_id not in _MACRO:
         raise ValueError(f"{persona_id}: not a macro/regime persona — no regime_dashboard")
-    mat = persona_material(persona_id, conn)
+    mat = persona_material(persona_id, conn, instance=instance)
     p, numbers, meanings = mat["p"], mat["numbers"], mat["meanings"]
 
     tile_keys = dashboard_tile_keys(mat, article, n=4)
@@ -320,7 +325,7 @@ def spec_from_persona(persona_id: str, conn, *, article: dict | None = None) -> 
     if len(badges) < 3:
         raise ValueError(f"{persona_id}: <3 state badges — inputs carry no readable §10 state")
 
-    png = macro_regime_png(conn, mat)
+    png = macro_regime_png(conn, mat, instance=instance)
     if not png:
         raise ValueError(f"{persona_id}: macro regime quadrant did not render")
     hero = Block(id="regime", type="chart_embed",

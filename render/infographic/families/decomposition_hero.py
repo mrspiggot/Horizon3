@@ -39,8 +39,9 @@ def _find_decomposition(mat: dict, exclude: set | None = None) -> tuple[str, dic
     return first
 
 
-def spec_from_persona(persona_id: str, conn, *, article: dict | None = None) -> tuple[InfographicSpec, set[str]]:
-    mat = persona_material(persona_id, conn)
+def spec_from_persona(persona_id: str, conn, *, instance: str,
+                      article: dict | None = None) -> tuple[InfographicSpec, set[str]]:
+    mat = persona_material(persona_id, conn, instance=instance)
     p, numbers = mat["p"], mat["numbers"]
     found = _find_decomposition(mat, set((article or {}).get("body_chart_ids") or []))
     if not found:

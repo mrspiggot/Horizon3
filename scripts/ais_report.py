@@ -36,7 +36,7 @@ def main() -> None:
     tiles, npass = [], 0
     for pid in personas:
         try:
-            spec, valid = db.spec_from_persona(pid, conn)
+            spec, valid = db.spec_from_persona(pid, conn, instance="US")
             out = OUT / f"{pid}.png"
             emit(spec, str(out), valid)
             nnum = len(spec.all_numbers())

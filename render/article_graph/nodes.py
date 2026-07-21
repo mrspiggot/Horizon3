@@ -14,8 +14,10 @@ from ..infographic.from_persona import persona_material
 
 
 def material(state: dict) -> dict:
+    # jurisdiction is a required contract field seeded by run_article — a missing value is a bug that
+    # must surface, never silently produce a US article.
     return {"mat": persona_material(state["persona_id"], state["conn"],
-                                    instance=state.get("jurisdiction", "US"),
+                                    instance=state["jurisdiction"],
                                     models=state.get("model_ids"))}
 
 
@@ -48,7 +50,8 @@ def illustrate(state: dict) -> dict:
 
 def reconcile_dashboard(state: dict) -> dict:
     out = W.reconcile_dashboard(state["persona_id"], state["conn"], state["draft"],
-                                state["brief"], Path(state["out_dir"]))
+                                state["brief"], Path(state["out_dir"]),
+                                instance=state["jurisdiction"])
     d = dict(state["draft"])
     d["reasons"] = out["reasons"]
     return {"draft": d, "infog_png": out["infog_png"], "cited_keys": out["cited_keys"]}

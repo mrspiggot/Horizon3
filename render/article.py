@@ -192,7 +192,7 @@ def build_article(persona_id: str, conn, out_dir, *, backend: str = "auto", use_
                   max_charts: int = 4) -> dict:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    mat = persona_material(persona_id, conn)
+    mat = persona_material(persona_id, conn, instance="US")
     p = mat["p"]
     model_id = MODEL_PICK[persona_id]
     run = mat["runs"][model_id]
@@ -220,12 +220,12 @@ def build_article(persona_id: str, conn, out_dir, *, backend: str = "auto", use_
     fam = FAMILY[persona_id]
     fam_name = fam.__name__.rsplit(".", 1)[-1]
     try:
-        fam.render_persona(persona_id, conn, str(infog_png))
+        fam.render_persona(persona_id, conn, str(infog_png), instance="US")
     except Exception as exc:
         reasons.append(f"{fam_name}→decision_brief: {str(exc).splitlines()[0][:80]}")
         fam_name = "decision_brief"
         try:
-            decision_brief.render_persona(persona_id, conn, str(infog_png))
+            decision_brief.render_persona(persona_id, conn, str(infog_png), instance="US")
         except Exception as exc2:
             reasons.append(f"decision_brief failed: {str(exc2).splitlines()[0][:80]}")
             infog_png = None

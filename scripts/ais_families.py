@@ -58,7 +58,7 @@ def main() -> None:
         for pid in personas:
             out_png = OUT / f"{fname}__{pid}.png"
             try:
-                mod.render_persona(pid, conn, str(out_png))
+                mod.render_persona(pid, conn, str(out_png), instance="US")
                 rendered.append(out_png)
                 print(f"PASS  {fname:22} {pid}")
             except Exception as exc:

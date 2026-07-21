@@ -6,27 +6,30 @@ personas:
   central_bank_policymaker:
     name: "Central-bank policymaker"
     decision: "Set the policy rate."
-    title: "The Fed versus its own rulebook: how far behind the curve?"
-    models: [reaction_function, policy_stance, recession_probability, phillips_curve]
+    # {cb_title} is filled per jurisdiction (The Fed / The ECB / The Bank of England / The Bank of Japan)
+    # by render.jurisdiction — this persona is a PEER across central banks, not a US default.
+    title: "{cb_title} versus its own rulebook: how far behind the curve?"
+    models: [reaction_function, monetary_stance_lite, recession_signal, phillips_curve]
     stub_charts:
-      - [phillips_curve, "The Phillips curve (unemployment vs inflation)"]
       - [reaction_function, "The rule's outcome — the prescription fan"]
-      - [reaction_function, "The consequence — how far the Fed is from its own rule"]
-      - [recession_probability, "Recession probability, 12m ahead"]
+      - [reaction_function, "The consequence — how far the central bank is from its own rule"]
+      - [recession_signal, "Recession probability from the curve"]
+      - [monetary_stance_lite, "The real policy rate vs neutral"]
     summary_template: >
       Hand a central banker their own toolkit and run it against the data, and a gap opens between
       what the rules prescribe and where policy actually sits. The 1993 Taylor rule now calls for
-      {reaction_function.taylor_1993}% while the funds rate is {reaction_function.policy}% — the Fed
-      swung from roughly nine points behind the rule at the 2022 inflation peak to about neutral by
-      2024, and is drifting behind again as core PCE re-firms to {reaction_function.cpi}%. Strip out
-      expected inflation and the ex-ante real policy rate is {policy_stance.real_rate_exante_pct}%, a
-      stance of {policy_stance.stance_pct}pp against a ~0.7% neutral rate. The yield curve, read
+      {reaction_function.taylor_1993}% while the policy rate is {reaction_function.policy}% — a measure
+      of how far {cb_the} is running from its own arithmetic, with headline inflation at
+      {reaction_function.cpi}%. Strip out inflation and the real policy rate is
+      {monetary_stance_lite.real_policy_rate_pct}%, a stance of
+      {monetary_stance_lite.stance_vs_neutral_pp}pp against a neutral setting. The yield curve, read
       through the Estrella-Mishkin probit, puts the twelve-month recession probability at
-      {recession_probability.prob_12m} on a 0-to-1 scale. Behind all of it sits the Phillips curve: at
+      {recession_signal.prob_12m} on a 0-to-1 scale, with the ten-year-minus-policy spread at
+      {recession_signal.term_spread_pp}pp. Behind all of it sits the Phillips curve: at
       {phillips_curve.unemployment_pct}% unemployment and {phillips_curve.inflation_pct}% inflation the
-      economy is a warm point on a trade-off whose sixty-year scatter is, tellingly, flat — Friedman's
-      vertical long-run curve — so the misery index reads {phillips_curve.misery_index}%. Four published
-      models, one reading: policy is easing back toward the rule even as the curve stops flashing alarm.
+      economy is a point on a trade-off whose long scatter is, tellingly, flat — Friedman's vertical
+      long-run curve — so the misery index reads {phillips_curve.misery_index}%. Four published models,
+      one reading of where policy stands relative to the rules.
 
   macro_rates_trader:
     name: "Macro rates trader"
@@ -217,47 +220,54 @@ personas:
     name: "ECB / euro-area strategist"
     decision: "Read the euro-area cycle and the ECB's stance."
     title: "The euro area: how tight is the ECB, and is the Bund paying you to wait?"
-    models: [monetary_stance_lite, real_yield_term, economies_scorecard]
+    models: [monetary_stance_lite, real_yield_term, economies_scorecard, recession_signal]
     stub_charts:
       - [monetary_stance_lite, "The real policy rate vs neutral"]
       - [real_yield_term, "The curve slope (10y minus policy)"]
       - [economies_scorecard, "The five macro readings today"]
+      - [recession_signal, "Recession probability from the curve"]
     summary_template: >
       The euro area sits with the ECB's real policy rate at {monetary_stance_lite.real_policy_rate_pct}% —
       {monetary_stance_lite.stance_vs_neutral_pp}pp from a neutral real rate — while the Bund's real 10y
       yield is {real_yield_term.real_long_yield_pct}% and the curve slope {real_yield_term.curve_slope_pp}pp.
-      Growth reads through unemployment at {economies_scorecard.unemployment_pct}% and inflation at
-      {economies_scorecard.inflation_pct}%. The stance and the curve together say how much room the ECB has,
-      and whether duration compensates the holder.
+      The curve's own recession probit puts 12-month odds at {recession_signal.prob_12m}. Growth reads
+      through unemployment at {economies_scorecard.unemployment_pct}% and inflation at
+      {economies_scorecard.inflation_pct}%. The stance, the curve and its recession signal together say how
+      much room the ECB has, and whether duration compensates the holder.
 
   uk_macro:
     name: "UK macro strategist"
     decision: "Read the UK cycle — labour, inflation and the Bank of England."
     title: "The UK: a tight labour market, sticky inflation, and how restrictive the Bank really is"
-    models: [sahm_rule, phillips_curve, monetary_stance_lite]
+    models: [sahm_rule, phillips_curve, monetary_stance_lite, recession_signal]
     stub_charts:
       - [sahm_rule, "Headroom to the recession trigger"]
       - [phillips_curve, "The Phillips curve (unemployment vs inflation)"]
       - [monetary_stance_lite, "The real policy rate vs neutral"]
+      - [recession_signal, "Recession probability from the curve"]
     summary_template: >
       The UK labour market leaves the Sahm rule {sahm_rule.headroom_pp}pp of headroom to its recession
       trigger, with unemployment at {phillips_curve.unemployment_pct}% against {phillips_curve.inflation_pct}%
-      inflation on a Phillips curve that has flattened. The Bank of England's real policy rate sits at
+      inflation on a Phillips curve that has flattened. The gilt curve's recession probit reads
+      {recession_signal.prob_12m} for the year ahead. The Bank of England's real policy rate sits at
       {monetary_stance_lite.real_policy_rate_pct}%, {monetary_stance_lite.stance_vs_neutral_pp}pp from
-      neutral — genuinely restrictive if inflation keeps falling, less so if it sticks.
+      neutral — genuinely restrictive if inflation keeps falling, less so if it sticks. Two recession reads,
+      one labour and one curve, that need not agree.
 
   boj_watcher:
     name: "Japan rates strategist"
     decision: "Read Japan's exit from ultra-low rates."
     title: "Japan's exit: the real long rate, the curve, and where the cycle stands"
-    models: [real_yield_term, economies_scorecard, phillips_curve]
+    models: [real_yield_term, economies_scorecard, phillips_curve, recession_signal]
     stub_charts:
       - [real_yield_term, "The real 10y yield"]
       - [economies_scorecard, "The five macro readings today"]
       - [phillips_curve, "The Phillips curve (unemployment vs inflation)"]
+      - [recession_signal, "The curve slope (10y minus policy)"]
     summary_template: >
       Japan's real 10y yield is {real_yield_term.real_long_yield_pct}% with a curve slope of
-      {real_yield_term.curve_slope_pp}pp as the BoJ inches its policy rate up from zero. Inflation runs at
+      {real_yield_term.curve_slope_pp}pp as the BoJ inches its policy rate up from zero — the steepest
+      curve of the majors, and a recession probit of just {recession_signal.prob_12m}. Inflation runs at
       {economies_scorecard.inflation_pct}% and unemployment at {economies_scorecard.unemployment_pct}% — low
       by any standard — while the Phillips curve reads {phillips_curve.inflation_pct}% inflation against
       {phillips_curve.unemployment_pct}% unemployment. The question is whether the exit is real or stalls.

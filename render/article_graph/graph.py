@@ -33,11 +33,11 @@ def build_graph():
     return g.compile()
 
 
-def run_article(persona_id: str, conn, out_dir, *, backend: str = "auto", max_iter: int = 3,
-                jurisdiction: str = "US", model_ids: list | None = None) -> dict:
+def run_article(persona_id: str, conn, out_dir, *, jurisdiction: str, backend: str = "auto",
+                max_iter: int = 3, model_ids: list | None = None) -> dict:
     """Compile and invoke the article graph for one (decision-maker, currency); returns the final
-    ArticleState. `jurisdiction` runs the models in that currency; `model_ids` pins an explicit set (the
-    graph enumerator's pick) instead of Role-2 selection. Defaults reproduce the US persona behaviour."""
+    ArticleState. `jurisdiction` is REQUIRED and runs the models in that currency (US is a peer, never a
+    hidden default); `model_ids` pins an explicit set (the graph enumerator's pick) over Role-2."""
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     os.environ["LANGSMITH_PROJECT"] = os.environ.get("HORIZON3_LANGSMITH_PROJECT", "horizon3-article")

@@ -16,12 +16,13 @@ _PALETTE = ["#4C6EA8", "#D55E00", "#009E73", "#B8C4CE", "#D98A00"]
 _TONES = ["mid", "up", "dn", "mid"]
 
 
-def spec_from_persona(persona_id: str, conn, *, n_tiles: int = 4, n_charts: int = 1,
+def spec_from_persona(persona_id: str, conn, *, instance: str, n_tiles: int = 4, n_charts: int = 1,
                       article: dict | None = None) -> tuple[InfographicSpec, set[str]]:
     """Return (spec, valid_sources) — valid_sources is the set of executed output keys the gate
     checks every rendered number against. When `article` is supplied, the thesis, the tiles and the
-    read are derived from the FINISHED piece rather than the static template."""
-    mat = persona_material(persona_id, conn)
+    read are derived from the FINISHED piece rather than the static template. `instance` is the
+    article's jurisdiction — REQUIRED so the dashboard renders in it, never a US default."""
+    mat = persona_material(persona_id, conn, instance=instance)
     p, numbers, meanings = mat["p"], mat["numbers"], mat["meanings"]
 
     # KPI tiles: the numbers the PROSE cited (canonical), else the salient menu to the floor. Tile

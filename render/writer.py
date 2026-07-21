@@ -322,12 +322,29 @@ _VOICE = (
     "substitute).")
 
 
+def _frame_steer(brief: dict) -> str:
+    """The jurisdiction steering line every prose prompt inherits, so an EU/GB/JP article never
+    free-writes 'the Fed'. Built from the article's own frame — US is a peer, addressed the same way."""
+    f = brief["mat"].get("frame")
+    if not f:
+        return ""
+    us = f.get("instance") == "US"
+    line = (f"JURISDICTION: this is a {f['central_bank']} ({f['ccy']}) article. Call the central bank "
+            f"{f['cb_the']}, the policy rate {f['policy_rate']}, the price gauge {f['price_index']}, the "
+            f"long benchmark {f['benchmark']}. Every figure is already this economy's.")
+    if not us:
+        line += (" NEVER write 'the Fed', 'FOMC', 'Fed funds', 'core PCE', 'Treasury' or 'civilian "
+                 "unemployment' — those are US-only; use this economy's institutions and terms.")
+    return line + "\n\n"
+
+
 def plan_arc(brief: dict, feedback: str = "") -> Outline:
     p = brief["mat"]["p"]
     llm = get_llm(max_tokens=4096).with_structured_output(Outline)
     prompt = (
         f"You are the section editor planning a ~1000-1200 word feature for a {p['name']}. "
         f"The decision it informs: {p.get('decision','')}. Working title: \"{p['title']}\".\n\n"
+        f"{_frame_steer(brief)}"
         f"{_brief_text(brief)}\n\n"
         "First decide the PIVOT — the single mechanism the whole piece turns on — and plan for it to be "
         "flagged UP FRONT (in the standfirst and the executive summary) so the article flows: tell the "
@@ -356,6 +373,7 @@ def write_article(brief: dict, outline: Outline, feedback: str = "") -> Article:
            f"cite: {', '.join(s.token_ids) or 'none'}]" for i, s in enumerate(outline.sections)])
     prompt = (
         f"You are a {p['name']} writing the full feature to the plan below. Target 1000-1200 words total.\n"
+        f"{_frame_steer(brief)}"
         "STRUCTURE, in order:\n"
         "  1. STANDFIRST — the sharp foreshadowing hook (given).\n"
         "  2. EXECUTIVE SUMMARY — ~160-240 words of narrative prose that earns the reader's next ten "
@@ -1514,15 +1532,17 @@ def make_illustration(mat: dict, persona_id: str, out_dir: Path, backend: str) -
     finding = _fill_template(mat)
     ill_b64, ill_meta = vangogh.illustration_png(
         finding, title=mat["p"]["title"], decision=mat["p"].get("decision", ""),
-        cache_key=f"{persona_id}|article", backend=backend)
+        cache_key=f"{persona_id}|{mat.get('instance', '?')}|article", backend=backend)
     ill_png = out_dir / "illustration.png"
     ill_png.write_bytes(base64.b64decode(ill_b64))
     return ill_png, ill_meta
 
 
-def reconcile_dashboard(persona_id: str, conn, draft: dict, brief: dict, out_dir: Path) -> dict:
+def reconcile_dashboard(persona_id: str, conn, draft: dict, brief: dict, out_dir: Path,
+                        *, instance: str) -> dict:
     """C: the dashboard is a projection of THIS finished article — the numbers the prose actually cited
-    (so no tile shows a figure the body never used) and the article's own closing read."""
+    (so no tile shows a figure the body never used) and the article's own closing read. `instance` is
+    the article's jurisdiction — the dashboard MUST render in it, never fall back to US."""
     full_text = draft["full_text"]
     cited_keys = [no.source for no in brief["toks"].values()
                   if no.rendered() and (no.rendered() in full_text or no.rendered().lstrip("+") in full_text)]
@@ -1536,11 +1556,12 @@ def reconcile_dashboard(persona_id: str, conn, draft: dict, brief: dict, out_dir
     reasons = list(draft.get("reasons", []))
     fam = FAMILY.get(persona_id, decision_brief)
     try:
-        fam.render_persona(persona_id, conn, str(infog_png), article=article_ctx)
+        fam.render_persona(persona_id, conn, str(infog_png), article=article_ctx, instance=instance)
     except Exception as exc:
         reasons.append(f"infographic→decision_brief: {str(exc).splitlines()[0][:70]}")
         try:
-            decision_brief.render_persona(persona_id, conn, str(infog_png), article=article_ctx)
+            decision_brief.render_persona(persona_id, conn, str(infog_png), article=article_ctx,
+                                          instance=instance)
         except Exception:
             infog_png = None
     return {"infog_png": infog_png, "cited_keys": cited_keys, "reasons": reasons}
@@ -1574,12 +1595,12 @@ def assemble(persona_id: str, mat: dict, brief: dict, draft: dict, ill_png, ill_
 
 
 # ── the orchestrator ─────────────────────────────────────────────────────────────────────────────
-def build_article_full(persona_id: str, conn, out_dir, *, backend: str = "auto", max_iter: int = 3,
-                       jurisdiction: str = "US", model_ids: list | None = None) -> dict:
+def build_article_full(persona_id: str, conn, out_dir, *, jurisdiction: str, backend: str = "auto",
+                       max_iter: int = 3, model_ids: list | None = None) -> dict:
     """Compile and run the article StateGraph, returning its result dict. The graph threads a single
     ArticleState through material → brief → plan → draft → reconcile_charts → reconcile_dashboard →
-    assemble. `jurisdiction`/`model_ids` are the steering contract — run a decision-maker's models in a
-    chosen currency (defaults reproduce the US persona article)."""
+    assemble. `jurisdiction` is REQUIRED — the caller must consciously choose the economy (US is a peer,
+    never a hidden default); `model_ids` pins the steering set."""
     from .article_graph import run_article
     return run_article(persona_id, conn, out_dir, backend=backend, max_iter=max_iter,
                        jurisdiction=jurisdiction, model_ids=model_ids)["result"]

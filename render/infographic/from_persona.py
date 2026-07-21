@@ -358,8 +358,8 @@ def _concept_registry(numbers: dict, meanings: dict, *, template_keys=(), runs=N
 _MATERIAL_CACHE: dict[str, dict] = {}
 
 
-def persona_material(persona_id: str, conn, *, use_cache: bool = True, select: bool = True,
-                     instance: str = "US", models: list | None = None) -> dict:
+def persona_material(persona_id: str, conn, *, instance: str, use_cache: bool = True,
+                     select: bool = True, models: list | None = None) -> dict:
     """Executed material for a persona, IN A JURISDICTION. Memoised by (persona_id, instance) so a US
     and a euro run of the same decision-maker don't collide.
 
@@ -371,7 +371,15 @@ def persona_material(persona_id: str, conn, *, use_cache: bool = True, select: b
     key = (persona_id, instance)
     if use_cache and key in _MATERIAL_CACHE:
         return _MATERIAL_CACHE[key]
-    p = yaml.safe_load((GRAPH_DIR / "personas.yaml").read_text())["personas"][persona_id]
+    from ..jurisdiction import frame as _frame
+    from ..jurisdiction import fill_frame_tokens
+    jframe = _frame(instance)   # raises on an unknown instance — never silently US
+    p = dict(yaml.safe_load((GRAPH_DIR / "personas.yaml").read_text())["personas"][persona_id])
+    # Speak in THIS economy's terms: fill {cb_title}/{cb_the}/{price_index}/… before the later
+    # {model.output} .format() (the two token kinds don't collide — frame tokens carry no dot).
+    for _k in ("title", "summary_template", "decision"):
+        if isinstance(p.get(_k), str):
+            p[_k] = fill_frame_tokens(p[_k], instance)
     model_ids, why = list(models if models is not None else p["models"]), {}
     if select and models is None:
         try:
@@ -468,7 +476,8 @@ def persona_material(persona_id: str, conn, *, use_cache: bool = True, select: b
     # `p["models"]` must be the models we ACTUALLY RAN, not the YAML's list — everything downstream
     # (build_brief, the exhibit contract, the data-window firewall) iterates it, so leaving the
     # hardcoded list here would compute a selection and then quietly ignore it.
-    mat = {"id": persona_id, "instance": instance, "p": {**p, "models": model_ids}, "runs": runs,
+    mat = {"id": persona_id, "instance": instance, "frame": jframe, "p": {**p, "models": model_ids},
+           "runs": runs,
            "numbers": numbers, "meanings": meanings, "selection_why": why, "concepts": concepts,
            "canon": canon, "salient": salient, "papers": sorted(papers), "sources": sorted(sources),
            "source_labels": source_labels, "model_names": model_names,

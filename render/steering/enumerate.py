@@ -46,8 +46,23 @@ def enumerate_analyses(uses: dict, execin: set, jur_ids: list[str], decisions: d
                 grounded_models=grounded, total_models=len(models),
                 groundable=len(grounded) >= min_models,
                 missing_models=[m for m in models if (m, jid) not in execin]))
-    out.sort(key=lambda a: (a.groundable, a.n, a.jurisdiction == "US"), reverse=True)
+    # Peer-neutral ordering: most-grounded first, ties broken alphabetically by jurisdiction — NOT with
+    # US ahead of its peers (the old `a.jurisdiction == "US"` tiebreak privileged the US row).
+    out.sort(key=lambda a: (a.decision_maker, a.jurisdiction))
+    out.sort(key=lambda a: (a.groundable, a.n), reverse=True)
     return out
+
+
+def groundable_analyses(min_models: int = 3, catalog: str = "horizon3") -> list[Analysis]:
+    """The batch driver's entry point: every groundable (decision-maker × currency) the graph proves,
+    peer-neutral. Replaces iterating a hardcoded persona list (which was US-only)."""
+    d = _driver()
+    try:
+        f = load_facts(d, catalog)
+    finally:
+        d.close()
+    return [a for a in enumerate_analyses(f["uses"], f["execin"], f["jur_ids"], f["decisions"],
+                                          min_models=min_models) if a.groundable]
 
 
 def data_gaps(blocked: dict) -> list[dict]:

@@ -28,16 +28,16 @@ execution:
   implemented_by: unified_market_data.analysis.macro_signals.phillips_curve
   args: {unemployment_pct: u.level, inflation_pct: pi.level}
 outputs:
-  - {name: unemployment_pct, unit: "%", meaning: "civilian unemployment rate (the slack variable)"}
+  - {name: unemployment_pct, unit: "%", meaning: "unemployment rate (the slack variable)"}
   - {name: inflation_pct,    unit: "%", meaning: "headline CPI inflation, YoY"}
   - {name: misery_index,     unit: "%", meaning: "unemployment + inflation (Okun's misery index)"}
 interpretations:
   - id: trade_off
-    when: "unemployment_pct < 4.5 and inflation_pct > 3"
+    when: "unemployment_pct < 5 and inflation_pct > 3"
     says: >
       The economy sits in the hot corner of the Phillips curve — low unemployment with elevated
       inflation. This is the short-run trade-off a central bank cannot ignore: pushing unemployment
-      below the natural rate is buying inflation, exactly the 2022 configuration.
+      below the natural rate is buying inflation.
   - id: stagflation
     when: "unemployment_pct > 6 and inflation_pct > 5"
     says: >

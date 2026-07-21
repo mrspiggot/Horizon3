@@ -10,7 +10,7 @@ method_note: >
   Diamond-Mortensen-Pissarides search-and-matching model, Nobel 2010). The message is the curve's
   SHAPE and its SHIFTS — an outward shift (more vacancies at any given unemployment) signals worse
   matching efficiency, as after 2020. Read as a scatter with a chronological path; V/U is the
-  labour-market tightness ratio the Fed watches.
+  labour-market tightness ratio the central bank watches.
 spec:
   equations: "downward-sloping V–U locus from search-and-matching; tightness = V/U. Outward shifts = lower matching efficiency."
 history: {start: "2001-01", end: "2026-05", cadence: monthly}
@@ -30,7 +30,7 @@ interpretations:
     when: "tightness > 1.2"
     says: >
       More than one vacancy per unemployed worker — an exceptionally tight labour market (the 2022
-      peak reached ~2.0). On the Beveridge curve this is the top-left corner; the Fed reads it as wage
+      peak reached ~2.0). On the Beveridge curve this is the top-left corner; the central bank reads it as wage
       pressure and a job market it can cool without mass layoffs by moving V down before U moves up.
   - id: slack
     when: "unemployment_pct > 6"
@@ -72,7 +72,7 @@ charts:
     interpretation: tight
     pos_label: "tight (V/U > 1)"
     neg_label: "slack (V/U < 1)"
-    insight: "vacancies per unemployed worker relative to balance — above 1 is a tight market (the 2022 peak near 2.0), below 1 is slack (2009-10). The single number the Fed cites for labour-market heat"
+    insight: "vacancies per unemployed worker relative to balance — above 1 is a tight market (the 2022 peak near 2.0), below 1 is slack (2009-10). The single number a central bank cites for labour-market heat"
     data_contract:
       kind: gap_series
       ylabel: "V/U - 1"

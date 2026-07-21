@@ -41,7 +41,7 @@ def main() -> None:
 
     tiles = []
     for pid, p in personas.items():
-        mat = persona_material(pid, conn)
+        mat = persona_material(pid, conn, instance="US")
         finding = _fill_template(mat)                       # the article's actual, number-filled content
         b64, meta = illustration_png(finding, title=p["title"], decision=p.get("decision", ""),
                                      cache_key=f"{pid}|{MODEL_PICK.get(pid, '')}", backend=backend)

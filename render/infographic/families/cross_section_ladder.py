@@ -52,9 +52,9 @@ def _cross_section(mat: dict, exclude: set | None = None) -> tuple[str, str] | N
     return first
 
 
-def spec_from_persona(persona_id: str, conn, *, min_rungs: int = 3,
+def spec_from_persona(persona_id: str, conn, *, instance: str, min_rungs: int = 3,
                       article: dict | None = None) -> tuple[InfographicSpec, set[str]]:
-    mat = persona_material(persona_id, conn)
+    mat = persona_material(persona_id, conn, instance=instance)
     p, numbers, meanings = mat["p"], mat["numbers"], mat["meanings"]
     xs = _cross_section(mat, set((article or {}).get("body_chart_ids") or []))
     if not xs:
