@@ -13,6 +13,7 @@ personas:
     stub_charts:
       - [reaction_function, "The rule's outcome — the prescription fan"]
       - [reaction_function, "The consequence — how far the central bank is from its own rule"]
+      - [phillips_curve, "The Phillips curve (unemployment vs inflation)"]
       - [recession_signal, "Recession probability from the curve"]
       - [monetary_stance_lite, "The real policy rate vs neutral"]
     summary_template: >

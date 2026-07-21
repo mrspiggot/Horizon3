@@ -34,6 +34,8 @@ _TXT_HALO = [pe.Stroke(linewidth=2.2, foreground="white"), pe.Normal()]
 _UNIT_HINTS = ("%", "pp", "bp", "index", "$", "ratio", "σ", "z-", "prob")
 _CMAP = "cividis"   # perceptually uniform + colourblind-safe time ramp
 _HOT = "#e0a63a"    # hot-corner accent (low unemployment × high inflation)
+# VIVID qualitative palette for regime clusters — saturated, maximally discriminating, NOT blue/grey-led.
+_VIVID = ["#d81159", "#0aa2a2", "#f4a300", "#6a2c91", "#1b9e4b", "#e8622c", "#2e6fb0", "#b5179e"]
 
 
 @dataclass
@@ -82,63 +84,50 @@ def lint_relationship(spec: RelationshipSpec, df: pd.DataFrame) -> list[str]:
     return p
 
 
-def _anchoring_regimes(infl: np.ndarray, target: float, *, band: float = 1.5,
-                       win: int = 36, min_len: int = 48) -> list[list]:
-    """Contiguous inflation-anchoring eras: anchored where the trailing `win`-point mean inflation sits
-    within `band` of the jurisdiction's target. Short runs (< min_len points, ~4yr monthly) are absorbed
-    into a neighbour so an era is a coherent PERIOD, not a flicker — a few meaningful regimes (like the
-    primer's ~3), not a dozen slivers. Returns [[i0, i1_exclusive, anchored_bool], …]."""
-    s = pd.Series(infl, dtype=float)
-    win = min(win, max(6, len(s) // 4))                        # short series get a shorter smoother
-    min_len = 30                                               # ~2.5yr: merges noise slivers but KEEPS the
-    #                                                            dramatic 2022 de-anchoring (~4yr) everywhere
-    roll = s.rolling(win, min_periods=max(6, win // 3)).mean().bfill().ffill().to_numpy()
-    anchored = np.abs(roll - target) <= band
-    n = len(anchored)
-    runs, i = [], 0
-    while i < n:
-        j = i
-        while j < n and anchored[j] == anchored[i]:
-            j += 1
-        runs.append([i, j, bool(anchored[i])])
-        i = j
-    def _coalesce(rs):
-        out = []
-        for r in rs:
-            if out and out[-1][2] == r[2]:
-                out[-1][1] = r[1]                  # same state as previous → one era
-            else:
-                out.append([r[0], r[1], r[2]])
-        return out
-
-    changed = True
-    while changed and len(runs) > 1:
-        changed = False
-        for k, r in enumerate(runs):
-            if r[1] - r[0] < min_len:
-                if k + 1 < len(runs):
-                    runs[k + 1][0] = r[0]          # absorb forward
-                else:
-                    runs[k - 1][1] = r[1]          # last run → absorb backward
-                runs.pop(k)
-                runs = _coalesce(runs)             # a removed sliver can leave two same-state neighbours
-                changed = True
-                break
-    return _coalesce(runs)
+def _cluster_regimes(x: np.ndarray, y: np.ndarray, target: float, *, kmin: int = 3, kmax: int = 4) -> np.ndarray:
+    """Cluster months into dynamic REGIMES by their §10 state — level, 3-month momentum, gap-to-target, and a
+    lightly-weighted time term — so reflation / disinflation / stagflation surface as distinct groups even in
+    a narrow-range economy like Japan (where a time-threshold collapsed to one blob). Gaussian Mixture,
+    K chosen by BIC with a floor of 3 so a jurisdiction can never reduce to a single colour. Deterministic
+    (random_state=0). Labels are remapped 0..K-1 in chronological order of each cluster's median date."""
+    from sklearn.mixture import GaussianMixture
+    n = len(x)
+    ys = pd.Series(y, dtype=float)
+    # Cluster on TIME (dominant) + inflation LEVEL + its 12m trend, deliberately NOT on unemployment — so a
+    # regime is a temporally-coherent inflation era across which unemployment still VARIES, leaving a real
+    # short-run Phillips fit inside it (clustering on position would collapse that variation and give noise).
+    z = lambda v: (v - np.nanmean(v)) / (np.nanstd(v) or 1.0)
+    feats = np.column_stack([
+        z(np.arange(n)) * 2.4,                                 # time — dominant → contiguous eras
+        z(y),                                                  # inflation level → splits eras by regime
+        z(ys.diff(12).fillna(0.0).to_numpy()),                # 1y inflation trend → catches de-anchoring
+    ])
+    Z = feats
+    khi = max(kmin, min(kmax, n // 20))
+    best, best_bic = None, np.inf
+    for k in range(kmin, khi + 1):
+        gm = GaussianMixture(n_components=k, covariance_type="full", random_state=0, n_init=2)
+        lab = gm.fit_predict(Z); bic = gm.bic(Z)
+        if bic < best_bic:
+            best_bic, best = bic, lab
+    lab = best if best is not None else np.zeros(n, dtype=int)
+    idx = np.arange(n)
+    order = sorted(set(lab.tolist()), key=lambda c: float(np.median(idx[lab == c])))
+    remap = {c: i for i, c in enumerate(order)}
+    return np.array([remap[c] for c in lab], dtype=int)
 
 
 def _render_regime_phillips(fig, ax, d: pd.DataFrame, spec: RelationshipSpec) -> None:
-    """The regime-separated Phillips trajectory: inflation-anchoring eras each in their own colour with
-    their own short-run fit (the curve HOLDS within a regime and SHIFTS between them — Friedman-Phelps),
-    a faint chronological path, 5-year year-markers, direction arrows, and this jurisdiction's own
-    hot-corner shaded at its u*. Colour encodes REGIME, not a continuous ramp — maximally discriminating."""
+    """The Phillips curve as CLUSTERED regimes: each month's §10 state is clustered (GMM), and every cluster
+    is a distinct VIVID colour with its own soft hull + short-run fit. The trade-off holds within a regime
+    and the whole curve SHIFTS between them (arrows walk the regime centroids in time) — Friedman-Phelps.
+    No blue/grey: colour encodes a distinct dynamic state. Hot-corner shaded at this jurisdiction's u*."""
     x = d[spec.x_key].to_numpy(float)          # unemployment
     y = d[spec.y_key].to_numpy(float)          # inflation
-    dts = pd.to_datetime(d["date"]); years = dts.dt.year.to_numpy()
-    infl = y if spec.infl_axis == "y" else x
+    years = pd.to_datetime(d["date"]).dt.year.to_numpy()
     target = spec.target if spec.target is not None else 2.0
 
-    # zoom to the data (so JP's narrow range isn't a dot in the corner), then shade the hot corner
+    # zoom to the data (JP's narrow range isn't a dot in the corner), target line + hot corner
     xpad = max(0.3, float(np.ptp(x)) * 0.08); ypad = max(0.4, float(np.ptp(y)) * 0.08)
     x0, x1 = x.min() - xpad, x.max() + xpad
     y0, y1 = min(y.min(), target) - ypad, y.max() + ypad
@@ -152,64 +141,64 @@ def _render_regime_phillips(fig, ax, d: pd.DataFrame, spec: RelationshipSpec) ->
                     xytext=(0, -6), textcoords="offset points", fontsize=8.0, color="#9a7a25",
                     ha="center", va="top")
 
-    # faint full chronological path (the loops read as time) + direction arrows
-    ax.plot(x, y, color="#c6c6ce", lw=1.0, alpha=0.75, zorder=1, solid_capstyle="round")
-    for frac in (0.30, 0.60, 0.86):
-        k = int(frac * (len(x) - 1))
-        if k + 1 < len(x):
-            ax.add_patch(FancyArrowPatch((x[k], y[k]), (x[k + 1], y[k + 1]), arrowstyle="-|>",
-                         mutation_scale=13, lw=0, color="#8a8a93", alpha=0.9, zorder=6))
+    lab = _cluster_regimes(x, y, target)
+    K = int(lab.max()) + 1
+    idx = np.arange(len(x))
+    handles, centroids = [], []
+    for c in range(K):
+        m = lab == c
+        xs_, ys_, yy = x[m], y[m], years[m]
+        col = _VIVID[c % len(_VIVID)]
+        # colour = a distinct dynamic regime. Points textured, the per-regime FIT LINE carries the story
+        # (its position + slope) — no hulls (overlapping GMM clusters muddy the plane; the fits read clean).
+        ax.scatter(xs_, ys_, s=30, color=col, edgecolor="white", lw=0.4, zorder=4, alpha=0.85)
+        centroids.append((float(np.median(idx[m])), float(np.median(xs_)), float(np.median(ys_)), col))
+        yr0, yr1 = int(yy.min()), int(yy.max())
+        lbl, drew = f"{yr0}–{yr1}", False
+        if m.sum() >= 10 and float(np.ptp(xs_)) > 0.4:
+            b1, b0 = np.polyfit(xs_, ys_, 1)
+            r2 = np.corrcoef(xs_, ys_)[0, 1] ** 2
+            if b1 < -0.05 and r2 > 0.04:                       # a REAL downward trade-off — draw its curve
+                gx = np.linspace(np.percentile(xs_, 3), np.percentile(xs_, 97), 50)
+                ax.plot(gx, b0 + b1 * gx, color=col, lw=3.0, zorder=5, path_effects=_HALO)
+                lbl += f"   trade-off {b1:+.2f}"; drew = True
+        if not drew:
+            lbl += "   (no clear trade-off)"                   # anchored / stagflation regime: honestly none
+        handles.append(Line2D([0], [0], marker="o", color=col, lw=(3.0 if drew else 0), markersize=8,
+                              markeredgecolor="white", label=lbl))
 
-    # per-era points + short-run fits; colour = regime
-    handles, anchored_k = [], 0
-    for i0, i1, anch in _anchoring_regimes(infl, target):
-        xs_, ys_ = x[i0:i1], y[i0:i1]
-        yr0, yr1 = int(years[i0]), int(years[i1 - 1])
-        if anch:
-            col = theme.cat(anchored_k); anchored_k += 1
-            ax.scatter(xs_, ys_, s=27, color=col, edgecolor="white", lw=0.35, zorder=4, alpha=0.92)
-            lbl = f"anchored {yr0}–{yr1}"
-            if len(xs_) >= 12 and float(np.ptp(xs_)) > 0.2:
-                b1, b0 = np.polyfit(xs_, ys_, 1)
-                gx = np.linspace(xs_.min(), xs_.max(), 50)
-                ax.plot(gx, b0 + b1 * gx, color=col, lw=2.6, zorder=5, path_effects=_HALO)
-                lbl += f"   slope {b1:+.2f}"
-            handles.append(Line2D([0], [0], marker="o", color=col, lw=2.4, markersize=7,
-                                  markeredgecolor="white", label=lbl))
-        else:
-            ax.scatter(xs_, ys_, s=20, color="#b7b7c0", edgecolor="white", lw=0.3, zorder=3, alpha=0.75)
-            handles.append(Patch(facecolor="#b7b7c0", edgecolor="none", label=f"de-anchored {yr0}–{yr1}"))
+    # the SHIFT: arrows walking the regime centroids in chronological order (dark, not grey)
+    centroids.sort(key=lambda t: t[0])
+    for a, b in zip(centroids[:-1], centroids[1:]):
+        ax.add_patch(FancyArrowPatch((a[1], a[2]), (b[1], b[2]), arrowstyle="-|>", mutation_scale=18,
+                     lw=2.4, color=INK, alpha=0.72, zorder=7, connectionstyle="arc3,rad=0.15"))
 
-    # year-markers along the path — every 10y for a long history (US 1948→) so labels don't collide,
-    # every 5y for the shorter post-2000 series.
+    # year-markers (10y for a long US history, else 5y) + start / latest — neutral black/white, no grey
     step = 10 if (int(years.max()) - int(years.min())) > 34 else 5
     lo = (int(years.min()) // step) * step
     for tick in range(lo, int(years.max()) + 1, step):
         cand = np.where(years == tick)[0]
         if len(cand):
             k = cand[0]
-            ax.scatter([x[k]], [y[k]], s=14, color=INK, zorder=8)
+            ax.scatter([x[k]], [y[k]], s=11, color=INK, zorder=8)
             ax.annotate(str(tick), (x[k], y[k]), xytext=(4, 3), textcoords="offset points",
-                        fontsize=7.6, color=INK, zorder=9, path_effects=_TXT_HALO)
-
-    # start (open ring) + latest (filled), each labelled with its year
-    ax.scatter([x[0]], [y[0]], s=64, facecolor="white", edgecolor=INK, lw=1.7, zorder=8)
+                        fontsize=7.4, color=INK, zorder=9, path_effects=_TXT_HALO)
+    ax.scatter([x[0]], [y[0]], s=60, facecolor="white", edgecolor=INK, lw=1.7, zorder=8)
     ax.annotate(f"start {int(years[0])}", (x[0], y[0]), xytext=(7, -11), textcoords="offset points",
-                fontsize=8.2, color=INK, zorder=9, path_effects=_TXT_HALO)
-    ax.scatter([x[-1]], [y[-1]], s=150, color="#c0392b", edgecolor="white", lw=1.6, zorder=10)
+                fontsize=8.0, color=INK, zorder=9, path_effects=_TXT_HALO)
+    ax.scatter([x[-1]], [y[-1]], s=160, color=INK, edgecolor="white", lw=1.8, marker="D", zorder=10)
     ax.annotate(f"latest {int(years[-1])}", (x[-1], y[-1]), xytext=(9, 4), textcoords="offset points",
-                fontsize=9.0, color="#c0392b", fontweight="bold", zorder=11, path_effects=_TXT_HALO)
+                fontsize=9.0, color=INK, fontweight="bold", zorder=11, path_effects=_TXT_HALO)
 
-    # pooled fit as the CONTRAST (the misleading flat line the eras explain away)
-    pb1, pb0 = np.polyfit(x, y, 1)
-    pr = np.corrcoef(x, y)[0, 1]
+    # pooled fit as the CONTRAST — thin dark dotted (NOT grey): flat only because the curve shifts by regime
+    pb1, pb0 = np.polyfit(x, y, 1); pr = np.corrcoef(x, y)[0, 1]
     gx = np.linspace(x.min(), x.max(), 50)
-    ax.plot(gx, pb0 + pb1 * gx, color="#9a9aa2", lw=1.6, ls=(0, (6, 4)), zorder=2)
-    handles.append(Line2D([0], [0], color="#9a9aa2", lw=1.6, ls="--",
-                          label=f"pooled fit — flat (R²={pr**2:.2f})"))
+    ax.plot(gx, pb0 + pb1 * gx, color=INK, lw=1.3, ls=(0, (2, 3)), alpha=0.5, zorder=3)
+    handles.append(Line2D([0], [0], color=INK, lw=1.3, ls=":", alpha=0.6,
+                          label=f"pooled — flat (R²={pr**2:.2f})"))
 
-    leg = ax.legend(handles=handles, loc="upper right", fontsize=8.4, frameon=True, framealpha=0.95,
-                    edgecolor="#c8c8d0", title="regime (each its own short-run curve)", title_fontsize=8.6)
+    leg = ax.legend(handles=handles, loc="upper right", fontsize=8.4, frameon=True, framealpha=0.96,
+                    edgecolor="#c8c8d0", title="regime clusters (colour = a distinct state)", title_fontsize=8.6)
     leg.get_frame().set_linewidth(0.8)
 
 

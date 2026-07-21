@@ -42,13 +42,13 @@ charts:
     role: input
     chart_type: series
     color_job: categorical
-    insight: "the two state variables the rule ingests: headline CPI inflation and the OECD output gap"
+    insight: "the two state variables the rule ingests: headline inflation and the OECD output gap"
     data_contract:
       kind: series
       ylabel: "%"
       zero_line: true
       series:
-        - {label: "headline CPI YoY", from: "input:cpi.level"}
+        - {label: "headline inflation YoY", from: "input:cpi.level"}
         - {label: "output gap", from: "input:gap.level"}
   - id: "The inputs as §10 STATES — inflation momentum & acceleration"
     role: input

@@ -29,7 +29,7 @@ execution:
   args: {unemployment_pct: u.level, inflation_pct: pi.level}
 outputs:
   - {name: unemployment_pct, unit: "%", meaning: "unemployment rate (the slack variable)"}
-  - {name: inflation_pct,    unit: "%", meaning: "headline CPI inflation, YoY"}
+  - {name: inflation_pct,    unit: "%", meaning: "headline inflation, YoY"}
   - {name: misery_index,     unit: "%", meaning: "unemployment + inflation (Okun's misery index)"}
 interpretations:
   - id: trade_off
@@ -51,10 +51,10 @@ charts:
     chart_type: scatter
     color_job: sequential
     interpretation: trade_off
-    insight: "not a dead relationship but a SHIFTING one: within each inflation-anchored era a downward trade-off holds (its own fitted slope), but the whole curve jumps between eras as expectations de-anchor and re-anchor — pooled, that shift flattens the fit to ~0, exactly Friedman-Phelps. The regimes are split by whether inflation sat near this central bank's own target"
+    insight: "clustering the economy's state surfaces distinct regimes (each a colour): in some the classic downward trade-off holds — its slope drawn — while in high-inflation, de-anchored regimes it breaks (no clear line). The arrows trace how the curve SHIFTS between regimes over time; pooled across all of them the fit collapses to ~0, exactly Friedman-Phelps"
     data_contract:
       kind: scatter
-      subtitle: "Each inflation-anchored era keeps its own downward short-run curve (coloured, with its slope); the curve JUMPS between eras as expectations de-anchor — so pooled, the fit looks flat. Friedman-Phelps."
+      subtitle: "Distinct regimes, found by clustering the state (each a colour): in some the downward trade-off holds (its slope shown), in high-inflation regimes it breaks. The curve SHIFTS between them — so pooled, it looks flat. Friedman-Phelps."
       xlabel: "unemployment (%)"
       ylabel: "{price_index}, YoY (%)"
       cbar_label: "observation date"
@@ -78,7 +78,7 @@ charts:
       zero_line: true
       series:
         - {label: "unemployment", from: "output:unemployment_pct"}
-        - {label: "CPI inflation (YoY)", from: "output:inflation_pct"}
+        - {label: "headline inflation (YoY)", from: "output:inflation_pct"}
   - id: "The misery index (unemployment + inflation)"
     role: consequence
     chart_type: gap_series
