@@ -134,7 +134,7 @@ class Critique(BaseModel):
 
 
 # ── the brief ────────────────────────────────────────────────────────────────────────────────────
-def _active_says(meta: dict, latest) -> list[str]:
+def _active_says(meta: dict, latest, calib: dict | None = None) -> list[str]:
     """The interpretations whose `when` guard is TRUE on the latest run — the model's live regime call.
 
     The scope is INPUTS + OUTPUTS. It used to be outputs only, and guards legitimately reference
@@ -151,7 +151,9 @@ def _active_says(meta: dict, latest) -> list[str]:
     """
     if latest is None:
         return []
-    scope = {**(getattr(latest, "inputs", {}) or {}), **(getattr(latest, "outputs", {}) or {})}
+    # Jurisdiction calibration goes BENEATH inputs/outputs so a per-economy constant (e.g. the Phillips
+    # hot-corner u*) is available to a `when` guard but can never shadow a model output on a name clash.
+    scope = {**(calib or {}), **(getattr(latest, "inputs", {}) or {}), **(getattr(latest, "outputs", {}) or {})}
     says = []
     for interp in (meta.get("interpretations") or []):
         when = interp.get("when")
@@ -189,6 +191,8 @@ def build_brief(mat: dict, *, conn=None, limit: int = 24) -> dict:
     the Judge can adjudicate against exactly these rows.
     """
     toks, menu = _citable(mat, limit=limit)
+    from . import jurisdiction_facts
+    _calib = jurisdiction_facts.facts(mat["instance"]).get("calibration", {})   # jurisdiction-relative guards
     models, chart_index, runs = [], {}, {}
     for mid in mat["p"].get("models", []):
         run = mat["runs"].get(mid) or {}
@@ -231,7 +235,7 @@ def build_brief(mat: dict, *, conn=None, limit: int = 24) -> dict:
             "grounded_in": ", ".join(meta.get("grounded_in") or []),
             "method": meta.get("method_note", "") or equations,
             "outputs": outs, "charts": charts,
-            "regime": _active_says(meta, run.get("latest")),
+            "regime": _active_says(meta, run.get("latest"), calib=_calib),
             "sheet": sheet,
         })
     # The data boundary: the earliest observation any of this persona's models actually holds. The writer
@@ -322,19 +326,35 @@ _VOICE = (
     "substitute).")
 
 
+def _forbidden_terms(instance: str) -> list[str]:
+    """The branded terms this article must never use — every OTHER jurisdiction's branded terms, minus the
+    ones this economy itself uses (US/GB/JP share 'CPI inflation', so it's never forbidden on their own
+    pieces). Derived from the vocab DATA — there is no hardcoded blacklist; adding a jurisdiction extends
+    the forbidden set automatically."""
+    from . import jurisdiction_facts
+    af = jurisdiction_facts.all_facts()
+    mine = set(jurisdiction_facts.brand_terms(af[instance]["vocab"]))
+    others: set[str] = set()
+    for jid, jf in af.items():
+        if jid != instance:
+            others |= set(jurisdiction_facts.brand_terms(jf["vocab"]))
+    return sorted(others - mine)
+
+
 def _frame_steer(brief: dict) -> str:
     """The jurisdiction steering line every prose prompt inherits, so an EU/GB/JP article never
-    free-writes 'the Fed'. Built from the article's own frame — US is a peer, addressed the same way."""
+    free-writes 'the Fed' (and a US article never says 'the ECB'). Vocabulary + forbidden terms are DATA,
+    read from the graph — US is a peer, addressed the same way as every other economy."""
     f = brief["mat"].get("frame")
     if not f:
         return ""
-    us = f.get("instance") == "US"
     line = (f"JURISDICTION: this is a {f['central_bank']} ({f['ccy']}) article. Call the central bank "
             f"{f['cb_the']}, the policy rate {f['policy_rate']}, the price gauge {f['price_index']}, the "
             f"long benchmark {f['benchmark']}. Every figure is already this economy's.")
-    if not us:
-        line += (" NEVER write 'the Fed', 'FOMC', 'Fed funds', 'core PCE', 'Treasury' or 'civilian "
-                 "unemployment' — those are US-only; use this economy's institutions and terms.")
+    bad = _forbidden_terms(f["instance"])
+    if bad:
+        line += (" NEVER write " + ", ".join(f"'{t}'" for t in bad)
+                 + " — those belong to other economies; use this economy's own institutions and terms.")
     return line + "\n\n"
 
 

@@ -30,23 +30,12 @@ from . import from_graph  # noqa: E402
 GRAPH_DIR = Path(__file__).resolve().parents[1] / "catalog" / "graph"
 CATALOG_DIR = GRAPH_DIR.parent
 _INPUT_FIELDS = {f.name for f in fields(InputSpec)}
-_JUR_CACHE: dict | None = None
-
-
 def _jurisdictions() -> dict:
-    """Load the jurisdiction axis (catalog/jurisdictions.yaml): {id: {meta, bindings{role:(ref,source)}}}."""
-    global _JUR_CACHE
-    if _JUR_CACHE is None:
-        d = yaml.safe_load((CATALOG_DIR / "jurisdictions.yaml").read_text())
-        out = {}
-        for j in d.get("jurisdictions", []):
-            b = {}
-            for role, binding in (j.get("bindings") or {}).items():
-                if isinstance(binding, dict) and binding.get("ref"):
-                    b[role] = (binding["ref"], binding.get("source"))
-            out[j["id"]] = {"meta": j, "bindings": b}
-        _JUR_CACHE = out
-    return _JUR_CACHE
+    """The jurisdiction axis from the runtime source (render.jurisdiction_facts — Neo4j in production,
+    catalog in tests). Shape preserved: {id: {meta, bindings{role:(ref,source)}}}. The provider caches."""
+    from . import jurisdiction_facts
+    return {jid: {"meta": f["meta"], "bindings": f["bindings"]}
+            for jid, f in jurisdiction_facts.all_facts().items()}
 
 
 def _load_model(model_id: str, instance: str | None = None) -> dict:
@@ -80,12 +69,19 @@ def _load_model(model_id: str, instance: str | None = None) -> dict:
         elif i.get("db_source") and i.get("series_id"):     # legacy concrete series
             db_sources[i["series_id"]] = i["db_source"]
         inputs.append(InputSpec(**{k: v for k, v in ii.items() if k in _INPUT_FIELDS}))
+    # The model's declared params ARE the set of keys it consumes; overlay THIS jurisdiction's calibration
+    # for exactly those keys, so e.g. reaction_function run for JP uses JP's r*/target, not a global
+    # US-flavoured constant. Keys the jurisdiction doesn't calibrate keep the model's default.
+    base_params = dict((d.get("spec") or {}).get("params", {}) or {})
+    from . import jurisdiction_facts
+    calib = jurisdiction_facts.facts(inst).get("calibration", {}) if any(i.get("role") for i in d["inputs"]) else {}
+    merged_params = {**base_params, **{k: calib[k] for k in base_params if k in calib}}
     spec = ModelSpec(
         model_id=d["model_id"],
         inputs=inputs,
         execution=ExecutionSpec(**d["execution"]),
         outputs=[OutputSpec(**o) for o in d["outputs"]],
-        params=(d.get("spec") or {}).get("params", {}) or {})
+        params=merged_params)
     return {"spec": spec, "charts": d.get("charts", []), "db_sources": db_sources,
             "history": d.get("history", {}), "meta": d, "instance": inst, "instances": instances}
 

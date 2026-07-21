@@ -25,6 +25,8 @@ REPO = Path(__file__).resolve().parents[1]
 CORE_FILES = [
     "render/graph_corpus.py",
     "render/model_store.py",
+    "render/jurisdiction.py",
+    "render/jurisdiction_facts.py",
     "render/article_graph/nodes.py",
     "render/article_graph/graph.py",
     "render/infographic/from_persona.py",
@@ -109,3 +111,55 @@ def test_peer_personas_use_templated_title_not_hardcoded_fed():
     assert "{cb_title}" in cb["title"], "central_bank_policymaker title must be jurisdiction-templated"
     assert "the Fed" not in cb.get("summary_template", ""), \
         "central_bank_policymaker summary must not hardcode 'the Fed' — use {cb_the}"
+
+
+# ── the vocabulary + rules are DATA, not hardcoded Python (the soft-coding contract) ──────────────
+
+def test_vocab_and_rules_are_data_not_hardcoded_python():
+    """The prose layer must live in the jurisdiction DATA, not in Python structures — so adding a
+    jurisdiction is a YAML+re-seed change, not a code edit."""
+    jur = (REPO / "render/jurisdiction.py").read_text()
+    assert "_VOCAB" not in jur, "render/jurisdiction.py must not hold a _VOCAB dict — read vocab from data"
+    sc = _strip_comments((REPO / "render/steering/scorecard.py").read_text())
+    assert "_CB_SHORT =" not in sc, "scorecard must not hardcode _CB_SHORT — read cb_short from data"
+    wr = _strip_comments((REPO / "render/writer.py").read_text())
+    assert "core PCE" not in wr and "civilian unemployment" not in wr, \
+        "writer must not hold a US-term blacklist — derive forbidden terms from the vocab data"
+
+
+def test_forbidden_terms_derived_and_peer_symmetric():
+    from render.writer import _forbidden_terms
+    eu = _forbidden_terms("EU")
+    assert "the Fed" in eu and "FOMC" in eu, "EU must forbid US-branded terms"
+    assert "the ECB" not in eu and "The ECB" not in eu, "EU must not forbid its OWN terms"
+    us = _forbidden_terms("US")
+    assert "the ECB" in us, "US must forbid EU-branded terms too — peer-symmetric, not US-privileged"
+    assert "CPI inflation" not in us, "US uses 'CPI inflation' — never forbid a term this economy uses"
+
+
+def test_calibration_is_per_jurisdiction():
+    from render.graph_corpus import _load_model
+    us = _load_model("reaction_function", "US")["spec"].params
+    jp = _load_model("reaction_function", "JP")["spec"].params
+    assert us["r_star_pct"] == 0.7 and jp["r_star_pct"] == 0.0, \
+        "reaction_function must read the article jurisdiction's r*, not one global constant"
+
+
+@pytest.mark.neo4j
+def test_neo4j_and_catalog_readers_agree():
+    """Parity: the live-graph reader and the catalog reader return the same facts after a seed."""
+    from render import jurisdiction_facts as jf
+    import os as _os
+    jf.reset(); _os.environ["HORIZON3_JUR_SOURCE"] = "catalog"
+    cat = jf.all_facts()
+    jf.reset(); _os.environ["HORIZON3_JUR_SOURCE"] = "neo4j"
+    try:
+        neo = jf.all_facts()
+    except Exception as exc:
+        pytest.skip(f"no seeded Neo4j: {exc}")
+    finally:
+        jf.reset(); _os.environ["HORIZON3_JUR_SOURCE"] = "catalog"
+    assert set(cat) == set(neo)
+    for j in cat:
+        assert cat[j]["vocab"] == neo[j]["vocab"], f"{j} vocab differs between readers"
+        assert cat[j]["calibration"] == neo[j]["calibration"], f"{j} calibration differs"

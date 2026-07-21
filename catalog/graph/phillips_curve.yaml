@@ -33,7 +33,9 @@ outputs:
   - {name: misery_index,     unit: "%", meaning: "unemployment + inflation (Okun's misery index)"}
 interpretations:
   - id: trade_off
-    when: "unemployment_pct < 5 and inflation_pct > 3"
+    # jurisdiction-relative hot corner: u* and the hot-inflation threshold come from the article's
+    # jurisdiction calibration (JP's u*~2.5 vs the US ~5), injected into the interpretation eval scope.
+    when: "unemployment_pct < phillips_u_star_pct and inflation_pct > phillips_hot_infl_pct"
     says: >
       The economy sits in the hot corner of the Phillips curve — low unemployment with elevated
       inflation. This is the short-run trade-off a central bank cannot ignore: pushing unemployment

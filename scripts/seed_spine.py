@@ -26,6 +26,7 @@ cell of the matrix; the per-currency truth is the EXECUTABLE_IN relationships.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -104,17 +105,24 @@ def _why_not(doc: dict) -> str:
     return ("design-stage spec — missing " + ", ".join(missing)) if missing else "not in catalog/graph"
 
 
+from render.jurisdiction_facts import brand_terms as _brand_terms  # noqa: E402  (canonical, shared with runtime)
+
+
 def seed_jurisdictions(s, roles: dict, jurisdictions: list) -> None:
     """Jurisdiction + DataSeries + role→series binding per jurisdiction; a null/absent binding is a
-    recorded MISSING_IN gap. This is the currency+data layer the vision needs and the live spine lacked."""
+    recorded MISSING_IN gap. vocab/calibration ride as JSON props (Neo4j has no nested maps); brand_terms
+    is denormalised for the neutrality query. This is the currency+data layer the vision needs."""
     for rname, rmeta in roles.items():
         s.run("MERGE (r:Role {name:$r, catalog:$cat}) SET r.kind=$k, r.desc=$d",
               cat=CATALOG, r=rname, k=(rmeta or {}).get("kind", ""), d=((rmeta or {}).get("desc", "") or "")[:220])
     for j in jurisdictions:
+        vocab, calib = j.get("vocab") or {}, j.get("calibration") or {}
         s.run("""MERGE (jn:Jurisdiction {id:$id, catalog:$cat})
-                 SET jn.central_bank=$cb, jn.ccy=$ccy, jn.scope=$scope""",
+                 SET jn.central_bank=$cb, jn.ccy=$ccy, jn.scope=$scope, jn.display_order=$ord,
+                     jn.vocab=$vocab, jn.calibration=$calib, jn.brand_terms=$terms""",
               cat=CATALOG, id=j["id"], cb=j.get("central_bank", ""), ccy=j.get("ccy", ""),
-              scope=j.get("scope", ""))
+              scope=j.get("scope", ""), ord=j.get("display_order", 999),
+              vocab=json.dumps(vocab), calib=json.dumps(calib), terms=_brand_terms(vocab))
         binds = j.get("bindings") or {}
         for rname in roles:                               # iterate the whole vocabulary → absent == missing
             b = binds.get(rname)

@@ -13,9 +13,15 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
-from .. import graph_corpus, theme  # noqa: E402
+from .. import graph_corpus, jurisdiction_facts, theme  # noqa: E402
 
-_CB_SHORT = {"US": "Fed", "EU": "ECB", "GB": "BoE", "JP": "BoJ", "CH": "SNB", "CA": "BoC", "AU": "RBA"}
+
+def _cb_short(j: str) -> str:
+    """Short central-bank label from the jurisdiction data (was a hardcoded dict)."""
+    try:
+        return jurisdiction_facts.facts(j)["vocab"].get("cb_short", j)
+    except Exception:
+        return j
 
 # (output field, row label, unit) — the indicators to show, in reading order
 _ROWS = [
@@ -38,10 +44,14 @@ def _zscore(hist, field) -> tuple[float | None, float | None]:
     return (float(a[-1]), float((a[-1] - a.mean()) / sd))
 
 
-def _regime(latest) -> str:
+def _regime(latest, instance: str) -> str:
     o = latest.outputs
     cli, infl = o.get("leading_indicator", 100.0), o.get("inflation_pct", 0.0)
-    growing, hot = cli >= 100.0, infl >= 2.5
+    try:
+        hot_cut = jurisdiction_facts.facts(instance)["calibration"].get("regime_hot_infl_pct", 2.5)
+    except Exception:
+        hot_cut = 2.5
+    growing, hot = cli >= 100.0, infl >= hot_cut
     return ("reflation" if growing and hot else "goldilocks" if growing else
             "stagflation" if hot else "slowdown")
 
@@ -51,7 +61,12 @@ def scorecard_png(conn, out_path: str, model_id: str = "economies_scorecard") ->
     inst = runs.get("instances") or {}
     if len(inst) < 2:
         return None
-    order = [j for j in ("US", "EU", "GB", "JP", "CH", "CA", "AU") if j in inst]
+    def _ord(j: str) -> int:
+        try:
+            return jurisdiction_facts.facts(j)["order"]
+        except Exception:
+            return 999
+    order = sorted(inst, key=_ord)
     cbs = [inst[j].get("cb", j) for j in order]
     levels = np.full((len(_ROWS), len(order)), np.nan)
     zs = np.full((len(_ROWS), len(order)), np.nan)
@@ -78,7 +93,7 @@ def scorecard_png(conn, out_path: str, model_id: str = "economies_scorecard") ->
                 ax.text(cj, ri, txt, ha="center", va="center", fontsize=13, fontweight="bold",
                         color=theme.INK)
     ax.set_xticks(range(ncol))
-    ax.set_xticklabels([f"{_CB_SHORT.get(j, j)}\n{j}" for j in order], fontsize=11, fontweight="bold")
+    ax.set_xticklabels([f"{_cb_short(j)}\n{j}" for j in order], fontsize=11, fontweight="bold")
     ax.xaxis.set_ticks_position("top")
     ax.set_yticks(range(nrow))
     ax.set_yticklabels([lbl for _f, lbl, _u in _ROWS], fontsize=11.5)
@@ -89,7 +104,7 @@ def scorecard_png(conn, out_path: str, model_id: str = "economies_scorecard") ->
     ax.set_ylim(nrow - 0.5, -0.5)
     # regime label under each column
     for cj, j in enumerate(order):
-        reg = _regime(inst[j]["latest"]) if inst[j].get("latest") else ""
+        reg = _regime(inst[j]["latest"], j) if inst[j].get("latest") else ""
         ax.text(cj, nrow - 0.5 + 0.14 * nrow, reg, ha="center", va="top", fontsize=10.5,
                 style="italic", fontweight="bold", color=theme.MUTED, clip_on=False)
     ax.text(-0.5, nrow - 0.5 + 0.14 * nrow, "regime:", ha="right", va="top", fontsize=10,

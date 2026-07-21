@@ -45,6 +45,26 @@ jurisdictions:
     central_bank: "Federal Reserve"
     ccy: USD
     scope: major
+    # vocab = how THIS economy names things (the article speaks in these terms; other jurisdictions'
+    # branded terms are forbidden, derived from this data — no hardcoded blacklist). calibration = the
+    # per-jurisdiction model constants (r*, target, Phillips hot-corner) a model reads instead of a global
+    # US-flavoured default. inflation targets are official; r*/u* are documented estimates (refine later).
+    display_order: 1
+    vocab:
+      cb_the: "the Fed"
+      cb_title: "The Fed"
+      cb_short: "Fed"
+      policy_rate: "the federal funds rate"
+      price_index: "CPI inflation"
+      benchmark: "the 10-year Treasury"
+      govt: "Treasuries"
+      aliases: ["FOMC", "Fed funds", "core PCE", "PCE", "civilian unemployment"]
+    calibration:
+      r_star_pct: 0.7
+      inflation_target_pct: 2.0
+      phillips_u_star_pct: 5.0
+      phillips_hot_infl_pct: 3.0
+      regime_hot_infl_pct: 2.5
     bindings:
       ois_par_curve:            {ref: "USD:ois",            source: curve}
       govt_par_curve:           null   # curve_snapshots USD/government has only 2 snapshots — SPARSE, unusable
@@ -72,6 +92,22 @@ jurisdictions:
     central_bank: "European Central Bank"
     ccy: EUR
     scope: major
+    display_order: 2
+    vocab:
+      cb_the: "the ECB"
+      cb_title: "The ECB"
+      cb_short: "ECB"
+      policy_rate: "the deposit rate"
+      price_index: "HICP inflation"
+      benchmark: "the 10-year Bund"
+      govt: "Bunds"
+      aliases: ["Eurosystem", "Governing Council", "HICP"]
+    calibration:
+      r_star_pct: 0.5
+      inflation_target_pct: 2.0
+      phillips_u_star_pct: 6.5
+      phillips_hot_infl_pct: 3.0
+      regime_hot_infl_pct: 2.5
     bindings:
       ois_par_curve:            {ref: "EUR:ois",            source: curve}
       govt_par_curve:           {ref: "EUR:government",      source: curve, note: "Rich (305 snapshots)."}
@@ -98,6 +134,22 @@ jurisdictions:
     central_bank: "Bank of England"
     ccy: GBP
     scope: major
+    display_order: 3
+    vocab:
+      cb_the: "the Bank of England"
+      cb_title: "The Bank of England"
+      cb_short: "BoE"
+      policy_rate: "Bank Rate"
+      price_index: "CPI inflation"
+      benchmark: "the 10-year gilt"
+      govt: "gilts"
+      aliases: ["MPC", "Monetary Policy Committee"]
+    calibration:
+      r_star_pct: 0.5
+      inflation_target_pct: 2.0
+      phillips_u_star_pct: 4.5
+      phillips_hot_infl_pct: 3.0
+      regime_hot_infl_pct: 2.5
     bindings:
       ois_par_curve:            {ref: "GBP:ois",            source: curve}
       govt_par_curve:           null   # no GBP government curve in curve_snapshots (gilts not scraped)
@@ -117,6 +169,22 @@ jurisdictions:
     central_bank: "Bank of Japan"
     ccy: JPY
     scope: major
+    display_order: 4
+    vocab:
+      cb_the: "the Bank of Japan"
+      cb_title: "The Bank of Japan"
+      cb_short: "BoJ"
+      policy_rate: "the BoJ policy rate"
+      price_index: "CPI inflation"
+      benchmark: "the 10-year JGB"
+      govt: "JGBs"
+      aliases: ["yield curve control", "YCC"]
+    calibration:
+      r_star_pct: 0.0
+      inflation_target_pct: 2.0
+      phillips_u_star_pct: 2.5
+      phillips_hot_infl_pct: 2.0
+      regime_hot_infl_pct: 2.5
     bindings:
       ois_par_curve:            {ref: "JPY:ois",            source: curve}
       govt_par_curve:           {ref: "JPY:government",      source: curve, note: "Present (75 snapshots) — richer than USD govt."}
@@ -138,6 +206,22 @@ jurisdictions:
     central_bank: "Swiss National Bank"
     ccy: CHF
     scope: major
+    display_order: 5
+    vocab:
+      cb_the: "the SNB"
+      cb_title: "The SNB"
+      cb_short: "SNB"
+      policy_rate: "the SNB policy rate"
+      price_index: "CPI inflation"
+      benchmark: "the 10-year Confederation bond"
+      govt: "Swiss govvies"
+      aliases: ["sight deposits"]
+    calibration:
+      r_star_pct: 0.0
+      inflation_target_pct: 1.0
+      phillips_u_star_pct: 3.0
+      phillips_hot_infl_pct: 2.0
+      regime_hot_infl_pct: 2.0
     bindings:
       ois_par_curve:            {ref: "CHF:ois",            source: curve}
       govt_par_curve:           {ref: "CHF:government",      source: curve, note: "Present (75 snapshots)."}
@@ -152,6 +236,22 @@ jurisdictions:
     central_bank: "Bank of Canada"
     ccy: CAD
     scope: major
+    display_order: 6
+    vocab:
+      cb_the: "the Bank of Canada"
+      cb_title: "The Bank of Canada"
+      cb_short: "BoC"
+      policy_rate: "the overnight rate"
+      price_index: "CPI inflation"
+      benchmark: "the 10-year Canada"
+      govt: "Canadas"
+      aliases: ["Governing Council"]
+    calibration:
+      r_star_pct: 0.75
+      inflation_target_pct: 2.0
+      phillips_u_star_pct: 6.0
+      phillips_hot_infl_pct: 3.0
+      regime_hot_infl_pct: 2.5
     bindings:
       ois_par_curve:            {ref: "CAD:ois",            source: curve}
       govt_par_curve:           {ref: "CAD:government",      source: curve, note: "Rich (296 snapshots)."}
@@ -166,6 +266,22 @@ jurisdictions:
     central_bank: "Reserve Bank of Australia"
     ccy: AUD
     scope: major
+    display_order: 7
+    vocab:
+      cb_the: "the RBA"
+      cb_title: "The RBA"
+      cb_short: "RBA"
+      policy_rate: "the cash rate"
+      price_index: "CPI inflation"
+      benchmark: "the 10-year ACGB"
+      govt: "ACGBs"
+      aliases: ["Reserve Bank"]
+    calibration:
+      r_star_pct: 0.75
+      inflation_target_pct: 2.5
+      phillips_u_star_pct: 4.5
+      phillips_hot_infl_pct: 3.0
+      regime_hot_infl_pct: 2.5
     bindings:
       ois_par_curve:            {ref: "AUD:ois",            source: curve}
       govt_par_curve:           {ref: "AUD:government",      source: curve, note: "Present (74 snapshots)."}

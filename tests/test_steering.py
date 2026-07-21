@@ -48,10 +48,11 @@ def test_scorecard_zscore_and_regime():
 
     class _P2:
         def __init__(self, cli, infl): self.outputs = {"leading_indicator": cli, "inflation_pct": infl}
-    assert _regime(_P2(101, 3.0)) == "reflation"                  # growing + hot
-    assert _regime(_P2(101, 1.0)) == "goldilocks"                 # growing + cool
-    assert _regime(_P2(98, 3.0)) == "stagflation"                 # slowing + hot
-    assert _regime(_P2(98, 1.0)) == "slowdown"                    # slowing + cool
+    # hot cutoff is the jurisdiction's regime_hot_infl_pct (US = 2.5, from the vocab/calibration data)
+    assert _regime(_P2(101, 3.0), "US") == "reflation"            # growing + hot
+    assert _regime(_P2(101, 1.0), "US") == "goldilocks"          # growing + cool
+    assert _regime(_P2(98, 3.0), "US") == "stagflation"          # slowing + hot
+    assert _regime(_P2(98, 1.0), "US") == "slowdown"             # slowing + cool
 
 
 def test_port_backlog_is_the_us_welded_models():

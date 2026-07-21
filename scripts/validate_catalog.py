@@ -317,8 +317,26 @@ def main() -> int:
               + ("" if not missing else f"  unresolved: {missing}"))
         persona_fail += bool(missing)
 
-    total = over_claims + persona_fail
+    # jurisdiction vocab + calibration completeness — the soft-coding contract: adding a jurisdiction must
+    # be pure data, so each must carry a full vocab (prose labels) + numeric calibration block, or the
+    # runtime frame/derived-rules/calibration would silently degrade.
+    print("\nJURISDICTION VOCAB + CALIBRATION")
+    vocab_keys = ("cb_the", "cb_title", "cb_short", "policy_rate", "price_index", "benchmark", "govt")
+    calib_keys = ("r_star_pct", "inflation_target_pct", "phillips_u_star_pct",
+                  "phillips_hot_infl_pct", "regime_hot_infl_pct")
+    jur_fail = 0
+    for j in yaml.safe_load(JURIS_FILE.read_text()).get("jurisdictions", []):
+        v, c = j.get("vocab") or {}, j.get("calibration") or {}
+        mv = [k for k in vocab_keys if not v.get(k)]
+        mc = [k for k in calib_keys if not isinstance(c.get(k), (int, float))]
+        ok = not mv and not mc
+        print(f"  {j.get('id'):4} vocab {OK if not mv else FAIL}  calibration {OK if not mc else FAIL}"
+              + ("" if ok else f"  MISSING: {mv + mc}"))
+        jur_fail += (not ok)
+
+    total = over_claims + persona_fail + jur_fail
     print(f"\nSUMMARY: {over_claims} over-claim/impl failures · {persona_fail} persona unresolved · "
+          f"{jur_fail} jurisdiction vocab/calibration gaps · "
           f"{sum(1 for d in docs.values() if d.get('build_stub'))} stubs")
     conn.close()
     return 0 if total == 0 else 1
