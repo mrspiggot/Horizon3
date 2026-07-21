@@ -1,0 +1,27 @@
+# Hand-owned annotations the extractors merge in — only the facts static analysis
+# cannot infer. Keep this small; everything else is auto-extracted from live code.
+
+# article_graph nodes delegate to render/writer.py and carry no inline get_llm call,
+# so the AST classifies them all "deterministic". These overrides restore the truth.
+node_kind_overrides:
+  article_graph:
+    plan: llm          # W.plan_arc — the section-editor LLM
+    draft: llm         # W.draft_best — best-of-N write/ground/critique loop
+    illustrate: vision # W.make_illustration — the Van Gogh header (image model)
+
+# The ATS is a hand-coded orchestrator (render/ats/run.py:run_ats), NOT a StateGraph,
+# so its flow is modelled here rather than auto-drawn. Stages/edges mirror run_ats.
+ats:
+  package: render/ats
+  note: >-
+    Deterministic commissioning orchestrator (not a LangGraph StateGraph). The LLM is
+    touched only twice: mapper._classify (free-text trigger → persona/models) and
+    score._llm_judge (one relevance vote). "Trigger proposes, human disposes."
+  direction: LR
+  stages:
+    - {id: harvest,   kind: deterministic}   # CB calendars, releases, standing pieces
+    - {id: map,       kind: llm}             # classify triggers → persona/models
+    - {id: readiness, kind: deterministic, is_gate: true}  # is the data present?
+    - {id: score,     kind: llm}             # deterministic dims + one LLM judge
+    - {id: shortlist, kind: deterministic}   # top-3 cards
+    - {id: briefing,  kind: deterministic}   # HTML/PDF briefing

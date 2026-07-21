@@ -1,0 +1,806 @@
+{
+  "ats": {
+    "edges": [
+      {
+        "conditional": false,
+        "source": "__start__",
+        "target": "harvest"
+      },
+      {
+        "conditional": false,
+        "source": "harvest",
+        "target": "map"
+      },
+      {
+        "conditional": false,
+        "source": "map",
+        "target": "readiness"
+      },
+      {
+        "conditional": false,
+        "source": "readiness",
+        "target": "score"
+      },
+      {
+        "conditional": false,
+        "source": "score",
+        "target": "shortlist"
+      },
+      {
+        "conditional": false,
+        "source": "shortlist",
+        "target": "briefing"
+      },
+      {
+        "conditional": false,
+        "source": "briefing",
+        "target": "__end__"
+      }
+    ],
+    "mermaid": "%%{init:{'theme':'base','themeVariables':{'fontFamily':'Helvetica,Arial,sans-serif','fontSize':'14px','primaryColor':'#eef2f7','primaryBorderColor':'#1A2238','primaryTextColor':'#1A2238','lineColor':'#54617a'}}}%%\nflowchart LR\n  __start__((start)):::term\n  harvest[\"harvest\"]:::det\n  map[\"map\"]:::llm\n  readiness{{\"readiness\"}}:::det\n  score[\"score\"]:::llm\n  shortlist[\"shortlist\"]:::det\n  briefing[\"briefing\"]:::det\n  __end__((end)):::term\n  __start__ --> harvest\n  harvest --> map\n  map --> readiness\n  readiness --> score\n  score --> shortlist\n  shortlist --> briefing\n  briefing --> __end__\n  classDef llm fill:#e8e7fb,stroke:#5b57c7,color:#2a2870;\n  classDef vis fill:#dcefef,stroke:#2a8f8f,color:#124d4d;\n  classDef det fill:#e6ebf3,stroke:#5b6b86,color:#2b3750;\n  classDef term fill:#1A2238,stroke:#1A2238,color:#ffffff;",
+    "note": "Deterministic commissioning orchestrator (not a LangGraph StateGraph). The LLM is touched only twice: mapper._classify (free-text trigger → persona/models) and score._llm_judge (one relevance vote). \"Trigger proposes, human disposes.\"",
+    "stages": [
+      "harvest",
+      "map",
+      "readiness",
+      "score",
+      "shortlist",
+      "briefing"
+    ]
+  },
+  "catalog": {
+    "design_models": 38,
+    "graph_models": 32,
+    "personas": 12
+  },
+  "graphs": [
+    {
+      "edges": [
+        {
+          "conditional": false,
+          "source": "__start__",
+          "target": "material"
+        },
+        {
+          "conditional": false,
+          "source": "assemble",
+          "target": "__end__"
+        },
+        {
+          "conditional": false,
+          "source": "brief",
+          "target": "plan"
+        },
+        {
+          "conditional": false,
+          "source": "draft",
+          "target": "reconcile_charts"
+        },
+        {
+          "conditional": false,
+          "source": "illustrate",
+          "target": "reconcile_dashboard"
+        },
+        {
+          "conditional": false,
+          "source": "material",
+          "target": "brief"
+        },
+        {
+          "conditional": false,
+          "source": "plan",
+          "target": "draft"
+        },
+        {
+          "conditional": false,
+          "source": "reconcile_charts",
+          "target": "illustrate"
+        },
+        {
+          "conditional": false,
+          "source": "reconcile_dashboard",
+          "target": "assemble"
+        }
+      ],
+      "langsmith_project": "horizon3-article",
+      "mermaid": "%%{init:{'theme':'base','themeVariables':{'fontFamily':'Helvetica,Arial,sans-serif','fontSize':'14px','primaryColor':'#eef2f7','primaryBorderColor':'#1A2238','primaryTextColor':'#1A2238','lineColor':'#54617a'}}}%%\nflowchart TB\n  __start__((start)):::term\n  material[\"material\"]:::det\n  brief[\"brief\"]:::det\n  plan[\"plan\"]:::llm\n  draft[\"draft\"]:::llm\n  reconcile_charts[\"reconcile_charts\"]:::det\n  illustrate[\"illustrate\"]:::vis\n  reconcile_dashboard[\"reconcile_dashboard\"]:::det\n  assemble[\"assemble\"]:::det\n  __end__((end)):::term\n  __start__ --> material\n  assemble --> __end__\n  brief --> plan\n  draft --> reconcile_charts\n  illustrate --> reconcile_dashboard\n  material --> brief\n  plan --> draft\n  reconcile_charts --> illustrate\n  reconcile_dashboard --> assemble\n  classDef llm fill:#e8e7fb,stroke:#5b57c7,color:#2a2870;\n  classDef vis fill:#dcefef,stroke:#2a8f8f,color:#124d4d;\n  classDef det fill:#e6ebf3,stroke:#5b6b86,color:#2b3750;\n  classDef term fill:#1A2238,stroke:#1A2238,color:#ffffff;",
+      "mermaid_raw": "---\nconfig:\n  flowchart:\n    curve: linear\n---\ngraph TD;\n\t__start__([<p>__start__</p>]):::first\n\tmaterial(material)\n\tbrief(brief)\n\tplan(plan)\n\tdraft(draft)\n\treconcile_charts(reconcile_charts)\n\tillustrate(illustrate)\n\treconcile_dashboard(reconcile_dashboard)\n\tassemble(assemble)\n\t__end__([<p>__end__</p>]):::last\n\t__start__ --> material;\n\tbrief --> plan;\n\tdraft --> reconcile_charts;\n\tillustrate --> reconcile_dashboard;\n\tmaterial --> brief;\n\tplan --> draft;\n\treconcile_charts --> illustrate;\n\treconcile_dashboard --> assemble;\n\tassemble --> __end__;\n\tclassDef default fill:#f2f0ff,line-height:1.2\n\tclassDef first fill-opacity:0\n\tclassDef last fill:#bfb6fc\n",
+      "name": "article_graph",
+      "nodes": [
+        {
+          "declared_temps": [],
+          "id": "material",
+          "is_gate": false,
+          "kind": "deterministic",
+          "models": [],
+          "schemas": []
+        },
+        {
+          "declared_temps": [],
+          "id": "brief",
+          "is_gate": false,
+          "kind": "deterministic",
+          "models": [],
+          "schemas": []
+        },
+        {
+          "declared_temps": [],
+          "id": "plan",
+          "is_gate": false,
+          "kind": "llm",
+          "models": [],
+          "schemas": []
+        },
+        {
+          "declared_temps": [],
+          "id": "draft",
+          "is_gate": false,
+          "kind": "llm",
+          "models": [],
+          "schemas": []
+        },
+        {
+          "declared_temps": [],
+          "id": "reconcile_charts",
+          "is_gate": false,
+          "kind": "deterministic",
+          "models": [],
+          "schemas": []
+        },
+        {
+          "declared_temps": [],
+          "id": "illustrate",
+          "is_gate": false,
+          "kind": "vision",
+          "models": [],
+          "schemas": []
+        },
+        {
+          "declared_temps": [],
+          "id": "reconcile_dashboard",
+          "is_gate": false,
+          "kind": "deterministic",
+          "models": [],
+          "schemas": []
+        },
+        {
+          "declared_temps": [],
+          "id": "assemble",
+          "is_gate": false,
+          "kind": "deterministic",
+          "models": [],
+          "schemas": []
+        }
+      ],
+      "package": "render/article_graph",
+      "role": "Orchestrator — assemble the whole artifact"
+    },
+    {
+      "edges": [
+        {
+          "conditional": false,
+          "source": "__start__",
+          "target": "library"
+        },
+        {
+          "conditional": false,
+          "source": "library",
+          "target": "propose"
+        },
+        {
+          "conditional": false,
+          "source": "propose",
+          "target": "validate"
+        },
+        {
+          "conditional": true,
+          "source": "validate",
+          "target": "__end__"
+        },
+        {
+          "conditional": true,
+          "source": "validate",
+          "target": "propose"
+        }
+      ],
+      "langsmith_project": "",
+      "mermaid": "%%{init:{'theme':'base','themeVariables':{'fontFamily':'Helvetica,Arial,sans-serif','fontSize':'14px','primaryColor':'#eef2f7','primaryBorderColor':'#1A2238','primaryTextColor':'#1A2238','lineColor':'#54617a'}}}%%\nflowchart LR\n  __start__((start)):::term\n  library[\"library\"]:::det\n  propose[\"propose\"]:::llm\n  validate{{\"validate\"}}:::det\n  __end__((end)):::term\n  __start__ --> library\n  library --> propose\n  propose --> validate\n  validate -.-> __end__\n  validate -.-> propose\n  classDef llm fill:#e8e7fb,stroke:#5b57c7,color:#2a2870;\n  classDef vis fill:#dcefef,stroke:#2a8f8f,color:#124d4d;\n  classDef det fill:#e6ebf3,stroke:#5b6b86,color:#2b3750;\n  classDef term fill:#1A2238,stroke:#1A2238,color:#ffffff;",
+      "mermaid_raw": "---\nconfig:\n  flowchart:\n    curve: linear\n---\ngraph TD;\n\t__start__([<p>__start__</p>]):::first\n\tlibrary(library)\n\tpropose(propose)\n\tvalidate(validate)\n\t__end__([<p>__end__</p>]):::last\n\t__start__ --> library;\n\tlibrary --> propose;\n\tpropose --> validate;\n\tvalidate -.-> __end__;\n\tvalidate -.-> propose;\n\tclassDef default fill:#f2f0ff,line-height:1.2\n\tclassDef first fill-opacity:0\n\tclassDef last fill:#bfb6fc\n",
+      "name": "selector",
+      "nodes": [
+        {
+          "declared_temps": [],
+          "id": "library",
+          "is_gate": false,
+          "kind": "deterministic",
+          "models": [],
+          "schemas": []
+        },
+        {
+          "declared_temps": [
+            null
+          ],
+          "id": "propose",
+          "is_gate": false,
+          "kind": "llm",
+          "models": [
+            "claude-opus-4-8"
+          ],
+          "schemas": [
+            "Picks"
+          ]
+        },
+        {
+          "declared_temps": [],
+          "id": "validate",
+          "is_gate": true,
+          "kind": "deterministic",
+          "models": [],
+          "schemas": []
+        }
+      ],
+      "package": "render/selector",
+      "role": "Role 2 — which models to run"
+    },
+    {
+      "edges": [
+        {
+          "conditional": false,
+          "source": "__start__",
+          "target": "framer"
+        },
+        {
+          "conditional": false,
+          "source": "compile",
+          "target": "critique"
+        },
+        {
+          "conditional": false,
+          "source": "critic_panel",
+          "target": "compile"
+        },
+        {
+          "conditional": true,
+          "source": "critique",
+          "target": "judge"
+        },
+        {
+          "conditional": true,
+          "source": "critique",
+          "target": "reviser"
+        },
+        {
+          "conditional": false,
+          "source": "framer",
+          "target": "proposer"
+        },
+        {
+          "conditional": true,
+          "source": "judge",
+          "target": "__end__"
+        },
+        {
+          "conditional": true,
+          "source": "judge",
+          "target": "proposer"
+        },
+        {
+          "conditional": false,
+          "source": "proposer",
+          "target": "critic_panel"
+        },
+        {
+          "conditional": false,
+          "source": "reviser",
+          "target": "compile"
+        }
+      ],
+      "langsmith_project": "horizon3-chart-studio",
+      "mermaid": "%%{init:{'theme':'base','themeVariables':{'fontFamily':'Helvetica,Arial,sans-serif','fontSize':'14px','primaryColor':'#eef2f7','primaryBorderColor':'#1A2238','primaryTextColor':'#1A2238','lineColor':'#54617a'}}}%%\nflowchart LR\n  __start__((start)):::term\n  framer[\"framer\"]:::llm\n  proposer[\"proposer\"]:::llm\n  critic_panel[\"critic_panel\"]:::llm\n  compile[\"compile\"]:::det\n  critique{{\"critique\"}}:::vis\n  reviser[\"reviser\"]:::llm\n  judge{{\"judge\"}}:::vis\n  __end__((end)):::term\n  __start__ --> framer\n  compile --> critique\n  critic_panel --> compile\n  critique -.-> judge\n  critique -.-> reviser\n  framer --> proposer\n  judge -.-> __end__\n  judge -.-> proposer\n  proposer --> critic_panel\n  reviser --> compile\n  classDef llm fill:#e8e7fb,stroke:#5b57c7,color:#2a2870;\n  classDef vis fill:#dcefef,stroke:#2a8f8f,color:#124d4d;\n  classDef det fill:#e6ebf3,stroke:#5b6b86,color:#2b3750;\n  classDef term fill:#1A2238,stroke:#1A2238,color:#ffffff;",
+      "mermaid_raw": "---\nconfig:\n  flowchart:\n    curve: linear\n---\ngraph TD;\n\t__start__([<p>__start__</p>]):::first\n\tframer(framer)\n\tproposer(proposer)\n\tcritic_panel(critic_panel)\n\tcompile(compile)\n\tcritique(critique)\n\treviser(reviser)\n\tjudge(judge)\n\t__end__([<p>__end__</p>]):::last\n\t__start__ --> framer;\n\tcompile --> critique;\n\tcritic_panel --> compile;\n\tcritique -.-> judge;\n\tcritique -.-> reviser;\n\tframer --> proposer;\n\tjudge -.-> __end__;\n\tjudge -.-> proposer;\n\tproposer --> critic_panel;\n\treviser --> compile;\n\tclassDef default fill:#f2f0ff,line-height:1.2\n\tclassDef first fill-opacity:0\n\tclassDef last fill:#bfb6fc\n",
+      "name": "studio",
+      "nodes": [
+        {
+          "declared_temps": [
+            0.2
+          ],
+          "id": "framer",
+          "is_gate": false,
+          "kind": "llm",
+          "models": [
+            "claude-opus-4-8"
+          ],
+          "schemas": [
+            "Frame"
+          ]
+        },
+        {
+          "declared_temps": [
+            0.5
+          ],
+          "id": "proposer",
+          "is_gate": false,
+          "kind": "llm",
+          "models": [
+            "claude-opus-4-8"
+          ],
+          "schemas": [
+            "ChartEncoding"
+          ]
+        },
+        {
+          "declared_temps": [
+            0.2
+          ],
+          "id": "critic_panel",
+          "is_gate": false,
+          "kind": "llm",
+          "models": [
+            "claude-opus-4-8"
+          ],
+          "schemas": [
+            "PanelVerdict"
+          ]
+        },
+        {
+          "declared_temps": [],
+          "id": "compile",
+          "is_gate": false,
+          "kind": "deterministic",
+          "models": [],
+          "schemas": []
+        },
+        {
+          "declared_temps": [
+            0.1
+          ],
+          "id": "critique",
+          "is_gate": true,
+          "kind": "vision",
+          "models": [
+            "claude-opus-4-8"
+          ],
+          "schemas": [
+            "VisualCritique"
+          ]
+        },
+        {
+          "declared_temps": [
+            0.2
+          ],
+          "id": "reviser",
+          "is_gate": false,
+          "kind": "llm",
+          "models": [
+            "claude-opus-4-8"
+          ],
+          "schemas": [
+            "ChartEncoding"
+          ]
+        },
+        {
+          "declared_temps": [
+            0.1
+          ],
+          "id": "judge",
+          "is_gate": true,
+          "kind": "vision",
+          "models": [
+            "claude-opus-4-8"
+          ],
+          "schemas": [
+            "Judgment"
+          ]
+        }
+      ],
+      "package": "render/studio",
+      "role": "How to visualize an insight"
+    },
+    {
+      "edges": [
+        {
+          "conditional": false,
+          "source": "__start__",
+          "target": "extract"
+        },
+        {
+          "conditional": true,
+          "source": "adjudicate",
+          "target": "extract"
+        },
+        {
+          "conditional": true,
+          "source": "adjudicate",
+          "target": "verdict"
+        },
+        {
+          "conditional": false,
+          "source": "extract",
+          "target": "adjudicate"
+        },
+        {
+          "conditional": false,
+          "source": "verdict",
+          "target": "__end__"
+        }
+      ],
+      "langsmith_project": "",
+      "mermaid": "%%{init:{'theme':'base','themeVariables':{'fontFamily':'Helvetica,Arial,sans-serif','fontSize':'14px','primaryColor':'#eef2f7','primaryBorderColor':'#1A2238','primaryTextColor':'#1A2238','lineColor':'#54617a'}}}%%\nflowchart LR\n  __start__((start)):::term\n  extract[\"extract\"]:::llm\n  adjudicate{{\"adjudicate\"}}:::det\n  verdict[\"verdict\"]:::det\n  __end__((end)):::term\n  __start__ --> extract\n  adjudicate -.-> extract\n  adjudicate -.-> verdict\n  extract --> adjudicate\n  verdict --> __end__\n  classDef llm fill:#e8e7fb,stroke:#5b57c7,color:#2a2870;\n  classDef vis fill:#dcefef,stroke:#2a8f8f,color:#124d4d;\n  classDef det fill:#e6ebf3,stroke:#5b6b86,color:#2b3750;\n  classDef term fill:#1A2238,stroke:#1A2238,color:#ffffff;",
+      "mermaid_raw": "---\nconfig:\n  flowchart:\n    curve: linear\n---\ngraph TD;\n\t__start__([<p>__start__</p>]):::first\n\textract(extract)\n\tadjudicate(adjudicate)\n\tverdict(verdict)\n\t__end__([<p>__end__</p>]):::last\n\t__start__ --> extract;\n\tadjudicate -.-> extract;\n\tadjudicate -.-> verdict;\n\textract --> adjudicate;\n\tverdict --> __end__;\n\tclassDef default fill:#f2f0ff,line-height:1.2\n\tclassDef first fill-opacity:0\n\tclassDef last fill:#bfb6fc\n",
+      "name": "judge",
+      "nodes": [
+        {
+          "declared_temps": [
+            0.0
+          ],
+          "id": "extract",
+          "is_gate": false,
+          "kind": "llm",
+          "models": [
+            "claude-opus-4-8"
+          ],
+          "schemas": [
+            "Claims"
+          ]
+        },
+        {
+          "declared_temps": [],
+          "id": "adjudicate",
+          "is_gate": true,
+          "kind": "deterministic",
+          "models": [],
+          "schemas": []
+        },
+        {
+          "declared_temps": [],
+          "id": "verdict",
+          "is_gate": false,
+          "kind": "deterministic",
+          "models": [],
+          "schemas": []
+        }
+      ],
+      "package": "render/judge",
+      "role": "Role 7 — is the prose true?"
+    }
+  ],
+  "schema_version": 1,
+  "schemas": [
+    {
+      "fields": [
+        {
+          "desc": "",
+          "name": "title"
+        },
+        {
+          "desc": "",
+          "name": "subtitle"
+        },
+        {
+          "desc": "The single communicative job, one sentence (compare/trend/spread/relationship/rank/part-to-whole).",
+          "name": "message"
+        },
+        {
+          "desc": "",
+          "name": "mark"
+        },
+        {
+          "desc": "",
+          "name": "encoding"
+        },
+        {
+          "desc": "",
+          "name": "color_job"
+        },
+        {
+          "desc": "",
+          "name": "annotations"
+        },
+        {
+          "desc": "Provenance line, e.g. model + papers + as-of date.",
+          "name": "source_note"
+        },
+        {
+          "desc": "Why this form/encoding carries the insight better than the alternatives.",
+          "name": "rationale"
+        },
+        {
+          "desc": "Long-form rows; every value from an executed model output — the LLM never authors a number.",
+          "name": "data"
+        }
+      ],
+      "module": "render/studio/encoding.py",
+      "name": "ChartEncoding"
+    },
+    {
+      "fields": [
+        {
+          "desc": "",
+          "name": "claims"
+        }
+      ],
+      "module": "render/judge/claims.py",
+      "name": "Claims"
+    },
+    {
+      "fields": [
+        {
+          "desc": "The ONE thing the chart must say, one sentence, naming the communicative job (compare/trend/spread/relationship/part-to-whole/rank/divergence).",
+          "name": "message"
+        },
+        {
+          "desc": "2–3 chart FORMS worth proposing for this message+data-shape, from: line, area, bar, grouped_bar, dumbbell, slope, point, connected_scatter, bubble, heatmap, ridgeline, waterfall. Ordered best-first. Avoid defaulting to line/bar unless the data genuinely calls for it.",
+          "name": "candidate_marks"
+        },
+        {
+          "desc": "Why these forms fit the message and the number/shape of variables.",
+          "name": "reasoning"
+        }
+      ],
+      "module": "render/studio/nodes.py",
+      "name": "Frame"
+    },
+    {
+      "fields": [
+        {
+          "desc": "True = ships (expressive, effective, carries the insight, and is differentiated — not something a muppet with the FT could reproduce).",
+          "name": "verdict"
+        },
+        {
+          "desc": "One or two sentences justifying the verdict against those criteria.",
+          "name": "notes"
+        }
+      ],
+      "module": "render/studio/nodes.py",
+      "name": "Judgment"
+    },
+    {
+      "fields": [
+        {
+          "desc": "0-based index of the winning candidate.",
+          "name": "chosen_index"
+        },
+        {
+          "desc": "Consensus of the three experts: why this encoding carries the insight best (effectiveness + insight-carriage + differentiation vs a vanilla default).",
+          "name": "rationale"
+        }
+      ],
+      "module": "render/studio/nodes.py",
+      "name": "PanelVerdict"
+    },
+    {
+      "fields": [
+        {
+          "desc": "",
+          "name": "picks"
+        }
+      ],
+      "module": "render/selector/state.py",
+      "name": "Picks"
+    },
+    {
+      "fields": [
+        {
+          "desc": "True if the rendered chart is clean and reads clearly with no defects worth fixing. If omitted, inferred from whether defects were listed.",
+          "name": "ok"
+        },
+        {
+          "desc": "Concrete rendered-pixel problems: label collisions, occlusion, clipped/overshooting axes, unreadable spaghetti, a legend that duplicates direct labels, a near-empty panel, etc.",
+          "name": "defects"
+        },
+        {
+          "desc": "Specific, encoding-level changes to fix each defect (e.g. 'set y scale.domain to [-1,6]', 'drop the legend, keep direct labels', 'switch color_job to diverging').",
+          "name": "fixes"
+        }
+      ],
+      "module": "render/studio/nodes.py",
+      "name": "VisualCritique"
+    }
+  ],
+  "spine": {
+    "by_family": [
+      {
+        "count": 8,
+        "family": "macro"
+      },
+      {
+        "count": 7,
+        "family": "rates"
+      },
+      {
+        "count": 6,
+        "family": "credit"
+      },
+      {
+        "count": 4,
+        "family": "vol"
+      },
+      {
+        "count": 3,
+        "family": "commodity"
+      },
+      {
+        "count": 3,
+        "family": "cross_asset"
+      },
+      {
+        "count": 1,
+        "family": "equity"
+      }
+    ],
+    "by_jurisdiction": [
+      {
+        "ccy": "USD",
+        "id": "US",
+        "models": 32
+      },
+      {
+        "ccy": "EUR",
+        "id": "EU",
+        "models": 6
+      },
+      {
+        "ccy": "GBP",
+        "id": "GB",
+        "models": 6
+      },
+      {
+        "ccy": "JPY",
+        "id": "JP",
+        "models": 6
+      },
+      {
+        "ccy": "AUD",
+        "id": "AU",
+        "models": 0
+      },
+      {
+        "ccy": "CAD",
+        "id": "CA",
+        "models": 0
+      },
+      {
+        "ccy": "CHF",
+        "id": "CH",
+        "models": 0
+      }
+    ],
+    "error": "",
+    "executable_models": 32,
+    "gaps": [
+      {
+        "jurisdiction": "AU",
+        "models": [
+          "real_yield_term",
+          "phillips_curve",
+          "monetary_stance_lite",
+          "economies_scorecard"
+        ],
+        "role": "headline_cpi"
+      },
+      {
+        "jurisdiction": "AU",
+        "models": [
+          "economies_scorecard"
+        ],
+        "role": "leading_indicator"
+      },
+      {
+        "jurisdiction": "AU",
+        "models": [
+          "recession_signal",
+          "real_yield_term",
+          "economies_scorecard"
+        ],
+        "role": "long_yield_10y"
+      },
+      {
+        "jurisdiction": "AU",
+        "models": [
+          "sahm_rule",
+          "phillips_curve",
+          "economies_scorecard"
+        ],
+        "role": "unemployment_rate"
+      },
+      {
+        "jurisdiction": "CA",
+        "models": [
+          "real_yield_term",
+          "phillips_curve",
+          "monetary_stance_lite",
+          "economies_scorecard"
+        ],
+        "role": "headline_cpi"
+      },
+      {
+        "jurisdiction": "CA",
+        "models": [
+          "economies_scorecard"
+        ],
+        "role": "leading_indicator"
+      },
+      {
+        "jurisdiction": "CA",
+        "models": [
+          "recession_signal",
+          "real_yield_term",
+          "economies_scorecard"
+        ],
+        "role": "long_yield_10y"
+      },
+      {
+        "jurisdiction": "CA",
+        "models": [
+          "sahm_rule",
+          "phillips_curve",
+          "economies_scorecard"
+        ],
+        "role": "unemployment_rate"
+      },
+      {
+        "jurisdiction": "CH",
+        "models": [
+          "real_yield_term",
+          "phillips_curve",
+          "monetary_stance_lite",
+          "economies_scorecard"
+        ],
+        "role": "headline_cpi"
+      },
+      {
+        "jurisdiction": "CH",
+        "models": [
+          "economies_scorecard"
+        ],
+        "role": "leading_indicator"
+      },
+      {
+        "jurisdiction": "CH",
+        "models": [
+          "recession_signal",
+          "real_yield_term",
+          "economies_scorecard"
+        ],
+        "role": "long_yield_10y"
+      },
+      {
+        "jurisdiction": "CH",
+        "models": [
+          "sahm_rule",
+          "phillips_curve",
+          "economies_scorecard"
+        ],
+        "role": "unemployment_rate"
+      }
+    ],
+    "labels": [
+      "DataSeries",
+      "Decision",
+      "DecisionMaker",
+      "Jurisdiction",
+      "Model",
+      "Output",
+      "Role",
+      "Visualization"
+    ],
+    "online": true,
+    "proven_cells": 50,
+    "rel_types": [
+      "EXECUTABLE_IN",
+      "INFORMS",
+      "NEEDS",
+      "NEEDS_SERIES",
+      "PRODUCES",
+      "RENDERS",
+      "USES"
+    ]
+  },
+  "version": {
+    "branch": "feat/sysdoc-living-docs",
+    "commit_date": "2026-07-21T10:03:32+01:00",
+    "generated_at": "2026-07-21T09:17:31+00:00",
+    "git_sha": "b8b25ed",
+    "pyproject": "0.0.1"
+  }
+}

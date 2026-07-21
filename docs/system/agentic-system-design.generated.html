@@ -1,0 +1,957 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Horizon3 — Agentic System Design (generated)</title>
+<style>
+:root{
+  --ink:#1A2238; --paper:#f4f6fa; --surface:#fff; --surface-2:#eef2f7;
+  --muted:#54617a; --faint:#7c88a0; --hairline:#d7dee8; --hairline-2:#e6ebf3;
+  --accent:#a9761f; --accent-soft:#f4ead4; --accent-ink:#6b4e12;
+  --code-bg:#eef1f6; --code-ink:#2b3750;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  --sans:"Helvetica Neue",Helvetica,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root{
+  --ink:#e7ecf5; --paper:#0f1420; --surface:#161d2c; --surface-2:#1c2534;
+  --muted:#9aa6bd; --faint:#7f8ba3; --hairline:#28313f; --hairline-2:#222b3a;
+  --accent:#e0a94a; --accent-soft:#2a2314; --accent-ink:#e8c274;
+  --code-bg:#1b2431; --code-ink:#c7d2e6;
+}}
+:root[data-theme="light"]{--ink:#1A2238;--paper:#f4f6fa;--surface:#fff;--surface-2:#eef2f7;--muted:#54617a;--faint:#7c88a0;--hairline:#d7dee8;--hairline-2:#e6ebf3;--accent:#a9761f;--accent-soft:#f4ead4;--accent-ink:#6b4e12;--code-bg:#eef1f6;--code-ink:#2b3750;}
+:root[data-theme="dark"]{--ink:#e7ecf5;--paper:#0f1420;--surface:#161d2c;--surface-2:#1c2534;--muted:#9aa6bd;--faint:#7f8ba3;--hairline:#28313f;--hairline-2:#222b3a;--accent:#e0a94a;--accent-soft:#2a2314;--accent-ink:#e8c274;--code-bg:#1b2431;--code-ink:#c7d2e6;}
+*{box-sizing:border-box;}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);line-height:1.62;font-size:17px;margin:0;-webkit-font-smoothing:antialiased;}
+.doc{max-width:820px;margin:0 auto;padding:32px 24px 90px;}
+h1{font-family:var(--serif);font-weight:600;font-size:clamp(2rem,4.6vw,3rem);line-height:1.06;letter-spacing:-.015em;margin:.4em 0 .5em;text-wrap:balance;}
+h2{font-weight:750;font-size:clamp(1.5rem,3vw,2rem);letter-spacing:-.01em;margin:1.7em 0 .5em;padding-top:.5em;border-top:1px solid var(--hairline-2);text-wrap:balance;}
+h3{font-weight:700;font-size:1.16rem;margin:1.5em 0 .4em;color:var(--ink);}
+p{margin:0 0 1em;}
+a{color:var(--accent);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--accent) 40%,transparent);}
+strong{font-weight:700;}
+em{color:var(--muted);}
+code{font-family:var(--mono);font-size:.85em;background:var(--code-bg);color:var(--code-ink);padding:.1em .38em;border-radius:4px;border:1px solid var(--hairline-2);}
+pre{background:var(--code-bg);color:var(--code-ink);border:1px solid var(--hairline-2);border-radius:8px;padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:12.6px;line-height:1.5;}
+pre code{background:none;border:none;padding:0;}
+ul,ol{margin:0 0 1em;padding-left:1.3em;}
+li{margin:.35em 0;}
+li::marker{color:var(--accent);}
+blockquote{border-left:3px solid var(--accent);background:var(--accent-soft);color:var(--ink);margin:1.4em 0;padding:12px 18px;border-radius:0 8px 8px 0;}
+blockquote p{margin:.3em 0;}
+.tablewrap{overflow-x:auto;margin:1.2em 0;border:1px solid var(--hairline);border-radius:10px;}
+table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:520px;}
+th,td{text-align:left;padding:9px 13px;border-bottom:1px solid var(--hairline-2);vertical-align:top;}
+thead th{background:var(--surface-2);font-weight:700;font-size:12px;letter-spacing:.03em;text-transform:uppercase;border-bottom:2px solid var(--hairline);}
+tbody tr:last-child td{border-bottom:none;}
+tbody tr:hover{background:color-mix(in srgb,var(--accent) 6%,transparent);}
+td code,th code{font-size:.82em;}
+.mermaid{background:#fbfcfe;border:1px solid var(--hairline);border-radius:12px;padding:16px;margin:1.3em 0;overflow-x:auto;text-align:center;}
+.topbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:12px;padding:9px 24px;background:color-mix(in srgb,var(--paper) 88%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--hairline);font-size:13px;}
+.topbar b{color:var(--accent);}
+.topbar .sp{margin-left:auto;}
+.themebtn{cursor:pointer;border:1px solid var(--hairline);background:var(--surface);color:var(--ink);border-radius:20px;padding:4px 12px;font:inherit;font-size:12px;}
+</style>
+</head>
+<body>
+<div class="topbar"><span>Horizon3 · <b>Agentic System Design</b></span><span class="sp"></span><span style="color:var(--muted)">0.0.1 · b8b25ed</span><button class="themebtn" id="themebtn">◑ theme</button></div>
+<main class="doc">
+<blockquote>
+<p><strong>Version</strong> <code>0.0.1</code> · commit <code>b8b25ed</code> (feat/sysdoc-living-docs) · generated 2026-07-21T09:17:31+00:00</p>
+</blockquote>
+<h1>An engine where the LLM never authors a number</h1>
+<p><em>Internal design document · model → data → insight → decision</em></p>
+<p>Horizon3 turns a decision-maker's <em>model</em>, run on real market data, into an article,
+its charts, and its infographic — three renderings of one executed result. The
+intelligence is agentic; the numbers are not. This document maps the LangGraph graphs,
+the GraphRAG model spine that feeds them, and the prompts that steer them.</p>
+<p><em>The diagrams, tables, and counts below are generated from live code and the Neo4j
+spine by <code>render/sysdoc/</code>; the prose is hand-owned.</em></p>
+<h2>The number firewall</h2>
+<p>Every design decision in this repo defends a single rule from <code>CLAUDE.md</code>: <strong>the LLM
+never authors a number.</strong> Numbers are produced by <em>executing</em> a catalogued model on UMD
+data; the LLM only <strong>selects</strong> which model to run, <strong>designs</strong> how to show it, and
+<strong>narrates</strong> what it means. A companion rule keeps rendering deterministic — no
+diffusion model touches a numeric artifact.</p>
+<p>The firewall is enforced structurally, not by asking nicely. The Chart Studio agents
+are shown a <em>data profile</em> — field names, types, ranges — and never the values. They
+emit an encoding that references field names with its <code>data</code> array <strong>forced empty</strong>; the
+compiler injects the real rows at render time.</p>
+<pre class="mermaid">
+%%{init:{'theme':'base','themeVariables':{'fontFamily':'Helvetica,Arial,sans-serif','fontSize':'14px','primaryColor':'#eef2f7','primaryBorderColor':'#1A2238','primaryTextColor':'#1A2238','lineColor':'#54617a'}}}%%
+flowchart LR
+  subgraph DET["DETERMINISTIC — disposes"]
+    direction TB
+    EX[(UMD executor<br/>runs the model)]:::data
+    NO[NumberObject<br/>value + provenance]:::det
+    CO[compile: inject rows<br/>→ matplotlib PNG]:::det
+  end
+  subgraph LLMD["LLM — proposes"]
+    direction TB
+    PROF[data PROFILE<br/>names · types · ranges]:::llm
+    ENC[chart FORM<br/>mark + encoding, data=∅]:::llm
+    NAR[prose narration]:::llm
+  end
+  EX --> NO
+  NO -->|"schema only,<br/>no values"| PROF
+  PROF --> ENC
+  ENC -->|"encoding"| CO
+  NO -->|"real rows,<br/>at render time"| CO
+  NO --> NAR
+  CO --> OUT[["chart PNG"]]:::ext
+  classDef llm fill:#e8e7fb,stroke:#5b57c7,color:#2a2870;
+  classDef det fill:#e6ebf3,stroke:#5b6b86,color:#2b3750;
+  classDef data fill:#f6ecd6,stroke:#b5852b,color:#6b4e12;
+  classDef ext fill:#f6e2df,stroke:#b0574d,color:#6e2c25;
+
+</pre>
+<h2>System context</h2>
+<p>Two triggers start work: a <strong>persona</strong> commissioned directly, or the <strong>ATS</strong>
+(article-trigger system) surfacing a candidate from central-bank calendars, data
+releases and standing pieces. The engine reaches one LLM (<code>claude-opus-4-8</code>, used for
+both reasoning and vision) and two data systems inside the external UMD platform:
+<strong>TimescaleDB/Postgres</strong> for the time series and executed outputs, and the <strong>Neo4j
+model spine</strong> for the proven-model vocabulary. The ChromaDB corpus is a dashed,
+design-time input — see the honesty note under the spine.</p>
+<pre class="mermaid">
+%%{init:{'theme':'base','themeVariables':{'fontFamily':'Helvetica,Arial,sans-serif','fontSize':'14px','primaryColor':'#eef2f7','primaryBorderColor':'#1A2238','primaryTextColor':'#1A2238','lineColor':'#54617a'}}}%%
+flowchart TB
+  P([Persona commission]):::actor
+  T([ATS trigger<br/>CB calendars · releases]):::actor
+  subgraph H3["HORIZON3 ENGINE — render/"]
+    ENG[Article pipeline<br/>+ Selector · Studio · Judge]:::det
+  end
+  LLM{{"claude-opus-4-8<br/>reasoning + vision"}}:::llm
+  PG[(UMD TimescaleDB<br/>localhost:5434<br/>observations · outputs)]:::ext
+  NEO[(Neo4j model spine<br/>horizon-neo4j : 7688)]:::data
+  CH[(ChromaDB corpus<br/>design-time only)]:::ext
+  OUT[[".docx article · charts<br/>infographic · ATS briefing"]]:::ext
+  P --> ENG
+  T --> ENG
+  ENG <-->|"structured prompts"| LLM
+  ENG -->|"SQL · executor"| PG
+  ENG -->|"Cypher"| NEO
+  CH -.->|"grounds design, not runtime"| ENG
+  ENG --> OUT
+  classDef actor fill:#ffffff,stroke:#54617a,color:#1A2238;
+  classDef llm fill:#e8e7fb,stroke:#5b57c7,color:#2a2870;
+  classDef det fill:#e6ebf3,stroke:#5b6b86,color:#2b3750;
+  classDef data fill:#f6ecd6,stroke:#b5852b,color:#6b4e12;
+  classDef ext fill:#f6e2df,stroke:#b0574d,color:#6e2c25;
+
+</pre>
+<h2>The graphs</h2>
+<p>The subsystem is a set of LangGraph graphs that share one house pattern: a <code>state.py</code>
+TypedDict, <code>nodes.py</code> of pure <code>State → partial-State</code> functions, and a <code>graph.py</code> that
+wires the <code>StateGraph</code> — every step traced to LangSmith. The article pipeline is the
+orchestrator; it invokes the selector, studio and judge as sub-graphs. The ATS is a
+separate, hand-coded commissioning orchestrator (not a StateGraph) that decides <em>what</em>
+to write before the pipeline decides <em>how</em>.</p>
+<p>The roster below is generated from the compiled graphs. The small DAGs (selector,
+judge, ATS) follow; the orchestrator and the studio get their own sections.</p>
+<h3>The graph roster</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+  <th>Graph</th>
+  <th>Package</th>
+  <th>Role</th>
+  <th>Nodes</th>
+  <th>Flow</th>
+  <th>LangSmith</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>article_graph</td>
+  <td>render/article_graph</td>
+  <td>Orchestrator — assemble the whole artifact</td>
+  <td>8</td>
+  <td>material → brief → plan → draft → reconcile_charts → illustrate → reconcile_dashboard → assemble</td>
+  <td>horizon3-article</td>
+</tr>
+<tr>
+  <td>selector</td>
+  <td>render/selector</td>
+  <td>Role 2 — which models to run</td>
+  <td>3</td>
+  <td>library → propose → validate</td>
+  <td>—</td>
+</tr>
+<tr>
+  <td>studio</td>
+  <td>render/studio</td>
+  <td>How to visualize an insight</td>
+  <td>7</td>
+  <td>framer → proposer → critic_panel → compile → critique → reviser → judge</td>
+  <td>horizon3-chart-studio</td>
+</tr>
+<tr>
+  <td>judge</td>
+  <td>render/judge</td>
+  <td>Role 7 — is the prose true?</td>
+  <td>3</td>
+  <td>extract → adjudicate → verdict</td>
+  <td>—</td>
+</tr>
+<tr>
+  <td>ats</td>
+  <td>render/ats</td>
+  <td>Commissioning (not a StateGraph)</td>
+  <td>6</td>
+  <td>harvest → map → readiness → score → shortlist → briefing</td>
+  <td>—</td>
+</tr>
+</tbody>
+</table></div>
+<p><em>Model-Selection graph — Role 2 — which models to run</em></p>
+<pre class="mermaid">
+%%{init:{'theme':'base','themeVariables':{'fontFamily':'Helvetica,Arial,sans-serif','fontSize':'14px','primaryColor':'#eef2f7','primaryBorderColor':'#1A2238','primaryTextColor':'#1A2238','lineColor':'#54617a'}}}%%
+flowchart LR
+  __start__((start)):::term
+  library["library"]:::det
+  propose["propose"]:::llm
+  validate{{"validate"}}:::det
+  __end__((end)):::term
+  __start__ --> library
+  library --> propose
+  propose --> validate
+  validate -.-> __end__
+  validate -.-> propose
+  classDef llm fill:#e8e7fb,stroke:#5b57c7,color:#2a2870;
+  classDef vis fill:#dcefef,stroke:#2a8f8f,color:#124d4d;
+  classDef det fill:#e6ebf3,stroke:#5b6b86,color:#2b3750;
+  classDef term fill:#1A2238,stroke:#1A2238,color:#ffffff;
+
+</pre>
+<p><em>Grounding Judge graph — Role 7 — is the prose true?</em></p>
+<pre class="mermaid">
+%%{init:{'theme':'base','themeVariables':{'fontFamily':'Helvetica,Arial,sans-serif','fontSize':'14px','primaryColor':'#eef2f7','primaryBorderColor':'#1A2238','primaryTextColor':'#1A2238','lineColor':'#54617a'}}}%%
+flowchart LR
+  __start__((start)):::term
+  extract["extract"]:::llm
+  adjudicate{{"adjudicate"}}:::det
+  verdict["verdict"]:::det
+  __end__((end)):::term
+  __start__ --> extract
+  adjudicate -.-> extract
+  adjudicate -.-> verdict
+  extract --> adjudicate
+  verdict --> __end__
+  classDef llm fill:#e8e7fb,stroke:#5b57c7,color:#2a2870;
+  classDef vis fill:#dcefef,stroke:#2a8f8f,color:#124d4d;
+  classDef det fill:#e6ebf3,stroke:#5b6b86,color:#2b3750;
+  classDef term fill:#1A2238,stroke:#1A2238,color:#ffffff;
+
+</pre>
+<p><em>ATS commissioning orchestrator (not a StateGraph)</em></p>
+<pre class="mermaid">
+%%{init:{'theme':'base','themeVariables':{'fontFamily':'Helvetica,Arial,sans-serif','fontSize':'14px','primaryColor':'#eef2f7','primaryBorderColor':'#1A2238','primaryTextColor':'#1A2238','lineColor':'#54617a'}}}%%
+flowchart LR
+  __start__((start)):::term
+  harvest["harvest"]:::det
+  map["map"]:::llm
+  readiness{{"readiness"}}:::det
+  score["score"]:::llm
+  shortlist["shortlist"]:::det
+  briefing["briefing"]:::det
+  __end__((end)):::term
+  __start__ --> harvest
+  harvest --> map
+  map --> readiness
+  readiness --> score
+  score --> shortlist
+  shortlist --> briefing
+  briefing --> __end__
+  classDef llm fill:#e8e7fb,stroke:#5b57c7,color:#2a2870;
+  classDef vis fill:#dcefef,stroke:#2a8f8f,color:#124d4d;
+  classDef det fill:#e6ebf3,stroke:#5b6b86,color:#2b3750;
+  classDef term fill:#1A2238,stroke:#1A2238,color:#ffffff;
+
+</pre>
+<h2>The pipeline, end to end</h2>
+<p>The article graph threads a single <code>ArticleState</code> object through its nodes. Its design
+intent, quoted in the source: charts, prose, and the dashboard are <em>projections of ONE
+state rather than three artifacts built from three unsynchronised sources</em>. The <code>draft</code>
+node is an atomic best-of-N loop — write, ground, critique, keep-best — and the two
+<code>reconcile_*</code> nodes are the consistency stage the predecessor never had: they build the
+charts the prose actually names and derive the dashboard from the finished article.</p>
+<p>The DAG below is extracted from the compiled <code>article_graph</code>; node colour is its kind
+(LLM / vision / deterministic) and hexagons mark gates.</p>
+<p><em>Article pipeline — extracted from the compiled graph</em></p>
+<pre class="mermaid">
+%%{init:{'theme':'base','themeVariables':{'fontFamily':'Helvetica,Arial,sans-serif','fontSize':'14px','primaryColor':'#eef2f7','primaryBorderColor':'#1A2238','primaryTextColor':'#1A2238','lineColor':'#54617a'}}}%%
+flowchart TB
+  __start__((start)):::term
+  material["material"]:::det
+  brief["brief"]:::det
+  plan["plan"]:::llm
+  draft["draft"]:::llm
+  reconcile_charts["reconcile_charts"]:::det
+  illustrate["illustrate"]:::vis
+  reconcile_dashboard["reconcile_dashboard"]:::det
+  assemble["assemble"]:::det
+  __end__((end)):::term
+  __start__ --> material
+  assemble --> __end__
+  brief --> plan
+  draft --> reconcile_charts
+  illustrate --> reconcile_dashboard
+  material --> brief
+  plan --> draft
+  reconcile_charts --> illustrate
+  reconcile_dashboard --> assemble
+  classDef llm fill:#e8e7fb,stroke:#5b57c7,color:#2a2870;
+  classDef vis fill:#dcefef,stroke:#2a8f8f,color:#124d4d;
+  classDef det fill:#e6ebf3,stroke:#5b6b86,color:#2b3750;
+  classDef term fill:#1A2238,stroke:#1A2238,color:#ffffff;
+
+</pre>
+<h2>Chart Studio: choosing form as a reasoning problem</h2>
+<p>The Studio's premise, from its <code>__init__</code>: <em>&quot;chart choice is a reasoning problem, not a
+lookup table.&quot;</em> The insight — <em>what</em> to show — is authored upstream; the Studio chooses
+the <strong>form</strong>: mark, encoding, and the editorial layer (reference lines, regime shading,
+direct labels) that separates craft from &quot;a muppet with the FT&quot;. Its DAG has two bounded
+loops and — critically — a <strong>vision</strong> pass that looks at the rendered pixels.</p>
+<p>The state machine and capability matrix below are extracted from the compiled <code>studio</code>
+graph and a static read of its nodes.</p>
+<p><em>Chart Studio state machine — extracted from the compiled graph</em></p>
+<pre class="mermaid">
+%%{init:{'theme':'base','themeVariables':{'fontFamily':'Helvetica,Arial,sans-serif','fontSize':'14px','primaryColor':'#eef2f7','primaryBorderColor':'#1A2238','primaryTextColor':'#1A2238','lineColor':'#54617a'}}}%%
+flowchart LR
+  __start__((start)):::term
+  framer["framer"]:::llm
+  proposer["proposer"]:::llm
+  critic_panel["critic_panel"]:::llm
+  compile["compile"]:::det
+  critique{{"critique"}}:::vis
+  reviser["reviser"]:::llm
+  judge{{"judge"}}:::vis
+  __end__((end)):::term
+  __start__ --> framer
+  compile --> critique
+  critic_panel --> compile
+  critique -.-> judge
+  critique -.-> reviser
+  framer --> proposer
+  judge -.-> __end__
+  judge -.-> proposer
+  proposer --> critic_panel
+  reviser --> compile
+  classDef llm fill:#e8e7fb,stroke:#5b57c7,color:#2a2870;
+  classDef vis fill:#dcefef,stroke:#2a8f8f,color:#124d4d;
+  classDef det fill:#e6ebf3,stroke:#5b6b86,color:#2b3750;
+  classDef term fill:#1A2238,stroke:#1A2238,color:#ffffff;
+
+</pre>
+<h3>Chart Studio — node capability matrix</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+  <th>Node</th>
+  <th>Kind</th>
+  <th>Gate</th>
+  <th>Schema</th>
+  <th>Model</th>
+  <th>Temp</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>framer</td>
+  <td>LLM</td>
+  <td>—</td>
+  <td>Frame</td>
+  <td>claude-opus-4-8</td>
+  <td>0.2</td>
+</tr>
+<tr>
+  <td>proposer</td>
+  <td>LLM</td>
+  <td>—</td>
+  <td>ChartEncoding</td>
+  <td>claude-opus-4-8</td>
+  <td>0.5</td>
+</tr>
+<tr>
+  <td>critic_panel</td>
+  <td>LLM</td>
+  <td>—</td>
+  <td>PanelVerdict</td>
+  <td>claude-opus-4-8</td>
+  <td>0.2</td>
+</tr>
+<tr>
+  <td>compile</td>
+  <td>DET</td>
+  <td>—</td>
+  <td>—</td>
+  <td>—</td>
+  <td>—</td>
+</tr>
+<tr>
+  <td>critique</td>
+  <td>VISION</td>
+  <td>yes</td>
+  <td>VisualCritique</td>
+  <td>claude-opus-4-8</td>
+  <td>0.1</td>
+</tr>
+<tr>
+  <td>reviser</td>
+  <td>LLM</td>
+  <td>—</td>
+  <td>ChartEncoding</td>
+  <td>claude-opus-4-8</td>
+  <td>0.2</td>
+</tr>
+<tr>
+  <td>judge</td>
+  <td>VISION</td>
+  <td>yes</td>
+  <td>Judgment</td>
+  <td>claude-opus-4-8</td>
+  <td>0.1</td>
+</tr>
+</tbody>
+</table></div>
+<h2>The GraphRAG model spine</h2>
+<p>The live GraphRAG in this system is the <strong>Neo4j model spine</strong>. A <code>Model</code> node carries
+<code>executable:true</code> <em>only after it actually ran</em>, alongside the run's <code>points</code> and
+<code>as_of</code>. The selector's retrieval returns that closed set, and the LLM chooses among it.
+It <em>cannot</em> pick a model that does not exist or cannot run, because it is never offered
+one. The retrieval query:</p>
+<pre><code>MATCH (m:Model {catalog:'horizon3', executable:true})
+OPTIONAL MATCH (m)-[:PRODUCES]-&gt;(o:Output)
+OPTIONAL MATCH (m)-[:RENDERS]-&gt;(v:Visualization)
+RETURN m.id, m.name, m.family, m.points, m.as_of, collect(o.name), collect(v.insight)
+</code></pre>
+<blockquote>
+<p><strong>Honesty note — read before citing &quot;RAG&quot;:</strong> the Neo4j spine is the only retrieval
+that feeds an agent at runtime. The <strong>ChromaDB corpus under <code>knowledge/</code> is
+design-time grounding only</strong> — it is queried by humans, not imported by any node in
+<code>render/</code>. A runtime literature-RAG is a planned future step, not a shipped feature.</p>
+</blockquote>
+<p>The census below is read live from <code>bolt://localhost:7688</code>. If the spine is offline when
+this doc is built, the counts are omitted and this section says so — the doc still
+renders.</p>
+<p><strong>32</strong> executable-catalog models · <strong>50</strong> proven model×jurisdiction cells · labels: <code>DataSeries</code>, <code>Decision</code>, <code>DecisionMaker</code>, <code>Jurisdiction</code>, <code>Model</code>, <code>Output</code>, <code>Role</code>, <code>Visualization</code> · relationships: <code>EXECUTABLE_IN</code>, <code>INFORMS</code>, <code>NEEDS</code>, <code>NEEDS_SERIES</code>, <code>PRODUCES</code>, <code>RENDERS</code>, <code>USES</code></p>
+<h3>Executable models by family</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+  <th>Model family</th>
+  <th>Executable models</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>macro</td>
+  <td>8</td>
+</tr>
+<tr>
+  <td>rates</td>
+  <td>7</td>
+</tr>
+<tr>
+  <td>credit</td>
+  <td>6</td>
+</tr>
+<tr>
+  <td>vol</td>
+  <td>4</td>
+</tr>
+<tr>
+  <td>commodity</td>
+  <td>3</td>
+</tr>
+<tr>
+  <td>cross_asset</td>
+  <td>3</td>
+</tr>
+<tr>
+  <td>equity</td>
+  <td>1</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Executable coverage by jurisdiction</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+  <th>Jurisdiction</th>
+  <th>Currency</th>
+  <th>Executable models</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>US</td>
+  <td>USD</td>
+  <td>32</td>
+</tr>
+<tr>
+  <td>EU</td>
+  <td>EUR</td>
+  <td>6</td>
+</tr>
+<tr>
+  <td>GB</td>
+  <td>GBP</td>
+  <td>6</td>
+</tr>
+<tr>
+  <td>JP</td>
+  <td>JPY</td>
+  <td>6</td>
+</tr>
+<tr>
+  <td>AU</td>
+  <td>AUD</td>
+  <td>0</td>
+</tr>
+<tr>
+  <td>CA</td>
+  <td>CAD</td>
+  <td>0</td>
+</tr>
+<tr>
+  <td>CH</td>
+  <td>CHF</td>
+  <td>0</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Data gaps (roles missing in a jurisdiction)</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+  <th>Jurisdiction</th>
+  <th>Missing role</th>
+  <th>Models blocked</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>AU</td>
+  <td>headline_cpi</td>
+  <td>real_yield_term, phillips_curve, monetary_stance_lite, economies_scorecard</td>
+</tr>
+<tr>
+  <td>AU</td>
+  <td>leading_indicator</td>
+  <td>economies_scorecard</td>
+</tr>
+<tr>
+  <td>AU</td>
+  <td>long_yield_10y</td>
+  <td>recession_signal, real_yield_term, economies_scorecard</td>
+</tr>
+<tr>
+  <td>AU</td>
+  <td>unemployment_rate</td>
+  <td>sahm_rule, phillips_curve, economies_scorecard</td>
+</tr>
+<tr>
+  <td>CA</td>
+  <td>headline_cpi</td>
+  <td>real_yield_term, phillips_curve, monetary_stance_lite, economies_scorecard</td>
+</tr>
+<tr>
+  <td>CA</td>
+  <td>leading_indicator</td>
+  <td>economies_scorecard</td>
+</tr>
+<tr>
+  <td>CA</td>
+  <td>long_yield_10y</td>
+  <td>recession_signal, real_yield_term, economies_scorecard</td>
+</tr>
+<tr>
+  <td>CA</td>
+  <td>unemployment_rate</td>
+  <td>sahm_rule, phillips_curve, economies_scorecard</td>
+</tr>
+<tr>
+  <td>CH</td>
+  <td>headline_cpi</td>
+  <td>real_yield_term, phillips_curve, monetary_stance_lite, economies_scorecard</td>
+</tr>
+<tr>
+  <td>CH</td>
+  <td>leading_indicator</td>
+  <td>economies_scorecard</td>
+</tr>
+<tr>
+  <td>CH</td>
+  <td>long_yield_10y</td>
+  <td>recession_signal, real_yield_term, economies_scorecard</td>
+</tr>
+<tr>
+  <td>CH</td>
+  <td>unemployment_rate</td>
+  <td>sahm_rule, phillips_curve, economies_scorecard</td>
+</tr>
+</tbody>
+</table></div>
+<h2>How the agents are instructed</h2>
+<p>Prompts here are inline string literals inside each <code>nodes.py</code>, paired with a Pydantic
+model via LangChain's <code>.with_structured_output(Model)</code>. There are no classic
+function-calling tools — <strong>the structured-output schema <em>is</em> the tool surface</strong>, and
+each schema's <code>Field(description=…)</code> text is itself part of the prompt.</p>
+<p>The catalogue below is extracted statically: for each LLM/vision node, its
+structured-output schema, the resolved model, and the <strong>declared</strong> temperature.
+Note: <code>get_llm()</code> ignores temperature at runtime (Opus 4.8), so the value is shown for
+call-site clarity, not runtime behaviour. The schema field tables that follow are pulled
+from wherever each Pydantic class is actually defined.</p>
+<p><strong>The principles the prompts encode:</strong> LLM proposes / deterministic code disposes ·
+start from the message, not a chart you like · never author a number (enforced in code) ·
+look at the rendered pixels · constrain to a closed, proven vocabulary · feed rejection
+reasons back as input rather than re-asking.</p>
+<h3>Prompt catalogue</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+  <th>Graph</th>
+  <th>Node</th>
+  <th>Kind</th>
+  <th>Schema</th>
+  <th>Model</th>
+  <th>Temp</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>article_graph</td>
+  <td>plan</td>
+  <td>LLM</td>
+  <td>—</td>
+  <td>—</td>
+  <td>—</td>
+</tr>
+<tr>
+  <td>article_graph</td>
+  <td>draft</td>
+  <td>LLM</td>
+  <td>—</td>
+  <td>—</td>
+  <td>—</td>
+</tr>
+<tr>
+  <td>article_graph</td>
+  <td>illustrate</td>
+  <td>VISION</td>
+  <td>—</td>
+  <td>—</td>
+  <td>—</td>
+</tr>
+<tr>
+  <td>selector</td>
+  <td>propose</td>
+  <td>LLM</td>
+  <td>Picks</td>
+  <td>claude-opus-4-8</td>
+  <td>—</td>
+</tr>
+<tr>
+  <td>studio</td>
+  <td>framer</td>
+  <td>LLM</td>
+  <td>Frame</td>
+  <td>claude-opus-4-8</td>
+  <td>0.2</td>
+</tr>
+<tr>
+  <td>studio</td>
+  <td>proposer</td>
+  <td>LLM</td>
+  <td>ChartEncoding</td>
+  <td>claude-opus-4-8</td>
+  <td>0.5</td>
+</tr>
+<tr>
+  <td>studio</td>
+  <td>critic_panel</td>
+  <td>LLM</td>
+  <td>PanelVerdict</td>
+  <td>claude-opus-4-8</td>
+  <td>0.2</td>
+</tr>
+<tr>
+  <td>studio</td>
+  <td>critique</td>
+  <td>VISION</td>
+  <td>VisualCritique</td>
+  <td>claude-opus-4-8</td>
+  <td>0.1</td>
+</tr>
+<tr>
+  <td>studio</td>
+  <td>reviser</td>
+  <td>LLM</td>
+  <td>ChartEncoding</td>
+  <td>claude-opus-4-8</td>
+  <td>0.2</td>
+</tr>
+<tr>
+  <td>studio</td>
+  <td>judge</td>
+  <td>VISION</td>
+  <td>Judgment</td>
+  <td>claude-opus-4-8</td>
+  <td>0.1</td>
+</tr>
+<tr>
+  <td>judge</td>
+  <td>extract</td>
+  <td>LLM</td>
+  <td>Claims</td>
+  <td>claude-opus-4-8</td>
+  <td>0</td>
+</tr>
+</tbody>
+</table></div>
+<h3>Structured-output schemas (the tool surface)</h3>
+<p><strong><code>ChartEncoding</code></strong> — <code>render/studio/encoding.py</code></p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+  <th>Field</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>title</td>
+  <td>—</td>
+</tr>
+<tr>
+  <td>subtitle</td>
+  <td>—</td>
+</tr>
+<tr>
+  <td>message</td>
+  <td>The single communicative job, one sentence (compare/trend/spread/relationship/rank/part-to-whole).</td>
+</tr>
+<tr>
+  <td>mark</td>
+  <td>—</td>
+</tr>
+<tr>
+  <td>encoding</td>
+  <td>—</td>
+</tr>
+<tr>
+  <td>color_job</td>
+  <td>—</td>
+</tr>
+<tr>
+  <td>annotations</td>
+  <td>—</td>
+</tr>
+<tr>
+  <td>source_note</td>
+  <td>Provenance line, e.g. model + papers + as-of date.</td>
+</tr>
+<tr>
+  <td>rationale</td>
+  <td>Why this form/encoding carries the insight better than the alternatives.</td>
+</tr>
+<tr>
+  <td>data</td>
+  <td>Long-form rows; every value from an executed model output — the LLM never authors a number.</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong><code>Claims</code></strong> — <code>render/judge/claims.py</code></p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+  <th>Field</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>claims</td>
+  <td>—</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong><code>Frame</code></strong> — <code>render/studio/nodes.py</code></p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+  <th>Field</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>message</td>
+  <td>The ONE thing the chart must say, one sentence, naming the communicative job (compare/trend/spread/relationship/part-to-whole/rank/divergence).</td>
+</tr>
+<tr>
+  <td>candidate_marks</td>
+  <td>2–3 chart FORMS worth proposing for this message+data-shape, from: line, area, bar, grouped_bar, dumbbell, slope, point, connected_scatter, bubble, heatmap, ridgeline, waterfall. Ordered best-first. Avoid defaulting to line/bar unless the data genuinely calls for it.</td>
+</tr>
+<tr>
+  <td>reasoning</td>
+  <td>Why these forms fit the message and the number/shape of variables.</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong><code>Judgment</code></strong> — <code>render/studio/nodes.py</code></p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+  <th>Field</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>verdict</td>
+  <td>True = ships (expressive, effective, carries the insight, and is differentiated — not something a muppet with the FT could reproduce).</td>
+</tr>
+<tr>
+  <td>notes</td>
+  <td>One or two sentences justifying the verdict against those criteria.</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong><code>PanelVerdict</code></strong> — <code>render/studio/nodes.py</code></p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+  <th>Field</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>chosen_index</td>
+  <td>0-based index of the winning candidate.</td>
+</tr>
+<tr>
+  <td>rationale</td>
+  <td>Consensus of the three experts: why this encoding carries the insight best (effectiveness + insight-carriage + differentiation vs a vanilla default).</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong><code>Picks</code></strong> — <code>render/selector/state.py</code></p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+  <th>Field</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>picks</td>
+  <td>—</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong><code>VisualCritique</code></strong> — <code>render/studio/nodes.py</code></p>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+  <th>Field</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>ok</td>
+  <td>True if the rendered chart is clean and reads clearly with no defects worth fixing. If omitted, inferred from whether defects were listed.</td>
+</tr>
+<tr>
+  <td>defects</td>
+  <td>Concrete rendered-pixel problems: label collisions, occlusion, clipped/overshooting axes, unreadable spaghetti, a legend that duplicates direct labels, a near-empty panel, etc.</td>
+</tr>
+<tr>
+  <td>fixes</td>
+  <td>Specific, encoding-level changes to fix each defect (e.g. 'set y scale.domain to [-1,6]', 'drop the legend, keep direct labels', 'switch color_job to diverging').</td>
+</tr>
+</tbody>
+</table></div>
+<h2>Where the system refuses to ship</h2>
+<p>Agentic systems are defined as much by their gates as their generators. A gate here is a
+node that is the source of a conditional edge — it routes forward only when its criterion
+is met, and loops back otherwise. The table is derived from the compiled graphs'
+conditional edges.</p>
+<h3>Quality gates</h3>
+<div class="tablewrap"><table>
+<thead>
+<tr>
+  <th>Graph</th>
+  <th>Gate node</th>
+  <th>Kind</th>
+  <th>Routes to (conditional)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>selector</td>
+  <td>validate</td>
+  <td>DET</td>
+  <td>END, propose</td>
+</tr>
+<tr>
+  <td>studio</td>
+  <td>critique</td>
+  <td>VISION</td>
+  <td>judge, reviser</td>
+</tr>
+<tr>
+  <td>studio</td>
+  <td>judge</td>
+  <td>VISION</td>
+  <td>END, proposer</td>
+</tr>
+<tr>
+  <td>judge</td>
+  <td>adjudicate</td>
+  <td>DET</td>
+  <td>extract, verdict</td>
+</tr>
+</tbody>
+</table></div>
+<h2>Where this design is grounded</h2>
+<p>This document is generated by <code>render/sysdoc/</code> — a living-documentation generator that
+extracts the volatile machine-truth (LangGraph DAGs via <code>get_graph().draw_mermaid()</code>,
+the Neo4j spine census, an AST read of the prompts) into a versioned manifest, then
+renders it into this stable narrative shell. A drift-gate
+(<code>scripts/check_sysdoc_drift.py</code>) keeps the doc from silently diverging from the code
+between commits; <code>--changelog</code> reports what changed between two versions.</p>
+<p>The documentation form follows the state of the art for agentic + GraphRAG systems:
+C4-for-agentic-AI (draw the LLM explicitly; model gates as first-class nodes; render
+prompts as tables; colour node kinds), the three-card framing, the GraphRAG three-stage
+pipeline shape, docs-as-code / living documentation, and prompt-documentation practice.</p>
+<p><em>Horizon3 · Lucidate Ltd · internal design document · generated from <code>render/</code>.
+&quot;Done&quot; means a human looked at the output and it is good.</em></p>
+
+</main>
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+  mermaid.initialize({ startOnLoad: true, securityLevel: 'loose' });
+</script>
+<script>
+  (function(){
+    var b=document.getElementById('themebtn');
+    if(!b)return;
+    b.addEventListener('click',function(){
+      var r=document.documentElement;
+      var cur=r.getAttribute('data-theme')|| (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+      r.setAttribute('data-theme', cur==='dark'?'light':'dark');
+    });
+  })();
+</script>
+
+</body>
+</html>
