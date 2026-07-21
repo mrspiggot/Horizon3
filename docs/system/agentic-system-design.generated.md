@@ -1,4 +1,4 @@
-> **Version** `0.0.1` · commit `b8b25ed` (feat/sysdoc-living-docs) · generated 2026-07-21T09:17:31+00:00
+> **Version** `0.0.1` · commit `6356821` (main) · generated 2026-07-21T09:48:46+00:00
 
 # An engine where the LLM never authors a number
 
@@ -299,7 +299,7 @@ The census below is read live from `bolt://localhost:7688`. If the spine is offl
 this doc is built, the counts are omitted and this section says so — the doc still
 renders.
 
-**32** executable-catalog models · **50** proven model×jurisdiction cells · labels: `DataSeries`, `Decision`, `DecisionMaker`, `Jurisdiction`, `Model`, `Output`, `Role`, `Visualization` · relationships: `EXECUTABLE_IN`, `INFORMS`, `NEEDS`, `NEEDS_SERIES`, `PRODUCES`, `RENDERS`, `USES`
+**32** executable-catalog models · **53** proven model×jurisdiction cells · labels: `DataSeries`, `Decision`, `DecisionMaker`, `Jurisdiction`, `Model`, `Output`, `Role`, `Visualization` · relationships: `EXECUTABLE_IN`, `INFORMS`, `NEEDS`, `NEEDS_SERIES`, `PRODUCES`, `RENDERS`, `USES`
 
 ### Executable models by family
 
@@ -318,9 +318,9 @@ renders.
 | Jurisdiction | Currency | Executable models |
 | --- | --- | --- |
 | US | USD | 32 |
-| EU | EUR | 6 |
-| GB | GBP | 6 |
-| JP | JPY | 6 |
+| EU | EUR | 7 |
+| GB | GBP | 7 |
+| JP | JPY | 7 |
 | AU | AUD | 0 |
 | CA | CAD | 0 |
 | CH | CHF | 0 |
@@ -329,17 +329,20 @@ renders.
 
 | Jurisdiction | Missing role | Models blocked |
 | --- | --- | --- |
-| AU | headline_cpi | real_yield_term, phillips_curve, monetary_stance_lite, economies_scorecard |
+| AU | headline_cpi | real_yield_term, reaction_function, phillips_curve, monetary_stance_lite, economies_scorecard |
 | AU | leading_indicator | economies_scorecard |
 | AU | long_yield_10y | recession_signal, real_yield_term, economies_scorecard |
+| AU | output_gap | reaction_function |
 | AU | unemployment_rate | sahm_rule, phillips_curve, economies_scorecard |
-| CA | headline_cpi | real_yield_term, phillips_curve, monetary_stance_lite, economies_scorecard |
+| CA | headline_cpi | real_yield_term, reaction_function, phillips_curve, monetary_stance_lite, economies_scorecard |
 | CA | leading_indicator | economies_scorecard |
 | CA | long_yield_10y | recession_signal, real_yield_term, economies_scorecard |
+| CA | output_gap | reaction_function |
 | CA | unemployment_rate | sahm_rule, phillips_curve, economies_scorecard |
-| CH | headline_cpi | real_yield_term, phillips_curve, monetary_stance_lite, economies_scorecard |
+| CH | headline_cpi | real_yield_term, reaction_function, phillips_curve, monetary_stance_lite, economies_scorecard |
 | CH | leading_indicator | economies_scorecard |
 | CH | long_yield_10y | recession_signal, real_yield_term, economies_scorecard |
+| CH | output_gap | reaction_function |
 | CH | unemployment_rate | sahm_rule, phillips_curve, economies_scorecard |
 
 ## How the agents are instructed

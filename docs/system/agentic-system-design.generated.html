@@ -55,10 +55,10 @@ td code,th code{font-size:.82em;}
 </style>
 </head>
 <body>
-<div class="topbar"><span>Horizon3 · <b>Agentic System Design</b></span><span class="sp"></span><span style="color:var(--muted)">0.0.1 · b8b25ed</span><button class="themebtn" id="themebtn">◑ theme</button></div>
+<div class="topbar"><span>Horizon3 · <b>Agentic System Design</b></span><span class="sp"></span><span style="color:var(--muted)">0.0.1 · 6356821</span><button class="themebtn" id="themebtn">◑ theme</button></div>
 <main class="doc">
 <blockquote>
-<p><strong>Version</strong> <code>0.0.1</code> · commit <code>b8b25ed</code> (feat/sysdoc-living-docs) · generated 2026-07-21T09:17:31+00:00</p>
+<p><strong>Version</strong> <code>0.0.1</code> · commit <code>6356821</code> (main) · generated 2026-07-21T09:48:46+00:00</p>
 </blockquote>
 <h1>An engine where the LLM never authors a number</h1>
 <p><em>Internal design document · model → data → insight → decision</em></p>
@@ -436,7 +436,7 @@ design-time grounding only</strong> — it is queried by humans, not imported by
 <p>The census below is read live from <code>bolt://localhost:7688</code>. If the spine is offline when
 this doc is built, the counts are omitted and this section says so — the doc still
 renders.</p>
-<p><strong>32</strong> executable-catalog models · <strong>50</strong> proven model×jurisdiction cells · labels: <code>DataSeries</code>, <code>Decision</code>, <code>DecisionMaker</code>, <code>Jurisdiction</code>, <code>Model</code>, <code>Output</code>, <code>Role</code>, <code>Visualization</code> · relationships: <code>EXECUTABLE_IN</code>, <code>INFORMS</code>, <code>NEEDS</code>, <code>NEEDS_SERIES</code>, <code>PRODUCES</code>, <code>RENDERS</code>, <code>USES</code></p>
+<p><strong>32</strong> executable-catalog models · <strong>53</strong> proven model×jurisdiction cells · labels: <code>DataSeries</code>, <code>Decision</code>, <code>DecisionMaker</code>, <code>Jurisdiction</code>, <code>Model</code>, <code>Output</code>, <code>Role</code>, <code>Visualization</code> · relationships: <code>EXECUTABLE_IN</code>, <code>INFORMS</code>, <code>NEEDS</code>, <code>NEEDS_SERIES</code>, <code>PRODUCES</code>, <code>RENDERS</code>, <code>USES</code></p>
 <h3>Executable models by family</h3>
 <div class="tablewrap"><table>
 <thead>
@@ -494,17 +494,17 @@ renders.</p>
 <tr>
   <td>EU</td>
   <td>EUR</td>
-  <td>6</td>
+  <td>7</td>
 </tr>
 <tr>
   <td>GB</td>
   <td>GBP</td>
-  <td>6</td>
+  <td>7</td>
 </tr>
 <tr>
   <td>JP</td>
   <td>JPY</td>
-  <td>6</td>
+  <td>7</td>
 </tr>
 <tr>
   <td>AU</td>
@@ -536,7 +536,7 @@ renders.</p>
 <tr>
   <td>AU</td>
   <td>headline_cpi</td>
-  <td>real_yield_term, phillips_curve, monetary_stance_lite, economies_scorecard</td>
+  <td>real_yield_term, reaction_function, phillips_curve, monetary_stance_lite, economies_scorecard</td>
 </tr>
 <tr>
   <td>AU</td>
@@ -547,6 +547,11 @@ renders.</p>
   <td>AU</td>
   <td>long_yield_10y</td>
   <td>recession_signal, real_yield_term, economies_scorecard</td>
+</tr>
+<tr>
+  <td>AU</td>
+  <td>output_gap</td>
+  <td>reaction_function</td>
 </tr>
 <tr>
   <td>AU</td>
@@ -556,7 +561,7 @@ renders.</p>
 <tr>
   <td>CA</td>
   <td>headline_cpi</td>
-  <td>real_yield_term, phillips_curve, monetary_stance_lite, economies_scorecard</td>
+  <td>real_yield_term, reaction_function, phillips_curve, monetary_stance_lite, economies_scorecard</td>
 </tr>
 <tr>
   <td>CA</td>
@@ -567,6 +572,11 @@ renders.</p>
   <td>CA</td>
   <td>long_yield_10y</td>
   <td>recession_signal, real_yield_term, economies_scorecard</td>
+</tr>
+<tr>
+  <td>CA</td>
+  <td>output_gap</td>
+  <td>reaction_function</td>
 </tr>
 <tr>
   <td>CA</td>
@@ -576,7 +586,7 @@ renders.</p>
 <tr>
   <td>CH</td>
   <td>headline_cpi</td>
-  <td>real_yield_term, phillips_curve, monetary_stance_lite, economies_scorecard</td>
+  <td>real_yield_term, reaction_function, phillips_curve, monetary_stance_lite, economies_scorecard</td>
 </tr>
 <tr>
   <td>CH</td>
@@ -587,6 +597,11 @@ renders.</p>
   <td>CH</td>
   <td>long_yield_10y</td>
   <td>recession_signal, real_yield_term, economies_scorecard</td>
+</tr>
+<tr>
+  <td>CH</td>
+  <td>output_gap</td>
+  <td>reaction_function</td>
 </tr>
 <tr>
   <td>CH</td>
