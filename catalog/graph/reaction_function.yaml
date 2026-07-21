@@ -1,27 +1,31 @@
 model_id: reaction_function
-name: "Taylor-rule reaction function"
+name: "Taylor-rule reaction function (cross-country)"
 family: rates
 persona: central_bank_policymaker
 grounded_in: [taylor-1993-rule, hlw-natural-rate]
 method: published
-method_note: "Taylor (1993) rule variants — the actual equation"
+method_note: >
+  Taylor (1993) rule variants — the actual equation, run jurisdiction-generically. Where the US-welded
+  version bootstrapped the activity term from GDPC1/GDPPOT, this version binds the OECD Economic Outlook
+  OUTPUT GAP directly (a published estimate, not an LLM number), so the same rule runs for the Fed, ECB,
+  BoE and BoJ. Inflation is headline CPI year-on-year — the measure the ECB (HICP) and BoE (CPI) actually
+  target at 2%, and a consistent cross-country gauge (the canonical Fed formulation uses core PCE). All
+  four majors share the 2% target. The neutral real rate r* is held at a common ~0.7% as a documented
+  simplification; a country-specific r* (Holston-Laubach-Williams) is the next data tier. The article's
+  headline output — the prescription MINUS the actual rate — is directionally robust to r*: it is what
+  flags, e.g., the BoJ as the standout running far below any reaction function.
 spec:
   equations: "i* = r* + pi + 0.5(pi - pi*) + 0.5*gap ; inertial i_t = rho*i_{t-1} + (1-rho)*i*"
   params: {r_star_pct: 0.7, inflation_target_pct: 2.0}
-history: {start: "1960-01", end: "2026-05"}
+history: {start: "1960-01", end: "2026-06"}
+instances: [US, EU, GB, JP]
 inputs:
-  - {id: cpi, series_id: PCEPILFE, db_source: fred, transform: yoy, state: level, context_window: 36}
-  - {id: real_gdp, series_id: GDPC1, db_source: fred, state: level}
-  - {id: potential_gdp, series_id: GDPPOT, db_source: fred, state: level, as_of_from: real_gdp}
-  - {id: policy, series_id: FEDFUNDS, db_source: fred, state: level}
-  - id: gap
-    source: derived
-    compute:
-      fn: unified_market_data.analysis.reaction_function.output_gap_pct
-      args: {gdp: real_gdp.level, potential_gdp: potential_gdp.level}
+  - {id: cpi,    role: headline_cpi, transform: yoy, state: level, context_window: 36}
+  - {id: gap,    role: output_gap,                   state: level, context_window: 40}
+  - {id: policy, role: policy_rate,                  state: level}
 execution:
   implemented_by: unified_market_data.analysis.reaction_function.taylor_variants
-  args: {inflation_pct: cpi.level, output_gap_pct_: gap, prev_rate: policy.level}
+  args: {inflation_pct: cpi.level, output_gap_pct_: gap.level, prev_rate: policy.level}
 outputs:
   - {name: taylor_1993, unit: "%", meaning: "1993-rule prescribed policy rate"}
   - {name: balanced_approach, unit: "%", meaning: "balanced-approach rule (2x gap weight)"}
@@ -29,20 +33,23 @@ outputs:
 interpretations:
   - id: behind_the_curve
     when: "taylor_1993 - policy.level > 1.0"
-    says: "Policy sits more than 100bp below the 1993 rule — the Fed is running easier than the rule prescribes."
+    says: "Policy sits more than 100bp below the 1993 rule — the central bank is running easier than the rule prescribes."
+  - id: ahead_of_the_curve
+    when: "policy.level - taylor_1993 > 1.0"
+    says: "Policy sits more than 100bp above the 1993 rule — the central bank is running tighter than the rule prescribes."
 charts:
   - id: "The model's inputs — inflation & the output gap"
     role: input
     chart_type: series
     color_job: categorical
-    insight: "the two state variables the rule ingests: core PCE inflation and the output gap"
+    insight: "the two state variables the rule ingests: headline CPI inflation and the OECD output gap"
     data_contract:
       kind: series
       ylabel: "%"
       zero_line: true
       series:
-        - {label: "core PCE YoY", from: "input:cpi.level"}
-        - {label: "output gap", from: "input:gap"}
+        - {label: "headline CPI YoY", from: "input:cpi.level"}
+        - {label: "output gap", from: "input:gap.level"}
   - id: "The inputs as §10 STATES — inflation momentum & acceleration"
     role: input
     chart_type: series
@@ -60,7 +67,7 @@ charts:
     chart_type: series
     color_job: categorical
     interpretation: behind_the_curve
-    insight: "what Taylor (1993) and its variants prescribe from those inputs, vs where the Fed actually set policy"
+    insight: "what Taylor (1993) and its variants prescribe from those inputs, vs where the central bank actually set policy"
     data_contract:
       kind: series
       ylabel: "policy rate (%)"
@@ -68,18 +75,18 @@ charts:
         - {label: "Taylor '93", from: "output:taylor_1993"}
         - {label: "Balanced-approach", from: "output:balanced_approach"}
         - {label: "Inertial rule", from: "output:inertial"}
-        - {label: "Fed funds (actual)", from: "input:policy.level", style: dashed}
-  - id: "The consequence — how far the Fed is from its own rule"
+        - {label: "Policy rate (actual)", from: "input:policy.level", style: dashed}
+  - id: "The consequence — how far the central bank is from its own rule"
     role: consequence
     chart_type: gap_series
     color_job: diverging
     interpretation: behind_the_curve
-    insight: "the prescription-minus-actual gap IS the trade: a Fed running below the rule is the case to be short duration"
-    pos_label: "Fed BELOW its own rule (easier than prescribed)"
-    neg_label: "Fed ABOVE its own rule (tighter than prescribed)"
+    insight: "the prescription-minus-actual gap IS the trade: a central bank running below the rule is the case to be short duration"
+    pos_label: "Policy BELOW the rule (easier than prescribed)"
+    neg_label: "Policy ABOVE the rule (tighter than prescribed)"
     data_contract:
       kind: gap_series
       ylabel: "percentage points"
-      label: "Taylor '93 - funds"
+      label: "Taylor '93 - policy"
       minuend: "output:taylor_1993"
       subtrahend: "input:policy.level"

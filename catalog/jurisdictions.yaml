@@ -19,6 +19,7 @@ roles:
   core_inflation:           {kind: observations, optional: true, desc: "Core inflation index (yoy computed = Taylor π). US = PCEPILFE (core PCE)."}
   real_gdp:                 {kind: observations, optional: true, desc: "Real GDP — output-gap numerator. US = GDPC1."}
   potential_gdp:            {kind: observations, optional: true, desc: "Potential real GDP — output-gap denominator. US = GDPPOT. DATE-ALIGN with real_gdp (projections run to 2036)."}
+  output_gap:               {kind: observations, optional: true, desc: "Output gap (% of potential GDP), OECD Economic Outlook (DSD_EO@DF_EO). The Taylor-rule activity term bound DIRECTLY — no real/potential-GDP bootstrap. Cross-country US/EU/GB/JP via OECD_EXP_GAP_* (euro area = EA17). Projection years dropped at ingest."}
   macro_release:            {kind: computed,     optional: true, desc: "Macro release actual/expected/surprise (macro_events). Surprise-vs-consensus input."}
   macro_indicators:         {kind: computed,     optional: true, desc: "Macro indicator set (growth/inflation/labour) for regime classification."}
   overnight_index:          {kind: observations, desc: "RFR overnight fixing (SOFR/ESTR/SONIA/...)."}
@@ -52,6 +53,7 @@ jurisdictions:
       core_inflation:           {ref: "PCEPILFE",           source: observations, note: "Core PCE index; yoy = Taylor π."}
       real_gdp:                 {ref: "GDPC1",              source: observations}
       potential_gdp:            {ref: "GDPPOT",             source: observations, note: "Date-align with real_gdp."}
+      output_gap:               {ref: "OECD_EXP_GAP_USA",   source: oecd_expanded, note: "OECD EO output gap, % of potential GDP."}
       macro_release:            {ref: "macro_events",       source: computed, note: "actual/expected/surprise (48 events)."}
       macro_indicators:         {ref: "us_macro",           source: computed, note: "growth/inflation/labour set for regime."}
       overnight_index:          {ref: "SOFR",               source: observations}
@@ -90,6 +92,7 @@ jurisdictions:
       headline_cpi:             {ref: "CP0000EZ19M086NEST", source: fred, note: "Euro-area HICP (Eurostat), from 1996; yoy = HICP inflation."}
       long_yield_10y:           {ref: "IRLTLT01DEM156N",    source: fred, note: "German 10y Bund (the euro-area risk-free benchmark), from 1956."}
       leading_indicator:        {ref: "OECD_CLI_DEU",        source: oecd, note: "OECD CLI, Germany as the euro-area proxy (consistent with the Bund long-yield binding)."}
+      output_gap:               {ref: "OECD_EXP_GAP_EA17",   source: oecd_expanded, note: "OECD EO euro-area output gap — EA17 is the EO euro aggregate (EA20/EA19 not published for GAP)."}
 
   - id: GB
     central_bank: "Bank of England"
@@ -108,6 +111,7 @@ jurisdictions:
       headline_cpi:             {ref: "GBRCPIALLMINMEI",    source: fred, note: "UK CPI (OECD), from 1955; yoy = headline inflation."}
       long_yield_10y:           {ref: "IRLTLT01GBM156N",    source: fred, note: "UK 10y gilt benchmark (OECD-harmonised), from 1960."}
       leading_indicator:        {ref: "OECD_CLI_GBR",        source: oecd, note: "OECD CLI, UK."}
+      output_gap:               {ref: "OECD_EXP_GAP_GBR",   source: oecd_expanded, note: "OECD EO output gap, UK."}
 
   - id: JP
     central_bank: "Bank of Japan"
@@ -128,6 +132,7 @@ jurisdictions:
       headline_cpi:             {ref: "IMF_IFS_JP_CPI",     source: imf, note: "Japan CPI (IMF IFS), live to 2026; yoy = headline inflation. Replaces the dead OECD JPNCPIALLMINMEI."}
       long_yield_10y:           {ref: "IRLTLT01JPM156N",    source: fred, note: "Japan 10y JGB benchmark (OECD-harmonised), from 1989."}
       leading_indicator:        {ref: "OECD_CLI_JPN",        source: oecd, note: "OECD CLI, Japan."}
+      output_gap:               {ref: "OECD_EXP_GAP_JPN",   source: oecd_expanded, note: "OECD EO output gap, Japan."}
 
   - id: CH
     central_bank: "Swiss National Bank"
