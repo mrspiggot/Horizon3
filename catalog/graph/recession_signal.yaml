@@ -1,0 +1,70 @@
+model_id: recession_signal
+name: "The yield-curve recession signal (cross-country)"
+family: macro
+persona: global_macro_strategist
+grounded_in: [estrella-mishkin]
+method: published
+canonical: true   # the probit is a single-input canonical model; floor waived
+method_note: >
+  The Estrella-Mishkin recession probit — P(recession within 12 months) = Phi(a + b·spread) — with the
+  spread the 10y government yield minus the policy rate. Where the US version uses 10y−3m (T10Y3M, no bound
+  foreign analog), this jurisdiction-generic version uses 10y−policy, so the same leading recession signal
+  runs for the Fed, ECB, BoE and BoJ. An inverted spread (10y below the policy rate) is the classic warning.
+spec:
+  equations: "spread = long_yield_10y - policy_rate; P(recession, 12m) = Phi(-0.5333 - 0.6330 * spread)"
+instances: [US, EU, GB, JP]
+history: {start: "1996-01", end: "2026-06", cadence: monthly}
+inputs:
+  - {id: yield10, role: long_yield_10y, state: level, context_window: 120}
+  - {id: policy,  role: policy_rate,   state: level, context_window: 120}
+execution:
+  implemented_by: unified_market_data.analysis.macro_signals.recession_signal
+  args: {long_yield_pct: yield10.level, policy_rate_pct: policy.level}
+outputs:
+  - {name: term_spread_pp, unit: "pp", meaning: "10y government yield minus the policy rate"}
+  - {name: prob_12m,       unit: "prob", meaning: "P(recession within 12 months), 0..1"}
+interpretations:
+  - id: inverted
+    when: "term_spread_pp < 0"
+    says: >
+      The curve is inverted — the 10y sits below the policy rate — and the probit's recession odds are
+      elevated. Historically one of the most reliable year-ahead warnings, though it leads with a variable lag.
+  - id: steep
+    when: "term_spread_pp > 1.5"
+    says: >
+      A steep positive curve — recession odds are low and the bond market is pricing growth, or the start
+      of a cutting cycle that re-steepens the curve after an inversion.
+charts:
+  - id: "The curve slope (10y minus policy)"
+    role: input
+    chart_type: series
+    color_job: diverging
+    interpretation: inverted
+    insight: "the 10y minus the policy rate — inversions below zero preceded recessions; the re-steepening is the market pricing the cuts"
+    data_contract:
+      kind: series
+      ylabel: "10y - policy (pp)"
+      zero_line: true
+      series:
+        - {label: "term spread", from: "output:term_spread_pp"}
+  - id: "Recession probability from the curve"
+    role: outcome
+    chart_type: series
+    color_job: sequential
+    interpretation: inverted
+    insight: "the probit's implied recession odds — spikes when the curve inverts, fades as it re-steepens"
+    data_contract:
+      kind: series
+      ylabel: "P(recession, 12m)"
+      series:
+        - {label: "recession probability", from: "output:prob_12m"}
+  - id: "The recession signal today"
+    role: outcome
+    chart_type: bar
+    color_job: diverging
+    insight: "the current term spread and the implied 12-month recession probability"
+    data_contract:
+      kind: named_values
+      ylabel: "pp / prob"
+      labels: ["term spread", "P(recession)"]
+      values: ["output:term_spread_pp", "output:prob_12m"]
