@@ -931,6 +931,11 @@ def _studio_chart(brief: dict, cid: str, info: dict, run: dict, out_dir: Path, p
     key = (info.get("model_id"), cid, str(getattr(run.get("latest"), "as_of", "")))
     if key in _STUDIO_CACHE:
         return _STUDIO_CACHE[key]
+    # Charts that ask for the deterministic renderer (e.g. the regime-separated Phillips trajectory) skip
+    # the agentic studio and fall through to chart_png_family — the studio can't express per-era fits.
+    _chart = next((c for c in (run.get("charts") or []) if c.get("id") == cid), None)
+    if _chart and (_chart.get("data_contract") or {}).get("renderer") == "deterministic":
+        return None
     try:
         from .studio.from_model import brief_for_chart
         from .studio.graph import run_studio

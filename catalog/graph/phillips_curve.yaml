@@ -51,16 +51,22 @@ charts:
     chart_type: scatter
     color_job: sequential
     interpretation: trade_off
-    insight: "the foundational trade-off, and its most important lesson: pooled across 60 years the fit is FLAT (R² ~0) — there is no stable long-run curve. The colour shows why: the cloud shifted up-and-out in the 1970s (light points, stagflation) then back down-left recently, exactly Friedman-Phelps's expectations-augmented, vertical long-run curve"
+    insight: "not a dead relationship but a SHIFTING one: within each inflation-anchored era a downward trade-off holds (its own fitted slope), but the whole curve jumps between eras as expectations de-anchor and re-anchor — pooled, that shift flattens the fit to ~0, exactly Friedman-Phelps. The regimes are split by whether inflation sat near this central bank's own target"
     data_contract:
       kind: scatter
+      subtitle: "Each inflation-anchored era keeps its own downward short-run curve (coloured, with its slope); the curve JUMPS between eras as expectations de-anchor — so pooled, the fit looks flat. Friedman-Phelps."
       xlabel: "unemployment (%)"
-      ylabel: "CPI inflation, YoY (%)"
-      cbar_label: "1962 → 2026"
+      ylabel: "{price_index}, YoY (%)"
+      cbar_label: "observation date"
       x: "output:unemployment_pct"
       y: "output:inflation_pct"
       fit: true
       time_colour: true
+      # render the regime-separated trajectory (inflation-anchoring eras, per-era fits, year markers,
+      # hot-corner shading at this jurisdiction's u*) via the deterministic family, not the studio.
+      regimes: inflation_anchoring
+      inflation_axis: y
+      renderer: deterministic
   - id: "Inflation and unemployment over time"
     role: input
     chart_type: series
