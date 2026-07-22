@@ -121,7 +121,7 @@ def render_surface(dates: list, mat: np.ndarray, spec: SurfaceSpec, out: str) ->
     # (e.g. "tightened (blue)") that could contradict it; the labelled colour bar states the mapping.
     clean = re.sub(r"\s*\((?:blue|red|amber|green|grey|gray|yellow|orange)\)", "",
                    spec.subtitle, flags=re.IGNORECASE).replace("→", "–")
-    sub = "\n".join(textwrap.wrap(clean, width=110)[:2])
+    sub = "\n".join(textwrap.wrap(clean, width=110))   # full subtitle, never drop lines
     fig.text(0.10, 0.875, sub, fontsize=10.8, color="#4a4a52", linespacing=1.32, va="top")
     fig.text(0.10, 0.035, spec.source, fontsize=8.2, color="#8a8a93")
     fig.text(0.10, 0.012, spec.footer, fontsize=8.2, color="#8a8a93", style="italic")

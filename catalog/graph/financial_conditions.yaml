@@ -73,3 +73,15 @@ charts:
       ylabel: "sigma"
       labels: ["risk", "credit", "leverage", "NFCI"]
       values: ["output:risk", "output:credit", "output:leverage", "output:nfci"]
+  # A graph-declared ML view (transform: pca) — fires by DATA SHAPE (≥4 quantitative outputs over time),
+  # not by persona/jurisdiction. Reduces the four subindices to their two principal axes so the reader
+  # sees they move as one story (a dominant common factor) plus one contrast, and where conditions sit now.
+  - id: "Financial conditions in two dimensions (PCA)"
+    role: outcome
+    chart_type: scatter
+    insight: "the four NFCI subindices reduced to their two principal components — a dominant common factor plus one contrast — so four series read as essentially one story, with today's reading placed in that space"
+    data_contract:
+      transform: pca
+      renderer: deterministic
+      kind: scatter
+      title: "Four conditions gauges, one-and-a-half stories"

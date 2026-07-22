@@ -200,6 +200,35 @@ _SHAPERS = {
 }
 
 
+def compute_chart_insight(model: dict, run: dict, chart_id: str):
+    """Run a chart's OWN analysis and return a ChartInsight (or None) — the computed structure the reader
+    sees in the picture (regimes + slopes, later PCA loadings / feature importances), so the prose can be
+    driven by it. DATA-CONTRACT / graph driven, so it generalises across models and every jurisdiction —
+    never a per-persona hack. Never raises: the prose brief must not break on an analysis."""
+    try:
+        chart = next((c for c in run.get("charts", []) if c.get("id") == chart_id), None)
+        if not chart:
+            return None
+        dc = chart.get("data_contract") or {}
+        transform = dc.get("transform") or ("regime" if dc.get("regimes") else "")
+        if transform == "regime":
+            from .families.relationship import regime_insight, spec_from_run
+            built = spec_from_run(model, run, chart_id)
+            if built:
+                df, spec = built
+                if spec.mode == "regime":
+                    return regime_insight(df, spec)
+        elif transform == "pca":
+            from .families.pca_biplot import pca_insight
+            return pca_insight(model, run, chart_id)
+        # future transforms dispatch here (transform == 'cluster' | 'feature_importance' | …)
+        return None
+    except Exception as exc:
+        print(f"compute_chart_insight — {chart_id}: {type(exc).__name__}: {exc}",
+              file=__import__("sys").stderr)
+        return None
+
+
 def brief_for_chart(persona: str, decision: str, model_id: str, chart_id: str, run: dict,
                     *, prose: str = "") -> InsightBrief | None:
     """Build a STRUCTURE-PRESERVING Studio brief from one authored chart: classify the insight type

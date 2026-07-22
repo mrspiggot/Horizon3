@@ -68,6 +68,38 @@ INSIGHT_TYPES = {
 
 
 @dataclass
+class CitableFact:
+    """One computed figure a chart's analysis produced, to register as an executed (citable) number so
+    the narrator may state it and the grounding judge accepts it. Numbers here are EXECUTED — the
+    clustering/regression ran on the data — so they are legitimate figures, not LLM inventions."""
+    label: str                      # human label for the citable menu
+    value: float
+    source: str                     # "<model_id>.<derived>" — provenance
+    unit: str = ""
+    fmt: str = "{:+.2f}"
+
+
+@dataclass
+class ChartInsight:
+    """The computed findings a chart's OWN analysis produced — regimes + per-regime slopes, a pooled
+    fit, a centroid path, PCA loadings, feature importances — i.e. the structure the reader SEES in the
+    picture. Threaded into the prose brief so the narrator tells THIS chart's story from executed
+    values instead of a textbook prior. Family-agnostic: every family returns this same shape."""
+    kind: str                                          # 'regime' | 'pca' | 'cluster' | …
+    headline: str = ""                                 # one-line computed summary
+    findings: list[str] = field(default_factory=list)  # bullet readings, each grounded in computed values
+    citable: list[CitableFact] = field(default_factory=list)  # distinctive figures to register as tokens
+    facts: dict = field(default_factory=dict)          # structured values (for the judge / downstream)
+
+    def narration(self) -> str:
+        head = (self.headline or "").strip()
+        body = "\n".join(f"       – {f}" for f in self.findings)
+        if head and body:
+            return f"{head}\n{body}"
+        return head or body
+
+
+@dataclass
 class InsightBrief:
     persona: str                    # e.g. "Central-bank policymaker"
     decision: str                   # the decision the chart informs

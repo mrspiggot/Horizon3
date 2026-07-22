@@ -31,6 +31,21 @@ def _df(enc: ChartEncoding) -> pd.DataFrame:
     return df
 
 
+def _identity_col(df: pd.DataFrame, exclude: set) -> str | None:
+    """The column that distinguishes several series inside a melted frame. Prefer a literal identity
+    field ('series' — what `_shape_series` emits); else any low-cardinality non-numeric column that is
+    not the x/y field. Returns None when the frame is genuinely one series."""
+    for name in ("series", "name", "label", "key", "variable"):
+        if name in df.columns and name not in exclude and 2 <= df[name].nunique() <= 12:
+            return name
+    for c in df.columns:
+        if c in exclude:
+            continue
+        if not pd.api.types.is_numeric_dtype(df[c]) and 2 <= df[c].nunique() <= 12:
+            return c
+    return None
+
+
 def _series_groups(df: pd.DataFrame, enc: ChartEncoding):
     """Split into (label, sub-df) by the identity channel (detail or color); one group if none."""
     key = None
@@ -44,6 +59,17 @@ def _series_groups(df: pd.DataFrame, enc: ChartEncoding):
         # shipped ~300 index labels ("231, 254, …") over an unreadable cluster. Treat as one series.
         if key not in ("order", "date", "t", "time", "index") and df[key].nunique() <= 12:
             return [(str(k), g) for k, g in df.groupby(key, sort=False)]
+    # DEFENSIVE SPLIT: the encoding bound no identity channel, but if the melted frame still carries an
+    # identity column AND there are DUPLICATE x-values (several rows per x), drawing one line would
+    # interleave distinct series into a sawtooth. This is the "Nominal policy rate and inflation" bug —
+    # policy (~0) and CPI (~9) collapsed into one whipsawing line, mislabelled a "real policy rate".
+    # Splitting on the identity renders the honest two lines, generically, for every jurisdiction.
+    xf = enc.encoding.x.field if enc.encoding.x else None
+    yf = enc.encoding.y.field if enc.encoding.y else None
+    if xf and xf in df and bool(df[xf].duplicated().any()):
+        ident = _identity_col(df, exclude={xf, yf})
+        if ident is not None:
+            return [(str(k), g) for k, g in df.groupby(ident, sort=False)]
     lbl = enc.encoding.y.title if (enc.encoding.y and enc.encoding.y.title) else (enc.encoding.y.field if enc.encoding.y else "value")
     return [(lbl, df)]
 
@@ -508,17 +534,24 @@ def _cap(s: str | None, n: int) -> str | None:
 
 
 def _sub(s: str | None, per_line: int, *, max_lines: int = 2) -> str | None:
-    """Wrap a subtitle to at most `max_lines` lines at WORD boundaries — never the mid-word '…' cut the
-    v6 review flagged. Glyph-sanitised first so the width is measured on the text that actually renders."""
+    """Wrap a subtitle to WORD boundaries. NEVER truncates: a figure's description is the reader's key
+    to the chart, so if it needs more than `max_lines` lines it USES them (the full text survives, the
+    layout adapts) rather than shipping the mid-word '…' the reviews flagged. `max_lines` is retained
+    for call-site clarity but no longer cuts."""
     if not s:
         return s
     s = _glyph_safe(" ".join(str(s).split()))
-    lines = textwrap.wrap(s, width=per_line)
-    if len(lines) <= max_lines:
-        return "\n".join(lines)
-    kept = lines[:max_lines]
-    kept[-1] = kept[-1].rstrip() + "…"
-    return "\n".join(kept)
+    return "\n".join(textwrap.wrap(s, width=per_line))
+
+
+def _note(s: str | None, per_line: int = 150) -> str | None:
+    """A provenance / source line (model, series, date range, as-of) — wrapped to word boundaries and
+    NEVER truncated. A cut 'As-of …' or '1996-01–2026-06.…' loses the very date it exists to state; no
+    FT/Economist/WSJ figure ships a cut source. Wrap it, never ellipsise it."""
+    if not s:
+        return s
+    s = _glyph_safe(" ".join(str(s).split()))
+    return "\n".join(textwrap.wrap(s, width=per_line))
 
 
 def _coerce_domain(ch, dom):
@@ -613,7 +646,7 @@ def compile_encoding(enc: ChartEncoding, out_path: str, *, figsize=(11, 7.2)) ->
         if enc.subtitle:
             fig.text(0.01, 0.945, _sub(enc.subtitle, 150, max_lines=1), fontsize=10, color=theme.MUTED, ha="left")
         if enc.source_note:
-            fig.text(0.99, 0.005, _cap(enc.source_note, 130), fontsize=7.8, color=theme.MUTED, ha="right")
+            fig.text(0.99, 0.005, _note(enc.source_note), fontsize=7.8, color=theme.MUTED, ha="right")
         fig.tight_layout(rect=[0, 0.02, 1, 0.90])
         # clip in-panel marks so a connected-scatter's overflowing end labels can't distort the grid
         for a in flat:
@@ -636,7 +669,7 @@ def compile_encoding(enc: ChartEncoding, out_path: str, *, figsize=(11, 7.2)) ->
         ax.text(0, 1.015, sub, transform=ax.transAxes, fontsize=10.5,
                 color=theme.MUTED, va="bottom", linespacing=1.3)
     if enc.source_note:
-        ax.text(1.0, -0.13, _cap(enc.source_note, 130), transform=ax.transAxes, fontsize=7.8,
+        ax.text(1.0, -0.13, _note(enc.source_note), transform=ax.transAxes, fontsize=7.8,
                 color=theme.MUTED, va="top", ha="right")
     _sanitise_fig_text(fig)
     return _savefig(fig, out_path)

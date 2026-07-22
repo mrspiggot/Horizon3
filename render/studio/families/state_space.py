@@ -134,7 +134,7 @@ def render_state_space(points: list[StatePoint], spec: StateSpaceSpec, out: str)
     axk.text(0.46, 0.02, "decelerating", fontsize=8.6, color="#6a6a72", va="center")
 
     fig.text(0.072, 0.945, _reader_safe(spec.title), fontsize=18, fontweight="bold", color=INK)
-    sub = "\n".join(textwrap.wrap(_reader_safe(spec.subtitle), width=118)[:2])
+    sub = "\n".join(textwrap.wrap(_reader_safe(spec.subtitle), width=118))   # full subtitle, never drop lines
     fig.text(0.072, 0.875, sub, fontsize=10.8, color="#4a4a52", linespacing=1.32, va="top")
     fig.text(0.072, 0.028, spec.source, fontsize=8.2, color="#8a8a93")
     fig.text(0.072, 0.008, spec.footer, fontsize=8.2, color="#8a8a93", style="italic")

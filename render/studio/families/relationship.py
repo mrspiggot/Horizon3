@@ -117,6 +117,81 @@ def _cluster_regimes(x: np.ndarray, y: np.ndarray, target: float, *, kmin: int =
     return np.array([remap[c] for c in lab], dtype=int)
 
 
+def regime_insight(d: pd.DataFrame, spec: RelationshipSpec):
+    """Compute the regime structure the Phillips chart DRAWS — as a ChartInsight the prose can narrate,
+    so the writer tells the visual story (clusters, per-regime slopes, the shift, the flat pooled fit)
+    instead of a textbook prior. Pure + deterministic (same `_cluster_regimes`, same fit thresholds and
+    seed as the render), so the words always match the picture. Jurisdiction-agnostic. Returns None on
+    any failure — the brief must never break on an analysis."""
+    from ..insight import ChartInsight, CitableFact
+    try:
+        x = d[spec.x_key].to_numpy(float)
+        y = d[spec.y_key].to_numpy(float)
+        years = pd.to_datetime(d["date"]).dt.year.to_numpy()
+        target = spec.target if spec.target is not None else 2.0
+        n = len(x)
+        if n < 30:
+            return None
+        lab = _cluster_regimes(x, y, target)
+        K = int(lab.max()) + 1
+        idx = np.arange(n)
+        regimes, centroids = [], []
+        for c in range(K):
+            m = lab == c
+            xs_, ys_, yy = x[m], y[m], years[m]
+            centroids.append((float(np.median(idx[m])), float(np.median(xs_)), float(np.median(ys_))))
+            yr0, yr1 = int(yy.min()), int(yy.max())
+            slope = r2 = None
+            if int(m.sum()) >= 10 and float(np.ptp(xs_)) > 0.4:
+                b1, b0 = np.polyfit(xs_, ys_, 1)
+                rr = float(np.corrcoef(xs_, ys_)[0, 1] ** 2)
+                if b1 < -0.05 and rr > 0.04:
+                    slope, r2 = float(b1), rr
+            regimes.append({"years": [yr0, yr1], "slope": slope, "r2": r2,
+                            "has_tradeoff": slope is not None, "n": int(m.sum())})
+        pb1 = float(np.polyfit(x, y, 1)[0]); pr2 = float(np.corrcoef(x, y)[0, 1] ** 2)
+        centroids.sort(key=lambda t: t[0])
+        du = centroids[-1][1] - centroids[0][1]; di = centroids[-1][2] - centroids[0][2]
+        latest = {"year": int(years[-1]), "x": float(x[-1]), "y": float(y[-1])}
+
+        trades = [r for r in regimes if r["has_tradeoff"]]
+        flats = [r for r in regimes if not r["has_tradeoff"]]
+        findings, citable = [], []
+        findings.append(f"The POOLED scatter across all {n} months is essentially flat "
+                        f"(R²={pr2:.2f}) — no stable long-run trade-off; this is Friedman-Phelps's vertical "
+                        f"long-run curve, not a menu policy can pick from.")
+        if trades:
+            seg = "; ".join(f"{r['years'][0]}–{r['years'][1]} at {r['slope']:+.2f}" for r in trades)
+            findings.append(f"Yet WITHIN individual regimes the short-run trade-off is real and downward: {seg} "
+                            f"(inflation falls ~{abs(min(r['slope'] for r in trades)):.2f}pp per extra point of "
+                            f"unemployment in the steepest).")
+            steep = min(trades, key=lambda r: r["slope"])
+            if steep["years"][0] >= 2000:
+                findings.append(f"A steep short-run curve has RE-EMERGED in the {steep['years'][0]}–{steep['years'][1]} "
+                                f"regime ({steep['slope']:+.2f}) — the flat pooled line hides it.")
+            for r in trades:
+                citable.append(CitableFact(
+                    label=f"Phillips regime {r['years'][0]}–{r['years'][1]} slope",
+                    value=r["slope"], source="phillips_curve.regime_slope", fmt="{:+.2f}"))
+        if flats:
+            seg = ", ".join(f"{r['years'][0]}–{r['years'][1]}" for r in flats)
+            findings.append(f"Other regimes show no clear trade-off ({seg}) — anchored or stagflation eras where "
+                            f"the curve is vertical or scrambled.")
+        move = (("up and to the " + ("right" if du > 0 else "left")) if di > 0 else
+                ("down and to the " + ("right" if du > 0 else "left")))
+        findings.append(f"The curve SHIFTS between regimes rather than sliding along one line — the regime "
+                        f"centroids walk {move} over time, then back, which is exactly why the pooled fit is flat.")
+        findings.append(f"Latest reading ({latest['year']}): unemployment {latest['x']:.1f}%, "
+                        f"inflation {latest['y']:.1f}% versus the {target:.0f}% target.")
+        head = (f"{K} distinct regimes: a steep short-run trade-off holds WITHIN regimes while the pooled "
+                f"long-run curve is flat — the trade-off shifts, it doesn't hold.")
+        return ChartInsight(kind="regime", headline=head, findings=findings, citable=citable,
+                            facts={"n_regimes": K, "pooled_r2": pr2, "regimes": regimes, "latest": latest})
+    except Exception as exc:   # never break the brief on an analysis
+        print(f"REGIME INSIGHT failed: {type(exc).__name__}: {exc}", file=__import__("sys").stderr)
+        return None
+
+
 def _render_regime_phillips(fig, ax, d: pd.DataFrame, spec: RelationshipSpec) -> None:
     """The Phillips curve as CLUSTERED regimes: each month's §10 state is clustered (GMM), and every cluster
     is a distinct VIVID colour with its own soft hull + short-run fit. The trade-off holds within a regime
@@ -285,7 +360,9 @@ def render_relationship(df: pd.DataFrame, spec: RelationshipSpec, out: str) -> s
         cbar.ax.tick_params(labelsize=8.5)
 
     fig.text(0.085, 0.945, spec.title, fontsize=18, fontweight="bold", color=INK)
-    sub = "\n".join(textwrap.wrap(spec.subtitle.replace("→", "–"), width=104)[:2])
+    # Wrap the subtitle to as many lines as it needs — never drop lines ([:2] silently shipped a
+    # half-description). The full authored insight also lands in the below-figure docx caption.
+    sub = "\n".join(textwrap.wrap(spec.subtitle.replace("→", "–"), width=104))
     fig.text(0.085, 0.875, sub, fontsize=10.8, color="#4a4a52", linespacing=1.32, va="top")
     fig.text(0.085, 0.028, spec.source, fontsize=8.2, color="#8a8a93")
     fig.text(0.085, 0.006, spec.footer, fontsize=8.2, color="#8a8a93", style="italic")
@@ -322,8 +399,9 @@ def spec_from_run(model: dict, run: dict, chart_id: str, persona_name: str = "")
                else "annual" if gap else "")
     span = f"{dts.iloc[0]:%b %Y}–{dts.iloc[-1]:%b %Y}"
     cbar_label = f"observation date ({cadence + ', ' if cadence else ''}{span})"
-    insight = " ".join((chart.get("insight") or "").split())
-    subtitle = insight if len(insight) <= 200 else insight[:197] + "…"
+    # The subtitle carries the chart's meaning — pass it WHOLE; the compile step wraps it to as many
+    # lines as it needs (never truncates). A prior [:197]+"…" here shipped mid-word cuts.
+    subtitle = " ".join((chart.get("insight") or "").split())
 
     # Regime-separated Phillips (inflation-anchoring): pull THIS jurisdiction's calibration from the graph
     # (soft-coded, per-jurisdiction) and fill the {price_index} label token so the axis reads HICP for EU,

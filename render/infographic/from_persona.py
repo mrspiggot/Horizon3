@@ -81,7 +81,9 @@ def chart_png_family(run: dict, chart_id: str) -> tuple[str | None, str]:
     if chart is None:
         return None, ""
     insight = " ".join((chart.get("insight") or "").split())
-    fam = _FAMILY.get((chart.get("data_contract", {}) or {}).get("kind", ""))
+    _dcx = chart.get("data_contract", {}) or {}
+    # A graph-declared ML transform (e.g. `transform: pca`) routes to its ML family regardless of `kind`.
+    fam = "pca" if _dcx.get("transform") == "pca" else _FAMILY.get(_dcx.get("kind", ""))
     if not fam or not run.get("history"):
         return None, insight
     # Gate BEFORE the try below — its `except Exception: return None` would turn a starvation refusal
@@ -105,6 +107,12 @@ def chart_png_family(run: dict, chart_id: str) -> tuple[str | None, str]:
             if not built:
                 return None, insight
             df, spec = built; _blank_meta(spec); _rel.render_relationship(df, spec, out)
+        elif fam == "pca":
+            from ..studio.families import pca_biplot as _pca
+            built = _pca.spec_from_run(model, run, chart_id)
+            if not built:
+                return None, insight
+            df, spec = built; _blank_meta(spec); _pca.render_pca_biplot(df, spec, out)
         else:  # surf
             built = _surf.spec_from_run(model, run, chart_id)
             if not built:

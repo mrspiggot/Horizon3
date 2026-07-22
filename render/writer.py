@@ -194,6 +194,7 @@ def build_brief(mat: dict, *, conn=None, limit: int = 24) -> dict:
     from . import jurisdiction_facts
     _calib = jurisdiction_facts.facts(mat["instance"]).get("calibration", {})   # jurisdiction-relative guards
     models, chart_index, runs = [], {}, {}
+    extra_menu: list[str] = []          # citable figures a chart's OWN analysis computed (regime slopes, …)
     for mid in mat["p"].get("models", []):
         run = mat["runs"].get(mid) or {}
         meta = run.get("meta") or {}
@@ -220,6 +221,26 @@ def build_brief(mat: dict, *, conn=None, limit: int = 24) -> dict:
             cid, ins = c.get("id", ""), " ".join((c.get("insight") or "").split())
             if cid:
                 charts.append((cid, ins))
+                # The chart's OWN computed analysis (regime slopes, the pooled fit, the shift, later PCA
+                # loadings) — so the prose is DRIVEN by what the picture shows, not a textbook prior. Each
+                # distinctive figure is registered as an executed citable token so the narrator may state
+                # it and the grounding judge accepts it (these numbers are executed, not LLM-authored).
+                computed = ""
+                try:
+                    from .studio.from_model import compute_chart_insight
+                    ci = compute_chart_insight(meta, run, cid)
+                except Exception as exc:
+                    print(f"CHART INSIGHT — {cid}: {type(exc).__name__}: {exc}", file=sys.stderr)
+                    ci = None
+                if ci:
+                    computed = ci.narration()
+                    from .infographic.schema import NumberObject
+                    for cf in ci.citable:
+                        tok = f"cx{len(toks)}"
+                        toks[tok] = NumberObject(name=tok, value=cf.value, unit=cf.unit, source=cf.source,
+                                                 source_computation="executed chart analysis",
+                                                 as_of=mat.get("as_of", ""), fmt=cf.fmt)
+                        extra_menu.append(f"  {{{tok}}}  {cf.label} = {toks[tok].rendered()}")
                 # `role` (input/outcome/consequence) and `refs` feed the exhibit contract: role drives
                 # diversity when filling to the floor, refs identify near-duplicates. Both were already
                 # in the catalog and neither was read.
@@ -227,6 +248,7 @@ def build_brief(mat: dict, *, conn=None, limit: int = 24) -> dict:
                     "model_id": mid, "insight": ins, "role": c.get("role"),
                     "refs": frozenset(_refs(c.get("data_contract") or {})),
                     "kind": (c.get("data_contract") or {}).get("kind", ""),
+                    "computed": computed,
                 }
         outs = "; ".join(f"{o['name']} ({o.get('unit','')}) — {o.get('meaning','')}"
                          for o in (meta.get("outputs") or []))
@@ -244,6 +266,8 @@ def build_brief(mat: dict, *, conn=None, limit: int = 24) -> dict:
               for mid in mat["p"].get("models", [])
               if (run := mat["runs"].get(mid)) and run.get("history")]
     data_start = min(starts) if starts else ""
+    if extra_menu:
+        menu = menu + "\n" + "\n".join(extra_menu)
     return {"mat": mat, "toks": toks, "menu": menu, "models": models,
             "chart_index": chart_index, "papers": mat.get("papers", []),
             "as_of": mat.get("as_of", ""), "data_start": data_start, "runs": runs}
@@ -277,6 +301,13 @@ def _brief_text(brief: dict) -> str:
             lines.append(m["sheet"])
         for cid, ins in m["charts"]:
             lines.append(f"   chart «{cid}» — {ins}")
+            comp = (brief.get("chart_index", {}).get(cid, {}) or {}).get("computed")
+            if comp:
+                lines.append("      ► WHAT THIS CHART'S OWN ANALYSIS COMPUTED — narrate THIS (it is the "
+                             "story the reader SEES in the picture; every figure here is executed on the "
+                             "data, so state it plainly and let the chart's structure drive the paragraph):")
+                for ln in comp.splitlines():
+                    lines.append(f"      {ln}")
         for s in m["regime"]:
             lines.append(f"   ► LIVE REGIME CALL: {s}")
         lines.append("")
@@ -1029,11 +1060,12 @@ def _inject_cross_jurisdiction(persona_id: str, mat: dict, conn, out_dir: Path,
     return None
 
 
-def _docx_caption(text: str, width: int = 200) -> str:
-    """A figure caption for the .docx: whole words only, ellipsis at a word boundary — never the bare
-    `[:160]` mid-word chop that shipped 'truncated captions' the agency flagged as publish seams."""
-    t = " ".join((text or "").split())
-    return textwrap.shorten(t, width=width, placeholder="…") if t else t
+def _docx_caption(text: str) -> str:
+    """The FULL below-figure description for the .docx — never truncated. A figure caption is the
+    reader's key to the chart; an FT/Economist/WSJ figure never ships a cut description. We only
+    normalise whitespace; the authored insight is carried whole, at every length, for every chart and
+    every jurisdiction. (Earlier this width-capped at 200 chars and shipped a dangling '(no…'.)"""
+    return " ".join((text or "").split())
 
 
 # ── semantic chart↔section binding (A) ──────────────────────────────────────────────────────────

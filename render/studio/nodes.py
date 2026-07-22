@@ -144,6 +144,12 @@ def proposer(state: StudioState) -> dict:
                 "instead of a legend. Write a thesis `title`, a `subtitle`, a `message`, a `rationale` (why "
                 "this beats a vanilla default), and a `source_note`. For a decomposition, colour by the "
                 "component field so the parts stack to the total. "
+                "MULTI-SERIES: if the data shape has MORE THAN ONE series (an identity/`series` field with "
+                "several values), you MUST bind that field to `color` (or `detail`) so each series draws as "
+                "its OWN line — a line/area whose multi-valued series field is left unbound collapses the "
+                "series into one interleaved sawtooth. Then label the y-axis by the shared UNIT/quantity "
+                "(e.g. '%'), NEVER by one series' derived meaning — do NOT title a chart of the nominal "
+                "policy rate and inflation 'real policy rate'. "
                 "CRITICAL: leave `data` EMPTY — the real rows are injected by the renderer; never author "
                 "numbers.\n\n" + brief.as_prompt()
             )
