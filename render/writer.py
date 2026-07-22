@@ -328,6 +328,13 @@ _VOICE = (
     "predates the data window: if the series starts in 2016, the 2008 crisis is not yours to cite.\n"
     "  • Address the reader where it earns its place ('you are being paid…'). Do not write as if no one "
     "is watching.\n"
+    "  • READ THE EXHIBIT you point at — do not merely restate the model's number beside a chart. Narrate "
+    "what the EYE sees in THAT specific picture: the crossing or turn (name its date), the widening or "
+    "narrowing gap, the shaded band, the outlier, WHERE today's marker sits in the cloud or against the "
+    "reference/neutral line — and echo the chart's OWN labels and reference lines so the text and the "
+    "picture point at the same thing. The chart's computed visual reading is provided per exhibit below. "
+    "The MODEL's finding (its outputs and what it says) AND the PICTURE's intuition belong in the SAME "
+    "paragraph, each reinforcing the other — this is additive, never one instead of the other.\n"
     "  • End on the genuine unresolved risk, NOT a tidy bow. Sit with the ambiguity.\n"
     "  • Plain and concrete over ornate. No purple metaphor, no bodily/sensory overwriting, no throat-"
     "clearing ('it is worth noting', 'in today's market', 'make no mistake').\n"
@@ -416,12 +423,29 @@ def plan_arc(brief: dict, feedback: str = "") -> Outline:
 def write_article(brief: dict, outline: Outline, feedback: str = "") -> Article:
     p = brief["mat"]["p"]
     llm = get_llm(max_tokens=8192).with_structured_output(Article)
+    _cidx = brief.get("chart_index", {})
+
+    def _chart_note(cid: str) -> str:
+        # ADDITIVE section-local delivery: the paragraph that shows this chart gets its authored insight AND
+        # its computed VISUAL reading (intuition + the salient features), beside the thesis — so the writer
+        # reads the specific picture, not a global list. The full fact sheet still arrives via the brief.
+        info = _cidx.get(cid, {}) or {}
+        ins = " ".join((info.get("insight") or "").split())
+        comp = [ln.strip(" –") for ln in (info.get("computed") or "").strip().splitlines() if ln.strip()]
+        vis = ("VISUAL: " + " ".join(comp[:3])) if comp else ""
+        bits = " || ".join(b for b in (ins, vis) if b)
+        return f"«{cid}»" + (f" — {bits}" if bits else "")
+
+    def _sec_line(i: int, s) -> str:
+        charts = "; ".join(_chart_note(c) for c in s.chart_ids) or "none"
+        return (f"  {i+1}. «{s.heading}» — {s.thesis}\n"
+                f"     [chart(s): {charts}; cite: {', '.join(s.token_ids) or 'none'}]")
+
     plan = "\n".join(
         [f"HEADLINE: {outline.headline}", f"STANDFIRST (foreshadow): {outline.standfirst}",
          f"PIVOT (flag this up front): {outline.pivot}",
          f"END ON (open risk): {outline.open_close}", "", "SECTIONS:"]
-        + [f"  {i+1}. «{s.heading}» — {s.thesis}  [charts: {', '.join(s.chart_ids) or 'none'}; "
-           f"cite: {', '.join(s.token_ids) or 'none'}]" for i, s in enumerate(outline.sections)])
+        + [_sec_line(i, s) for i, s in enumerate(outline.sections)])
     prompt = (
         f"You are a {p['name']} writing the full feature to the plan below. Target 1000-1200 words total.\n"
         f"{_frame_steer(brief)}"
@@ -436,9 +460,14 @@ def write_article(brief: dict, outline: Outline, feedback: str = "") -> Article:
         "'you will see…', 'this piece/article', 'the pivot of this piece', 'the charts that follow', "
         "'start with the…', and any sentence that narrates the article's own structure. Address the reader "
         "about the SUBJECT ('you are being paid…'), never about the document.\n"
-        "  3. SECTIONS — the detail: flowing paragraphs (not bullets), each grounded in its model and "
-        "interpreting its chart(s) in words. INTERPRET every chart you point at — say what the reader "
-        "should see in it and why it matters; never name a chart without reading it.\n\n"
+        "  3. SECTIONS — the detail: flowing paragraphs (not bullets), each grounded in its model AND its "
+        "chart. Narrate the model's finding — its outputs and what it says — AND, in the same paragraph, "
+        "READ the specific chart you point at: name the visual feature the eye lands on (the crossing or "
+        "turn with its date, the widening gap, the shaded band, the regime colour, where today's marker "
+        "sits against the reference/neutral line) and echo the chart's own labels, so the number and the "
+        "picture reinforce each other. Each section below carries its chart's computed visual reading in "
+        "its [chart …] note — use it. Never name a chart without reading it; never restate a figure "
+        "without saying what the picture shows.\n\n"
         f"{_brief_text(brief)}\n\n{plan}\n\n" + _VOICE
         + "\n\nReturn the standfirst, the executive summary, and each section's heading + prose. Cite "
         "figures ONLY as the {n} number tokens — the ONLY braces permitted in your prose. Do NOT insert "

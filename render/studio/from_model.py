@@ -218,10 +218,25 @@ def compute_chart_insight(model: dict, run: dict, chart_id: str):
                 df, spec = built
                 if spec.mode == "regime":
                     return regime_insight(df, spec)
-        elif transform == "pca":
+            return None
+        if transform == "pca":
             from .families.pca_biplot import pca_insight
             return pca_insight(model, run, chart_id)
-        # future transforms dispatch here (transform == 'cluster' | 'feature_importance' | …)
+        # Otherwise dispatch by the chart's structural KIND, so EVERY family yields its visual reading —
+        # generalises across every model/persona/jurisdiction, not a hand-picked chart list.
+        kind = dc.get("kind", "")
+        if kind in ("series", "gap_series"):
+            from .families.timeseries import timeseries_insight
+            return timeseries_insight(model, run, chart_id)
+        if kind in ("scatter", "pearson"):
+            from .families.relationship import fit_insight
+            return fit_insight(model, run, chart_id)
+        if kind in ("decomposition", "stacked"):
+            from .families.decomposition import decomposition_insight
+            return decomposition_insight(model, run, chart_id)
+        if kind == "heatmap":
+            from .families.surface import surface_insight
+            return surface_insight(model, run, chart_id)
         return None
     except Exception as exc:
         print(f"compute_chart_insight — {chart_id}: {type(exc).__name__}: {exc}",

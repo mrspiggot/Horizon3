@@ -192,6 +192,67 @@ def regime_insight(d: pd.DataFrame, spec: RelationshipSpec):
         return None
 
 
+def fit_insight(model: dict, run: dict, chart_id: str):
+    """The scatter's VISUAL reading for the 'fit' and 'path' modes (Okun, Beveridge, …): the slope the
+    cloud makes (or its absence), and — for a path — whether the relationship SHIFTED rather than held.
+    ADDITIVE: the model's coefficient/interpretation still drives the prose; this is what the picture
+    adds. Pure, deterministic, jurisdiction-agnostic. None on any failure or on regime charts (handled
+    elsewhere)."""
+    from ..insight import ChartInsight, CitableFact
+    try:
+        built = spec_from_run(model, run, chart_id)
+        if not built:
+            return None
+        df, spec = built
+        if spec.mode == "regime":
+            return None
+        x = df[spec.x_key].to_numpy(float)
+        y = df[spec.y_key].to_numpy(float)
+        n = len(x)
+        if n < 12:
+            return None
+        xn = spec.xlabel.split("(")[0].split(",")[0].strip().lower()
+        yn = spec.ylabel.split("(")[0].split(",")[0].strip().lower()
+        dts = pd.to_datetime(df["date"]) if "date" in df else None
+        span = f"{dts.iloc[0]:%b %Y}–{dts.iloc[-1]:%b %Y}" if dts is not None else ""
+        # latest position stated QUALITATIVELY (the exact latest values are model outputs the writer already
+        # cites via tokens — restating them raw here would risk a rounding leak).
+        qx = "high" if x[-1] >= np.median(x) else "low"
+        qy = "high" if y[-1] >= np.median(y) else "low"
+        findings: list[str] = []
+        citable: list[CitableFact] = []
+        if spec.mode == "path":
+            k = max(3, n // 3)
+            ex, ey = float(np.mean(x[:k])), float(np.mean(y[:k]))
+            lx, ly = float(np.mean(x[-k:])), float(np.mean(y[-k:]))
+            outin = "outward" if (lx - ex) > 0 else "inward"
+            updown = "up" if (ly - ey) > 0 else "down"
+            findings.append(f"Follow the time-coloured trajectory: the cloud has SHIFTED {outin} and {updown} "
+                            f"across {span} — the recent cluster sits away from the early one, so the relationship "
+                            f"moved rather than sliding back along itself.")
+            findings.append(f"The latest point (ringed) sits in the {qx}-{xn}, {qy}-{yn} corner.")
+            head = f"The path SHIFTED — {xn} vs {yn} is not one stable curve."
+        else:  # fit
+            b1, b0 = np.polyfit(x, y, 1)
+            r2 = float(np.corrcoef(x, y)[0, 1] ** 2)
+            flat = (r2 < 0.10) or (abs(b1) < 0.08)
+            if flat:
+                findings.append(f"The scatter is essentially flat (slope {b1:+.2f}, R²={r2:.2f}) — no stable "
+                                f"relationship between {xn} and {yn} across {span}; the cloud is a blob, not a line.")
+                head = f"No slope worth the name — {xn} and {yn} do not co-move here."
+            else:
+                findings.append(f"The fit line slopes {b1:+.2f} (R²={r2:.2f}) — the slope IS the economic "
+                                f"coefficient linking {xn} and {yn}.")
+                head = f"The slope of the cloud is the coefficient: {xn} against {yn}."
+                citable.append(CitableFact(label=f"{xn}–{yn} OLS slope", value=float(b1),
+                                           source=f"{model.get('model_id','')}.ols_slope", fmt="{:+.2f}"))
+            findings.append(f"The latest observation (ringed) sits in the {qx}-{xn}, {qy}-{yn} corner of the cloud.")
+        return ChartInsight(kind="relationship", headline=head, findings=findings, citable=citable, facts={})
+    except Exception as exc:
+        print(f"FIT INSIGHT failed: {type(exc).__name__}: {exc}", file=__import__("sys").stderr)
+        return None
+
+
 def _render_regime_phillips(fig, ax, d: pd.DataFrame, spec: RelationshipSpec) -> None:
     """The Phillips curve as CLUSTERED regimes: each month's §10 state is clustered (GMM), and every cluster
     is a distinct VIVID colour with its own soft hull + short-run fit. The trade-off holds within a regime

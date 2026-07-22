@@ -91,6 +91,7 @@ class SeriesSpec:
     pos_label: str = ""
     neg_label: str = ""
     callouts: list[dict] = field(default_factory=list)
+    events: list = field(default_factory=list)   # [(pd.Timestamp, label)] macro markers inside the window
 
 
 def lint_timeseries(spec: SeriesSpec, df: pd.DataFrame) -> list[str]:
@@ -157,6 +158,17 @@ def render_timeseries(df: pd.DataFrame, spec: SeriesSpec, out: str) -> str:
         if spec.hline_label:
             handles.append(Line2D([], [], color="#6b6b73", lw=1.2, ls=(0, (4, 3)),
                                   label=spec.hline_label))
+
+    # Macro event markers — thin, muted, BEHIND the data (zorder=1) with a small rotated label at the top,
+    # so they anchor the eye without competing with the line. Only events inside the window arrive here.
+    for ts, lbl in (spec.events or []):
+        try:
+            ax.axvline(ts, color="#9a9aa2", lw=0.9, ls=(0, (2, 3)), zorder=1, alpha=0.75)
+            ax.annotate(lbl, xy=(ts, 1.0), xycoords=("data", "axes fraction"), xytext=(2, -3),
+                        textcoords="offset points", rotation=90, va="top", ha="left",
+                        fontsize=7.6, color="#8a8a93", zorder=1)
+        except Exception:
+            pass
 
     bbox = dict(boxstyle="round,pad=0.35", fc="white", ec="#c8c8d0", lw=0.8, alpha=0.94)
     for co in spec.callouts:
@@ -271,4 +283,131 @@ def spec_from_run(model: dict, run: dict, chart_id: str,
         pos_label=pos,
         neg_label=neg,
     )
+    # Jurisdiction-aware macro markers inside THIS chart's data window (DATA, not hardcoded) — so the eye
+    # and the prose point at the same crisis. Only events the data spans are attached.
+    try:
+        from ...events import events_for
+        if len(df):
+            spec.events = events_for(run.get("instance"), df.index[0], df.index[-1])
+    except Exception:
+        spec.events = []
     return df, spec
+
+
+def _mon(ts) -> str:
+    return pd.Timestamp(ts).strftime("%b %Y")
+
+
+def _last_cross(idx, v, level: float = 0.0):
+    """(date, to_sign) of the LAST time series v crosses `level` (ignoring exact-equal touches), else None."""
+    s = np.asarray(v, dtype=float) - level
+    last = None
+    prev = None
+    for i, cur in enumerate(s):
+        if np.isnan(cur) or cur == 0:
+            continue
+        sg = 1 if cur > 0 else -1
+        if prev is not None and sg != prev:
+            last = (idx[i], sg)
+        prev = sg
+    return last
+
+
+def _hold(v) -> int:
+    """How many consecutive periods (ending now) the series has held its current sign vs zero."""
+    v = np.asarray(v, dtype=float)
+    cur = v[-1] >= 0
+    n = 0
+    for x in v[::-1]:
+        if np.isnan(x):
+            break
+        if (x >= 0) == cur:
+            n += 1
+        else:
+            break
+    return n
+
+
+def timeseries_insight(model: dict, run: dict, chart_id: str):
+    """The chart's VISUAL reading — the crossings (with dates), the turns, where today sits in the line's
+    own range, and (for a gap chart) how long the sign has held — so the prose can point the reader at
+    what the eye sees. ADDITIVE: the model's own outputs/interpretation still drive the prose; this is the
+    picture's contribution. Pure, deterministic, jurisdiction-agnostic. None on any failure."""
+    from ..insight import ChartInsight
+    try:
+        built = spec_from_run(model, run, chart_id)
+        if not built:
+            return None
+        df, spec = built
+        if len(df) < 12 or not spec.lines:
+            return None
+        idx = list(df.index)
+        span = f"{_mon(idx[0])}–{_mon(idx[-1])}"
+        findings: list[str] = []
+        try:
+            from ...events import nearest_event
+            _inst = run.get("instance")
+
+            def _near(d):
+                ev = nearest_event(d, _inst, idx[0], idx[-1])
+                return f" (around the {ev})" if ev else ""
+        except Exception:
+            def _near(d):
+                return ""
+
+        v_first = df[spec.lines[0].key].to_numpy(float)
+        two_signed = bool((v_first > 0).any() and (v_first < 0).any())
+        if spec.gap and two_signed:
+            k = spec.lines[0].key
+            v = df[k].to_numpy(float)
+            cur_pos = v[-1] >= 0
+            side = (spec.pos_label if cur_pos else spec.neg_label) or ("above zero" if cur_pos else "below zero")
+            lc = _last_cross(idx, v, 0.0)
+            hold = _hold(v)
+            j = int(np.nanargmax(np.abs(v)))
+            findings.append(
+                f"The shaded gap has sat {('above' if cur_pos else 'below')} zero — {side} — for {hold} "
+                f"straight periods" + (f", since it last crossed in {_mon(lc[0])}{_near(lc[0])}." if lc else f" across {span}."))
+            findings.append(
+                f"Its widest excursion in {span} was {_mon(idx[j])}{_near(idx[j])} "
+                f"({'above' if v[j] >= 0 else 'below'} zero).")
+            head = (f"Read the sign of the shaded fill: the gap is {('positive' if cur_pos else 'negative')} "
+                    f"now and has been for {hold} periods.")
+        else:
+            head = f"Read the line for its turns, its crossings, and where today sits in its own range ({span})."
+            if len(spec.lines) >= 2:
+                a = df[spec.lines[0].key].to_numpy(float)
+                b = df[spec.lines[1].key].to_numpy(float)
+                diff = a - b
+                lc = _last_cross(idx, diff, 0.0)
+                above = diff[-1] >= 0
+                hi = spec.lines[0].label if above else spec.lines[1].label
+                lo = spec.lines[1].label if above else spec.lines[0].label
+                if lc:
+                    findings.append(f"{spec.lines[0].label} and {spec.lines[1].label} last crossed in "
+                                    f"{_mon(lc[0])}{_near(lc[0])}; since then {hi} has sat above {lo}.")
+                else:
+                    findings.append(f"{hi} stays above {lo} across {span} — the two lines do not cross.")
+                head = (f"The story is the GAP between {spec.lines[0].label} and {spec.lines[1].label} "
+                        f"and where they cross.")
+            v0 = df[spec.lines[0].key].to_numpy(float)
+            if spec.zero_line:
+                lc0 = _last_cross(idx, v0, 0.0)
+                if lc0:
+                    findings.append(f"{spec.lines[0].label} last crossed zero in {_mon(lc0[0])}{_near(lc0[0])}, "
+                                    f"turning {'positive' if lc0[1] > 0 else 'negative'}.")
+            if spec.hline is not None:
+                lch = _last_cross(idx, v0, float(spec.hline))
+                if lch:
+                    lbl = spec.hline_label or f"the {float(spec.hline):g} line"
+                    findings.append(f"It last crossed {lbl} in {_mon(lch[0])}.")
+            # Position only (grounded, no number/date). The exact peak/trough dates are the fact sheet's
+            # job (min_at/max_at, checked by the judge); restating them here risked a window mismatch.
+            pct = float((v0 < v0[-1]).mean() * 100)
+            where = "near the top" if pct >= 80 else "near the bottom" if pct <= 20 else "in the middle"
+            findings.append(f"Today {spec.lines[0].label} sits {where} of its range across {span}.")
+        return ChartInsight(kind="timeseries", headline=head, findings=findings, citable=[],
+                            facts={"span": span})
+    except Exception as exc:
+        print(f"TIMESERIES INSIGHT failed: {type(exc).__name__}: {exc}", file=__import__("sys").stderr)
+        return None

@@ -1,0 +1,22 @@
+# CHART EVENT MARKERS — light dated lines drawn on time-series charts and echoed in the prose, so the
+# reader's eye and the text point at the SAME moment. DATA, jurisdiction-aware: `global` events apply to
+# every market; `by_jurisdiction` adds market-specific ones. Only events inside a chart's own data window
+# are ever drawn or named (respecting the data-start firewall). Adding a market or an event is a pure
+# YAML edit — no Python change.
+#
+# Dates are "YYYY-MM" (month resolution — enough to anchor the eye without implying spurious day precision).
+
+global:
+  - {date: "2008-09", label: "GFC"}
+  - {date: "2020-03", label: "COVID"}
+
+by_jurisdiction:
+  US:
+    - {date: "2022-03", label: "hiking cycle begins"}
+  EU:
+    - {date: "2011-07", label: "euro sovereign crisis"}
+    - {date: "2022-07", label: "ECB liftoff"}
+  GB:
+    - {date: "2022-09", label: "gilt crisis"}
+  JP:
+    - {date: "2024-03", label: "BoJ exits NIRP"}
