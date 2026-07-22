@@ -110,6 +110,7 @@ class InsightBrief:
     insight_type: str = "trend"     # one of INSIGHT_TYPES — what KIND of chart this is
     form_hint: str = ""             # the canonical forms + why (from the bridge's structural read)
     rows: list[dict] = field(default_factory=list)   # the raw data — NOT shown to the LLM
+    instance: str = ""              # the jurisdiction this run is for — drives market-correct event markers
 
     def as_prompt(self) -> str:
         it = self.insight_type

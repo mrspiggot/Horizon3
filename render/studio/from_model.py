@@ -270,7 +270,8 @@ def brief_for_chart(persona: str, decision: str, model_id: str, chart_id: str, r
     return InsightBrief(
         persona=persona, decision=decision, model_id=model_id, papers=(meta.get("grounded_in") or []),
         interpretation=interp, insight_type=insight_type, form_hint=form_hint,
-        profile=profile_rows(rows, series_field=series_field), rows=rows)
+        profile=profile_rows(rows, series_field=series_field), rows=rows,
+        instance=run.get("instance") or "")
 
 
 def brief_for_model_instances(persona: str, decision: str, model_id: str, chart_id: str, conn) -> InsightBrief | None:

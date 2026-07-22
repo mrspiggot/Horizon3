@@ -184,10 +184,33 @@ def critic_panel(state: StudioState) -> dict:
     return {"chosen": cands[idx], "critique_rationale": v.rationale}
 
 
+def _inject_events(enc, brief) -> None:
+    """Populate a temporal chart's event markers from the jurisdiction-aware catalog (render/events.py),
+    so the SAME crises are drawn on every market's charts as DATA — replacing the LLM's ad-hoc, often
+    US-leaning guesses. Only events inside the data window are attached; non-temporal charts are left
+    untouched. Never raises."""
+    try:
+        if not (enc.encoding.x and enc.encoding.x.type == "temporal"):
+            return
+        xf = enc.encoding.x.field
+        import pandas as pd
+        xs = pd.to_datetime(pd.Series([r.get(xf) for r in (brief.rows or [])]), errors="coerce").dropna()
+        if xs.empty:
+            return
+        from ..events import events_for
+        from .encoding import EventMarker
+        evs = events_for(getattr(brief, "instance", ""), xs.min(), xs.max())
+        if evs:
+            enc.annotations.events = [EventMarker(at=str(ts.date()), label=lbl) for ts, lbl in evs]
+    except Exception:
+        pass
+
+
 def compile_node(state: StudioState) -> dict:
     brief = state["brief"]
     enc = state["chosen"].model_copy(deep=True)
     enc.data = brief.rows                    # inject the real numbers deterministically
+    _inject_events(enc, brief)               # market-correct macro markers, DATA-driven (not LLM-guessed)
     out_dir = state.get("out_dir", "/tmp")
     png = str(Path(out_dir) / "studio_chart.png")
     try:
