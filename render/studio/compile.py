@@ -14,6 +14,7 @@ import textwrap
 import matplotlib
 
 matplotlib.use("Agg")
+import matplotlib.dates as mdates  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
@@ -146,6 +147,11 @@ def _apply_refs_events(ax, enc: ChartEncoding, df: pd.DataFrame):
         try:
             xv = pd.to_datetime(e.at) if x_is_temporal else float(e.at)
         except (ValueError, TypeError):
+            continue
+        # An event OUTSIDE the displayed x-range must not be drawn: its off-axis label would expand the
+        # tight-bbox figure to absurd width (a chart windowed to 2023-2026 must not sprout a 2008 marker).
+        xnum = mdates.date2num(xv) if x_is_temporal else xv
+        if not (min(xlim0) <= xnum <= max(xlim0)):
             continue
         ax.axvline(xv, color=theme.MUTED, lw=1, ls=":", zorder=2, alpha=0.7)
         ax.annotate(e.label, xy=(xv, 0.98), xycoords=("data", "axes fraction"), fontsize=8,
