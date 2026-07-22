@@ -134,6 +134,55 @@ papers:
     why: "Chart-to-code as the faithful-rendering mechanism (parallels Infogen for infographics): the LLM designs, code renders, numbers are exact — the anti-diffusion principle for visuals."
     superseded_by: null
 
+  # ── Agentic chart-DESIGN subsystem (insight→chart reasoning) — added 2026-07-12 ──
+  - id: data-to-dashboard
+    title: "Data-to-Dashboard: Multi-Agent LLM Framework for Insightful Visualization in Enterprise Analytics"
+    authors: []
+    url: "https://arxiv.org/abs/2505.23695"
+    arxiv_id: "2505.23695"
+    local_path: sources/2505.23695.pdf
+    topics: [agentic-chart-design, insight-to-chart, multi-agent]
+    tier: canonical
+    added: "2026-07-12"
+    why: "The blueprint for OUR charting subsystem: two-stage split (Data→Insight, Insight→Chart), Tree-of-Thought + three-expert consensus DEBATING chart type/encoding against the insight and domain (reasoning, not a lookup table), Reflexion self-reflection, a separate Evaluator scoring insightfulness/novelty/depth. Directly answers 'what chart for this insight and data shape'."
+    superseded_by: null
+
+  - id: plotgen
+    title: "PlotGen: Multi-Agent LLM-based Scientific Data Visualization via Multimodal Feedback"
+    authors: []
+    url: "https://arxiv.org/abs/2502.00988"
+    arxiv_id: "2502.00988"
+    local_path: sources/2502.00988.pdf
+    topics: [agentic-chart-design, multimodal-feedback, self-correction]
+    tier: canonical
+    added: "2026-07-12"
+    why: "The multimodal critique loop we lack: after rendering, Numeric/Lexical/Visual feedback agents (a vision LLM looking at the actual PNG) catch data errors, label problems and visual defects — exactly the label-collision/occlusion craft failures shipped by hand. Render→see→critique→revise. +4-6% MatPlotBench."
+    superseded_by: null
+
+  - id: draco-2
+    title: "Draco 2: An Extensible Platform to Model Visualization Design"
+    authors: []
+    url: "https://arxiv.org/abs/2308.14247"
+    arxiv_id: "2308.14247"
+    local_path: sources/2308.14247.pdf
+    topics: [agentic-chart-design, visualization-grammar, expressiveness-effectiveness]
+    tier: canonical
+    added: "2026-07-12"
+    why: "The formal substrate the agents must reason OVER (Mackinlay APT → Draco): visualization design knowledge as explicit constraints over a grammar (Vega-Lite), judged by expressiveness + effectiveness, with learnable weights. Grounds chart choice in a principled model, not vibes or a decision-tree."
+    superseded_by: null
+
+  - id: multi-agent-viz-narrative
+    title: "Multi-Agent Data Visualization and Narrative Generation"
+    authors: []
+    url: "https://arxiv.org/abs/2509.00481"
+    arxiv_id: "2509.00481"
+    local_path: sources/2509.00481.pdf
+    topics: [agentic-chart-design, narrative-generation, multi-agent]
+    tier: reference
+    added: "2026-07-12"
+    why: "Couples chart generation with the narrative — the persona-voice article and its charts designed together, the Horizon3 stub exactly. Corroborates the two-stage, multi-agent shape."
+    superseded_by: null
+
   # ── Reference-tier guides (indexed from cached extract; no PDF) ───────────
   - id: gdpnow-explainer
     title: "What Is GDPNow? (Atlanta Fed)"

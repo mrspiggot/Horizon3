@@ -22,6 +22,7 @@ import hashlib
 import io
 import json
 import os
+import random
 import time
 from pathlib import Path
 
@@ -31,10 +32,38 @@ CACHE_DIR = _HERE / ".cache"
 COMFYUI_URL = os.environ.get("COMFYUI_URL", "http://127.0.0.1:8188")
 
 
+# A rotating well of van Gogh VISUAL REGISTERS — palette, light, brushwork and mood only, NEVER the
+# subjects. Each run draws one at random so successive articles differ in colour and feeling, but the
+# SUBJECTS are always invented fresh from the article's finding. The named canvas is a shorthand for a
+# look, not a scene to reproduce — the prompt forbids depicting the painting's own subjects/composition.
+_PALETTE: dict[str, str] = {
+    "The Starry Night": "a churning nocturne — deep cobalt and indigo swept with swirling turbulence, "
+        "luminous yellow-white points of light, restless spiralling brushwork, ominous yet transcendent",
+    "Café Terrace at Night": "warm lamplight against deep-blue night — pools of amber and gold set "
+        "against cool dark, an intimate human warmth held against the surrounding shadow",
+    "The Night Café": "a feverish, oppressive palette — clashing blood-red and acid-green under a harsh "
+        "yellow glare, airless tension and unease, garish claustrophobic heat",
+    "Wheat Stack in Provence": "high-noon Provençal heat — saturated amber, ochre and gold under a wide "
+        "bleached sky, heavy stillness and thick sun-baked impasto",
+    "The Red Vineyard": "a blazing low sun — molten red, orange and violet flooding everything, fiery "
+        "reflected light, collective warmth and toil at day's end",
+    "Cypresses": "restless wind-swept greens and blues — twisting flame-like verticals, a rolling "
+        "churning sky, coiled kinetic energy and disquiet",
+    "The Bedroom in Arles": "an enclosed interior calm — flat planes of ochre, lilac and sky-blue, a "
+        "skewed intimate perspective, quiet refuge and repose",
+    "The Yellow House": "brilliant sun-struck daylight — vivid chrome-yellow against intense cobalt, "
+        "clear hard-edged shadows, bright optimism edged with exposure",
+    "Daubigny's Garden": "lush verdant abundance — dense greens dappled with flower-colour, soft diffuse "
+        "summer light, tranquil fertility and ease",
+}
+
+
 # ── the art-director: article finding → a van Gogh scene that evokes it ─────────────────────────────
 def art_director(title: str, decision: str, finding: str) -> dict:
-    """Turn THIS article's finding into a vivid van Gogh-style scene. Returns {scene, caption}. Falls
-    back to a plain scene derived from the finding if the LLM is unavailable (keeps the pipeline alive)."""
+    """Turn THIS article's finding into a vivid van Gogh-style scene. Returns {scene, caption, source}.
+    A visual register (palette/light/mood) is drawn at random from _PALETTE for variety, but the SUBJECTS
+    are always invented from the finding — never the source painting. Falls back if the LLM is down."""
+    painting, register = random.choice(list(_PALETTE.items()))
     try:
         from pydantic import BaseModel, Field
 
@@ -43,8 +72,13 @@ def art_director(title: str, decision: str, finding: str) -> dict:
         class Scene(BaseModel):
             scene: str = Field(description="2-4 sentences describing ONE vivid van Gogh-style oil "
                                "painting that evokes the essence of the finding — subjects, "
-                               "composition, palette, light, brushwork, mood. Figurative/symbolic "
-                               "elements welcome; do NOT depict charts or graphs.")
+                               "composition, palette, light, brushwork, mood. Anchor it in ONE "
+                               "concrete, specific subject drawn from the finding's own particulars "
+                               "(the actual mechanism, actors, place, object or tension it names), not "
+                               "a generic emblem. Figurative/symbolic elements welcome; do NOT depict "
+                               "charts or graphs, and do NOT default to a lone figure walking a "
+                               "road/path/furrow toward a post, signpost, gate or marker, a rising or "
+                               "setting sun, or a fork in the road.")
             caption: str = Field(description="a short metaphor title, <= 8 words")
 
         llm = get_llm().with_structured_output(Scene)
@@ -53,18 +87,32 @@ def art_director(title: str, decision: str, finding: str) -> dict:
             "header illustration: an abstract oil painting in the unmistakable style of Vincent van Gogh "
             "that evokes the ESSENCE of the article's specific finding — its mood, tension and message — "
             "so a reader who merely glances at the picture already senses what the piece is about and how "
-            "it feels. It is an evocative PAINTING, not an infographic: use figurative or symbolic imagery "
-            "freely (a road, a gathering storm, a harvest, a lone figure, a rising or setting sun, birds, "
-            "a threshold, a tide) — whatever best carries THIS finding. Do not depict charts or graphs.\n\n"
+            "it feels. It is an evocative PAINTING, not an infographic: invent figurative or symbolic "
+            "imagery freely. The SUBJECTS of the painting must come ENTIRELY from THIS article's finding "
+            "— the objects, figures, landscape or event you choose must stand for what the finding says. "
+            "\n\nRender it in ONE fixed visual register — the palette, light, brushwork and mood of van "
+            f"Gogh's «{painting}»: {register}. Use that register ONLY for how the picture LOOKS and FEELS. "
+            f"Do NOT depict «{painting}» itself or any of its subjects — no reuse of that painting's "
+            "scene, objects or composition. Two articles handed the same register must still yield "
+            "completely different pictures, because their subjects come from different findings. Do not "
+            "depict charts or graphs.\n\n"
+            "AVOID THE HOUSE CLICHÉ. Do not reach for the stock 'economic destiny' emblem — a lone "
+            "hatted figure trudging along a winding road or furrow toward a distant post, signpost, "
+            "gate or marker; a sun rising or setting on the horizon; a crossroads or a fork in the "
+            "road. Those are exhausted and say nothing specific — a reader could paste them onto any "
+            "article. Instead SEIZE ONE CONCRETE PARTICULAR from THIS finding — the specific force, "
+            "object, actor, threshold or reversal it describes — and build the whole picture around "
+            "that one thing, so this image could not be swapped onto a different piece.\n\n"
             f"Article headline: {title}\n"
             f"The decision it informs: {decision}\n"
             f"The article's actual finding (this is what the painting must evoke): {finding}\n\n"
             "Invent the single scene that best captures the essence of THAT finding.")
         r = llm.invoke(prompt)
-        return {"scene": r.scene.strip(), "caption": r.caption.strip()}
+        return {"scene": r.scene.strip(), "caption": r.caption.strip(), "source": painting}
     except Exception:
         head = " ".join((finding or title).split())[:240]
-        return {"scene": f"A van Gogh-style landscape evoking: {head}", "caption": (title or "")[:60]}
+        return {"scene": f"A van Gogh-style landscape evoking: {head}", "caption": (title or "")[:60],
+                "source": painting}
 
 
 def _build_prompt(scene: str) -> str:
