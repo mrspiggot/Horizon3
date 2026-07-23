@@ -52,14 +52,18 @@ def build_graph():
     return g.compile()
 
 
-def judge_article(prose: str, runs: dict, conn, *, max_iterations: int = 2) -> dict:
+def judge_article(prose: str, runs: dict, conn, *, max_iterations: int = 2,
+                  computed_ledger: str = "") -> dict:
     """Judge one article's prose against the executed runs behind it.
 
     `runs` = {model_id: run_id} — the Output-table rows this article was written from.
+    `computed_ledger` = the article's executed CHART-ANALYSIS figures (regime slopes, chart crossings on
+    derived series, PCA variance) — grounded by the chart's own computation, so the extractor is told not
+    to convict a sentence that merely states one against a raw output series.
     Returns the final state: {claims, verdicts, grounded, failures}.
     """
     return build_graph().invoke(
         {"prose": prose, "runs": runs, "conn": conn, "iterations": 0,
-         "max_iterations": max_iterations, "feedback": ""},
+         "max_iterations": max_iterations, "feedback": "", "computed_ledger": computed_ledger},
         config={"recursion_limit": 12},
     )

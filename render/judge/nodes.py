@@ -112,6 +112,18 @@ RULES
   Emitting these as regime claims convicts a caption for correctly labelling its own axis.
 - Be exhaustive on the five kinds and silent on everything else.
 
+EXECUTED CHART-ANALYSIS FIGURES for THIS article (each is computed by the chart's OWN analysis running
+on the data — a regime slope, a fitted OLS slope, a crossing DATE on a derived/state series such as
+momentum or acceleration, a PCA variance share, and a qualitative reading of WHERE the latest point
+SITS in the chart's own range, e.g. "near the bottom/top/middle of its range"). These are already
+GROUNDED by that computation and their source is the chart, NOT a raw output series. A sentence that
+merely states one of these is TRUE by construction: do NOT extract it as a claim, and NEVER bind it to
+an offered output (a "slope of -0.89" is a Phillips-regime coefficient, not a value of inflation;
+"momentum crossed zero in June" is about the first-derivative series, not the level; "sits near the
+bottom of its range" is a chart-position reading, NOT a percentile — never convert it into one). Skip
+them like any other non-output claim:
+{computed}
+
 OFFERED OUTPUTS (the only ones that exist):
 {outputs}
 
@@ -124,12 +136,31 @@ ARTICLE PROSE:
 def extract(state: JudgeState) -> dict:
     outputs = _offered_outputs(state["runs"], state["conn"])
     fb = state.get("feedback") or ""
+    computed = (state.get("computed_ledger") or "").strip() or "  (none for this article)"
     prompt = _EXTRACT.format(
         outputs=outputs, prose=state["prose"][:14000], episodes=", ".join(sorted(EPISODES)),
+        computed=computed,
         feedback=(f"YOUR LAST ATTEMPT FAILED: {fb}\nFix it.\n\n" if fb else ""))
     llm = get_llm(model=REASONING_MODEL, temperature=0).with_structured_output(Claims)
     got: Claims = llm.invoke(prompt)
     return {"claims": got.claims, "iterations": state.get("iterations", 0) + 1}
+
+
+import re as _re
+
+_SLOPE_RE = _re.compile(r"[-−]\d+\.\d+")
+_MONYR_RE = _re.compile(r"\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+(\d{4})\b")
+
+
+def _chart_figs(text: str) -> set:
+    """The DISTINCTIVE figures a chart's OWN analysis produces: signed slopes (a regime/OLS coefficient
+    like -0.89) and month-year crossing DATES (normalised to 'Mon YYYY' so 'June 2024'=='Jun 2024').
+    Deliberately NOT plain percentages — '2%'/'5%' are common raw-output values, and skipping a claim on
+    one would let a genuine error through, gutting the gate. Minus signs normalised so '−'=='-'."""
+    t = (text or "").replace("−", "-")
+    figs = set(_SLOPE_RE.findall(t))
+    figs |= {f"{m[:3]} {y}" for m, y in _MONYR_RE.findall(t)}
+    return figs
 
 
 def adjudicate_node(state: JudgeState) -> dict:
@@ -137,7 +168,15 @@ def adjudicate_node(state: JudgeState) -> dict:
     conn, runs = state["conn"], state["runs"]
     verdicts: list[Verdict] = []
     unresolved: list[str] = []
+    # Figures the article's charts COMPUTED (regime/OLS slopes, PCA shares, derived-series crossings).
+    # A claim whose every figure is one of these is grounded by the chart's own analysis, not a raw output
+    # series — settled deterministically here so the non-deterministic extractor can't convict it against
+    # the wrong output (the -0.89 regime slope bound to inflation_pct). Belt to the extractor prompt's braces.
+    ledger_figs = _chart_figs(state.get("computed_ledger") or "")
     for c in state.get("claims") or []:
+        qfigs = _chart_figs(getattr(c, "quote", "") or "")
+        if qfigs and qfigs <= ledger_figs:
+            continue  # every figure in this quote is chart-computed & grounded — do not adjudicate
         # Be lenient about a dotted "model.output" arriving in either field — the binding is
         # unambiguous, and failing a true claim on a formatting nit would teach us nothing.
         mid, out = c.model_id, c.output

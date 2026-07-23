@@ -714,6 +714,20 @@ def _strip_stray(text: str) -> str:
     return re.sub(r"[ \t]{2,}", " ", re.sub(r"\s+([.,;:])", r"\1", text)).strip()
 
 
+def computed_ledger(brief: dict) -> str:
+    """The article's executed CHART-ANALYSIS figures, for the Judge: each chart's computed visual reading
+    (regime slopes, fitted OLS slopes, crossings on derived/state series, PCA variance) — grounded by the
+    chart's OWN computation, not a raw output series. Passed to the extractor so it never convicts a
+    sentence that merely states one of these against the wrong output (the -0.89 regime slope, the
+    momentum zero-crossing). Rebuildable from the brief alone, so re-judging matches generation."""
+    lines: list[str] = []
+    for cid, info in (brief.get("chart_index") or {}).items():
+        comp = " ".join((info.get("computed") or "").split())
+        if comp:
+            lines.append(f'  chart «{cid}»: {comp}')
+    return "\n".join(lines)
+
+
 def _judge(full_text: str, brief: dict, conn) -> tuple[bool, list]:
     """§06 role 7 — is the prose grounded in what the models actually produced?
 
@@ -728,7 +742,7 @@ def _judge(full_text: str, brief: dict, conn) -> tuple[bool, list]:
               file=sys.stderr)
         return False, []
     try:
-        st = judge_article(full_text, runs, conn)
+        st = judge_article(full_text, runs, conn, computed_ledger=computed_ledger(brief))
         return bool(st.get("grounded")), list(st.get("failures") or [])
     except Exception as exc:
         print(f"JUDGE FAILED — {type(exc).__name__}: {exc}; grounding is UNPROVEN", file=sys.stderr)
