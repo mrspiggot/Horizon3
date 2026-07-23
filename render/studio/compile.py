@@ -155,7 +155,7 @@ def _apply_refs_events(ax, enc: ChartEncoding, df: pd.DataFrame):
             continue
         ax.axvline(xv, color=theme.MUTED, lw=1, ls=":", zorder=2, alpha=0.7)
         ax.annotate(e.label, xy=(xv, 0.98), xycoords=("data", "axes fraction"), fontsize=8,
-                    color=theme.MUTED, rotation=90, va="top", ha="right")
+                    color=theme.MUTED, rotation=90, va="top", ha="right", annotation_clip=True)
     ax.set_xlim(*xlim0)
     ax.set_ylim(*ylim0)
 

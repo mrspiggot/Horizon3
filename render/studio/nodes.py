@@ -197,11 +197,21 @@ def _inject_events(enc, brief) -> None:
         xs = pd.to_datetime(pd.Series([r.get(xf) for r in (brief.rows or [])]), errors="coerce").dropna()
         if xs.empty:
             return
+        lo, hi = xs.min(), xs.max()
+        # Respect a windowed DISPLAY domain — never inject a marker the chart won't show (a chart the
+        # studio zoomed to 2022-2026 must not carry a 2008 GFC marker, whose off-axis label would blow
+        # the figure width). Bound the events to the intersection of the data and the displayed range.
+        dom = getattr(getattr(enc.encoding.x, "scale", None), "domain", None)
+        if dom and len(dom) == 2:
+            try:
+                dlo, dhi = pd.to_datetime(dom[0]), pd.to_datetime(dom[1])
+                lo, hi = max(lo, dlo), min(hi, dhi)
+            except Exception:
+                pass
         from ..events import events_for
         from .encoding import EventMarker
-        evs = events_for(getattr(brief, "instance", ""), xs.min(), xs.max())
-        if evs:
-            enc.annotations.events = [EventMarker(at=str(ts.date()), label=lbl) for ts, lbl in evs]
+        evs = events_for(getattr(brief, "instance", ""), lo, hi)
+        enc.annotations.events = [EventMarker(at=str(ts.date()), label=lbl) for ts, lbl in evs]
     except Exception:
         pass
 

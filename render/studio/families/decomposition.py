@@ -158,7 +158,7 @@ def render_decomposition(df: pd.DataFrame, spec: DecompSpec, out: str) -> str:
             ax.axvline(ts, color="#9a9aa2", lw=0.9, ls=(0, (2, 3)), zorder=1, alpha=0.7)
             ax.annotate(lbl, xy=(ts, 1.0), xycoords=("data", "axes fraction"), xytext=(2, -3),
                         textcoords="offset points", rotation=90, va="top", ha="left",
-                        fontsize=7.6, color="#8a8a93", zorder=1)
+                        fontsize=7.6, color="#8a8a93", zorder=1, annotation_clip=True)
         except Exception:
             pass
 
