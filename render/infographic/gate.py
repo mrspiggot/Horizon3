@@ -19,9 +19,10 @@ _DIGITS = re.compile(r"-?\d[\d,]*\.?\d*")
 # a "data leak" in prose = a decimal or a unit-suffixed number (what a real figure looks like).
 # Bare integers (counts) and 4-digit years are fine — this is the H2-class leak, not enumeration.
 _LEAK = re.compile(r"\d+\.\d+|\d+\s?(?:%|pp|bp|bps|×|σ)")
-# equivocation a real publication would never print — a decisive read, or none.
-_HEDGE = re.compile(r"\b(one reading|one interpretation|one could argue|arguably|on balance|"
-                    r"broadly speaking|it may be that|some would say)\b", re.I)
+# NOTE: editorial judgment (is the copy decisive or a shrug?) used to live here as a regex blocklist and
+# convicted decisive prose it could not read. That is a JUDGMENT, not a fact — it now belongs to the
+# agentic editor in editorial.py, run in emit() before this deterministic fact-gate. This module verifies
+# FACTS only (numbers == fmt(data-val), provenance, structure, diffusion isolation).
 
 
 def _fmt(fmt: str, val: float, unit: str) -> str:
@@ -103,14 +104,21 @@ def lint_infographic(spec: InfographicSpec, html: str,
         m = _LEAK.search(prose)
         if m:
             p.append(f"un-traced data number {m.group()!r} in prose (must be a NumberObject)")
-        h = _HEDGE.search(prose)
-        if h:
-            p.append(f"equivocation {h.group()!r} in reader copy — make a call, not a shrug")
     return p
 
 
-def emit(spec: InfographicSpec, out_png: str, valid_sources: set[str] | None = None) -> str:
-    """Render → lint → rasterise. RAISES if the tier-1 gate finds any violation."""
+def emit(spec: InfographicSpec, out_png: str, valid_sources: set[str] | None = None,
+         *, review: bool = True) -> str:
+    """Agentic editorial review → render → deterministic fact-gate → rasterise.
+
+    The editor (editorial.review_and_repair) is an LLM that decisively rewrites any genuine shrug in the
+    reader copy, touching no number. It RAISES nothing (fails open). The deterministic lint below is the
+    hard firewall — it RAISES on any FACTUAL violation (number ≠ fmt(data-val), lost provenance, a digit
+    in the illustration slot, a template leak), and runs AFTER the editor so any rewrite is re-verified.
+    """
+    if review:
+        from .editorial import review_and_repair
+        spec = review_and_repair(spec)
     html = render_html(spec)
     problems = lint_infographic(spec, html, valid_sources)
     if problems:
