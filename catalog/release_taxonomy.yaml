@@ -1,0 +1,193 @@
+# Economic-release taxonomy — the OWNED input to scripts/build_release_calendar.py.
+#
+# This is the master list of recurring data releases and policy events we track, encoded as DATA. It
+# carries the STABLE metadata (id / jurisdiction / name / category / domain / tier); the builder learns
+# the DATES and writes catalog/release_calendar.yaml (the generated schedule the ATS harvester reads).
+# Adding a jurisdiction or a release is an edit HERE — never a code change (CLAUDE.md hard-rule #6:
+# generic, not FOMC; the US is one jurisdiction of N, discovered by the identical path as GB/EU/JP).
+#
+# Each release names a `discovery:` method — WHERE its dates come from. The builder never invents a
+# date (hard-rule #2): dates are read from a real source, or projected by deterministic arithmetic from
+# a rule fitted to / declared from real observed history. Anything undiscoverable is written blank +
+# confidence: unknown (hard-rule #5), never guessed.
+#
+#   via: cb_calendar   central-bank rate decisions from UMD cb_meeting_calendars (the single source of
+#                      truth — reconciled, not duplicated). ccy is resolved from jurisdictions.yaml.
+#   via: anchors       real observed dates fetched from the issuing agency (2025–2026), recorded with a
+#                      `source:` URL; the fitter infers the recurrence and projects it forward.
+#   via: rule          an explicit documented recurrence (cadence: string, optional months: list) where
+#                      a clean history wasn't fetched; projected deterministically at medium confidence.
+#   via: fred          the FRED releases/dates API (live) for US releases FRED serves, with a `fallback:`
+#                      (anchors/rule) so the release still resolves offline / without an API key.
+#
+# domain ∈ render/ats/vocab.DOMAIN_TO_PERSONA (rates/inflation/growth/credit/vol/equity/commodity/…).
+# tier: 1 = ★★★ top market-mover · 2 = ★★ · 3 = ★ (a market-impact prior, jurisdiction-blind).
+
+releases:
+  # ── central-bank rate decisions (all jurisdictions; dates sourced from UMD) ──────────────────────
+  - {id: us_fomc, jurisdiction: US, name: "FOMC rate decision", category: rates, domain: rates, tier: 1, discovery: {via: cb_calendar}}
+  - {id: eu_ecb,  jurisdiction: EU, name: "ECB rate decision",  category: rates, domain: rates, tier: 1, discovery: {via: cb_calendar}}
+  - {id: gb_boe,  jurisdiction: GB, name: "BoE Bank Rate decision", category: rates, domain: rates, tier: 1, discovery: {via: cb_calendar}}
+  - {id: jp_boj,  jurisdiction: JP, name: "BoJ policy-rate decision", category: rates, domain: rates, tier: 1, discovery: {via: cb_calendar}}
+  - {id: ch_snb,  jurisdiction: CH, name: "SNB policy assessment", category: rates, domain: rates, tier: 1, discovery: {via: cb_calendar}}
+  - {id: ca_boc,  jurisdiction: CA, name: "BoC rate announcement", category: rates, domain: rates, tier: 1, discovery: {via: cb_calendar}}
+  - {id: au_rba,  jurisdiction: AU, name: "RBA cash-rate decision", category: rates, domain: rates, tier: 1, discovery: {via: cb_calendar}}
+
+  # ── United States ─────────────────────────────────────────────────────────────────────────────────
+  - id: us_cpi
+    jurisdiction: US
+    name: "Consumer Price Index (CPI)"
+    category: inflation
+    domain: inflation
+    tier: 1
+    discovery:
+      via: fred
+      release_name: "Consumer Price Index"
+      fallback:
+        via: anchors
+        source: "BLS CPI schedule (usinflationcalculator.com/inflation/consumer-price-index-release-schedule)"
+        dates: ["2025-12-18", "2026-01-13", "2026-02-13", "2026-03-11", "2026-04-10", "2026-05-12",
+                "2026-06-10", "2026-07-14", "2026-08-12", "2026-09-11", "2026-10-14", "2026-11-10", "2026-12-10"]
+  - id: us_pce
+    jurisdiction: US
+    name: "Personal Income & Outlays (PCE prices)"
+    category: inflation
+    domain: inflation
+    tier: 1
+    discovery:
+      via: fred
+      release_name: "Personal Income and Outlays"
+      fallback: {via: rule, cadence: "fixed_dom: 27", source: "BEA Personal Income & Outlays (~late month)"}
+  - id: us_nfp
+    jurisdiction: US
+    name: "Employment Situation (Nonfarm Payrolls)"
+    category: jobs
+    domain: growth
+    tier: 1
+    discovery: {via: rule, cadence: "nth_weekday: 1 fri", source: "BLS Employment Situation (first Friday, 08:30 ET)"}
+  - id: us_retail
+    jurisdiction: US
+    name: "Advance Retail Sales"
+    category: consumer
+    domain: growth
+    tier: 1
+    discovery:
+      via: fred
+      release_name: "Advance Monthly Sales for Retail"
+      fallback: {via: rule, cadence: "fixed_dom: 16", source: "Census Advance Retail Sales (~mid-month)"}
+  - id: us_ism_services
+    jurisdiction: US
+    name: "ISM Services PMI"
+    category: surveys
+    domain: growth
+    tier: 1
+    discovery: {via: rule, cadence: "fixed_dom: 4", source: "ISM Services (third business day, 10:00 ET)"}
+
+  # ── Euro area ─────────────────────────────────────────────────────────────────────────────────────
+  - id: eu_hicp_flash
+    jurisdiction: EU
+    name: "HICP flash estimate"
+    category: inflation
+    domain: inflation
+    tier: 1
+    discovery: {via: rule, cadence: "last_working_day", source: "Eurostat HICP flash (last working day of month)"}
+  - id: eu_gdp_flash
+    jurisdiction: EU
+    name: "GDP flash estimate"
+    category: growth
+    domain: growth
+    tier: 1
+    discovery:
+      via: anchors
+      source: "Eurostat euro-indicators QNA (flash, ~45 days after quarter)"
+      dates: ["2025-11-14", "2026-02-13", "2026-05-13", "2026-08-14"]
+  - id: eu_pmi_composite
+    jurisdiction: EU
+    name: "HCOB Composite PMI (flash)"
+    category: surveys
+    domain: growth
+    tier: 1
+    discovery: {via: rule, cadence: "fixed_dom: 23", source: "S&P Global / HCOB euro-area flash PMI (~3rd/4th week)"}
+  - id: eu_ifo
+    jurisdiction: EU
+    name: "German Ifo Business Climate"
+    category: surveys
+    domain: growth
+    tier: 1
+    discovery: {via: rule, cadence: "fixed_dom: 24", source: "ifo Institute Business Climate (~24th–25th)"}
+
+  # ── United Kingdom ────────────────────────────────────────────────────────────────────────────────
+  - id: gb_cpi
+    jurisdiction: GB
+    name: "Consumer Price Index (CPI/CPIH)"
+    category: inflation
+    domain: inflation
+    tier: 1
+    discovery:
+      via: anchors
+      source: "ONS Consumer price inflation bulletin, previous releases"
+      dates: ["2025-10-22", "2025-11-19", "2025-12-17", "2026-01-21", "2026-02-18", "2026-03-25",
+              "2026-04-22", "2026-05-20", "2026-06-17", "2026-07-22"]
+  - id: gb_labour
+    jurisdiction: GB
+    name: "Labour market overview"
+    category: jobs
+    domain: growth
+    tier: 1
+    discovery:
+      via: anchors
+      source: "ONS Labour market overview bulletin, previous releases"
+      dates: ["2025-10-14", "2025-11-11", "2025-12-16", "2026-01-20", "2026-02-17", "2026-03-19",
+              "2026-04-21", "2026-05-19", "2026-06-18", "2026-07-21"]
+  - id: gb_gdp
+    jurisdiction: GB
+    name: "Monthly GDP estimate"
+    category: growth
+    domain: growth
+    tier: 1
+    discovery:
+      via: anchors
+      source: "ONS GDP monthly estimate bulletin, previous releases"
+      dates: ["2025-10-16", "2025-11-13", "2025-12-12", "2026-01-15", "2026-02-12", "2026-03-13",
+              "2026-04-16", "2026-05-14", "2026-06-12", "2026-07-16"]
+  - id: gb_services_pmi
+    jurisdiction: GB
+    name: "S&P Global / CIPS Services PMI"
+    category: surveys
+    domain: growth
+    tier: 1
+    discovery: {via: rule, cadence: "fixed_dom: 5", source: "S&P Global / CIPS UK Services PMI (~third business day)"}
+
+  # ── Japan ─────────────────────────────────────────────────────────────────────────────────────────
+  - id: jp_cpi
+    jurisdiction: JP
+    name: "National Consumer Price Index"
+    category: inflation
+    domain: inflation
+    tier: 1
+    discovery: {via: rule, cadence: "fixed_dom: 19", source: "Statistics Bureau National CPI (~19th, Friday, 08:30 JST)"}
+  - id: jp_gdp
+    jurisdiction: JP
+    name: "GDP (first preliminary)"
+    category: growth
+    domain: growth
+    tier: 1
+    discovery: {via: rule, cadence: "fixed_dom: 15", months: [2, 5, 8, 11],
+                source: "Cabinet Office ESRI Quarterly Estimates of GDP (1st prelim, ~45 days after quarter)"}
+  - id: jp_tankan
+    jurisdiction: JP
+    name: "Tankan (large-manufacturer survey)"
+    category: surveys
+    domain: growth
+    tier: 1
+    discovery: {via: rule, cadence: "fixed_dom: 1", months: [4, 7, 10, 12],
+                source: "BoJ Tankan (early Apr/Jul/Oct, mid-Dec — Dec approximate)"}
+  - id: jp_labour_earnings
+    jurisdiction: JP
+    name: "Labour Cash Earnings"
+    category: jobs
+    domain: growth
+    tier: 2
+    # No published schedule verified at build time — left for the builder to flag `unknown` (never
+    # guessed). A data-acquisition backlog item: add `discovery: {via: anchors, dates: [...], source}`
+    # once MHLW dates are confirmed. This row proves the honest-blank path end to end.

@@ -27,6 +27,7 @@ from __future__ import annotations
 import os
 import re
 import sys
+from datetime import date
 from pathlib import Path
 
 import psycopg2
@@ -159,6 +160,72 @@ def _load_axis(cfg: dict) -> dict:
     d = yaml.safe_load(cfg["file"].read_text())
     insts = {x["id"]: x for x in d.get(cfg["list_key"], [])}
     return {"roles": set(d.get("roles", {})), "insts": insts, "order": list(insts), "claim": cfg["claim_field"]}
+
+
+REL_CALENDAR_FILE = REPO / "catalog" / "release_calendar.yaml"
+
+
+def _domain_vocab() -> set[str]:
+    """The ATS domain vocabulary a release must route into (render/ats/vocab.DOMAIN_TO_PERSONA)."""
+    try:
+        sys.path.insert(0, str(REPO))
+        from render.ats.vocab import DOMAIN_TO_PERSONA
+        return set(DOMAIN_TO_PERSONA)
+    except Exception:
+        return {"rates", "inflation", "growth", "credit", "vol", "equity",
+                "cross_asset", "commodity", "crypto"}
+
+
+def _validate_release_calendar() -> int:
+    """Read-only (no DB) check of the generated release calendar the ATS harvester consumes. A malformed
+    record would silently drop or mis-route a candidate. Honours the honesty contract: confidence:
+    unknown ⇒ blank dates (never a guessed date)."""
+    if not REL_CALENDAR_FILE.exists():
+        print("  no release_calendar.yaml (run scripts/build_release_calendar.py) — skipped")
+        return 0
+    doc = yaml.safe_load(REL_CALENDAR_FILE.read_text()) or {}
+    jur_ids = {j["id"] for j in yaml.safe_load(JURIS_FILE.read_text()).get("jurisdictions", [])}
+    domains = _domain_vocab()
+    try:
+        gen = date.fromisoformat(str(doc.get("generated", "")))
+    except ValueError:
+        gen = None
+    req = ("id", "jurisdiction", "name", "domain", "tier", "cadence", "upcoming",
+           "confidence", "provenance")
+    releases, fails = doc.get("releases", []), 0
+    for r in releases:
+        errs = [f"missing '{k}'" for k in req if k not in r]
+        if r.get("jurisdiction") not in jur_ids:
+            errs.append(f"jurisdiction '{r.get('jurisdiction')}' not in jurisdictions.yaml")
+        if r.get("domain") not in domains:
+            errs.append(f"domain '{r.get('domain')}' not in DOMAIN_TO_PERSONA")
+        if r.get("tier") not in (1, 2, 3):
+            errs.append(f"tier {r.get('tier')!r} not in 1..3")
+        conf = r.get("confidence")
+        if conf not in ("high", "medium", "unknown"):
+            errs.append(f"confidence {conf!r} invalid")
+        up = r.get("upcoming") or []
+        parsed = []
+        for ds in up:
+            try:
+                parsed.append(date.fromisoformat(ds))
+            except (ValueError, TypeError):
+                errs.append(f"un-parseable date {ds!r}")
+        if parsed != sorted(parsed):
+            errs.append("upcoming dates not ascending")
+        if gen and parsed and parsed[0] < gen:
+            errs.append("upcoming contains a past date (before `generated`)")
+        if conf == "unknown" and up:
+            errs.append("confidence unknown but upcoming non-empty (must be blank, never guessed)")
+        if not str(r.get("provenance", "")).strip():
+            errs.append("empty provenance")
+        if errs:
+            fails += 1
+            print(f"  {CROSS} {r.get('id', '?'):22} " + "; ".join(errs))
+    resolved = sum(1 for r in releases if r.get("confidence") != "unknown")
+    print(f"  {len(releases)} releases · {resolved} resolved · {len(releases) - resolved} unknown · "
+          + (OK if not fails else FAIL) + f" ({fails} malformed)")
+    return fails
 
 
 def main() -> int:
@@ -334,9 +401,12 @@ def main() -> int:
               + ("" if ok else f"  MISSING: {mv + mc}"))
         jur_fail += (not ok)
 
-    total = over_claims + persona_fail + jur_fail
+    print("\nRELEASE CALENDAR")
+    rel_fail = _validate_release_calendar()
+
+    total = over_claims + persona_fail + jur_fail + rel_fail
     print(f"\nSUMMARY: {over_claims} over-claim/impl failures · {persona_fail} persona unresolved · "
-          f"{jur_fail} jurisdiction vocab/calibration gaps · "
+          f"{jur_fail} jurisdiction vocab/calibration gaps · {rel_fail} release-calendar malformed · "
           f"{sum(1 for d in docs.values() if d.get('build_stub'))} stubs")
     conn.close()
     return 0 if total == 0 else 1
