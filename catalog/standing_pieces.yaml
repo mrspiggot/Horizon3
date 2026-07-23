@@ -1,0 +1,56 @@
+# Standing pieces — evergreen comparative templates the ATS can always propose.
+#
+# A standing piece is ALWAYS eligible at its `evergreen_floor` (so the shortlist is never empty and the
+# estate gets exercised even on a quiet day); its `lights_up_when` condition raises its score when the
+# moment is apt (e.g. a week when ≥2 central banks decide). `personas`/`models`/`jurisdictions` are
+# validated against the graph headers by render/ats/vocab.py, so a typo fails loudly. Because these are
+# grounded in existing, jurisdiction-generic models, they are groundable by construction.
+#
+# lights_up_when conditions (evaluated in render/ats/harvest.py against the run context):
+#   cb_meeting_collision: {within_days, min_banks}   — ≥min_banks of the 7 CBs decide within the window
+#   recent_surprise:      {domain, abs_z_min, within_days}  — a large recent macro surprise in `domain`
+
+standing_pieces:
+  - id: cb_policy_comparison
+    title: "One rulebook, seven verdicts: how the major central banks are diverging"
+    thesis: >
+      Run the same reaction-function lens across the G10 majors: who is behind their own rulebook, who
+      is ahead, and where the policy divergence — and the trade in it — is widest.
+    personas:      [central_bank_policymaker]
+    models:        [reaction_function, policy_stance, recession_probability]
+    jurisdictions: [US, EU, GB, JP, CH, CA, AU]
+    domain: rates
+    lights_up_when:
+      any:
+        - cb_meeting_collision: {within_days: 7, min_banks: 2}
+        - recent_surprise:      {domain: inflation, abs_z_min: 1.5, within_days: 5}
+    evergreen_floor: 0.45
+
+  - id: quality_ladder_regime
+    title: "Down the quality ladder: is the market paying you for default risk, or for calm?"
+    thesis: >
+      The credit spread ladder and the Gilchrist-Zakrajšek decomposition read together — how much of
+      today's spread is expected loss versus the risk-appetite residual, and what that says about the
+      cycle.
+    personas:      [credit_investor]
+    models:        [credit_quality_ladder, oas_implied_default, credit_excess_bond_premium]
+    jurisdictions: [US]
+    domain: credit
+    lights_up_when:
+      any:
+        - recent_surprise: {domain: growth, abs_z_min: 1.5, within_days: 7}
+    evergreen_floor: 0.40
+
+  - id: real_rate_regime
+    title: "What is really in the long bond: expectations, or the price of duration risk?"
+    thesis: >
+      The ACM decomposition of the 10-year into expected-rate path versus term premium, read as a state
+      — where the premium sits versus its own history and which way it is moving.
+    personas:      [macro_rates_trader]
+    models:        [term_premium_decomposition, term_premium_surface, expectations_path]
+    jurisdictions: [US]
+    domain: rates
+    lights_up_when:
+      any:
+        - cb_meeting_collision: {within_days: 5, min_banks: 1}
+    evergreen_floor: 0.38
