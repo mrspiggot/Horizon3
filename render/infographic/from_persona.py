@@ -204,17 +204,13 @@ def clean_meaning(meaning: str, fallback: str = "") -> str:
     return fallback or (m[:24].rsplit(" ", 1)[0] + "…")
 
 
-# hedges a real publication would never print — strip them so the read is a CALL, not a shrug
-_HEDGE_PREFIX = re.compile(r"^.*?\b(reading|reads|trade|interpretation|take|models?)\b[^:]*:\s*", re.I)
-_HEDGE_WORD = re.compile(
-    r"\b(arguably|perhaps|somewhat|broadly|on balance|it may be(?: that)?|one could argue|"
-    r"tends to|seems to|appears to)\b[,]?\s*", re.I)
-
-
 def decisive(s: str) -> str:
-    """Turn a hedged sentence into a declarative call (drop 'One reading:' etc.)."""
-    s = _HEDGE_PREFIX.sub("", s or "").strip()
-    s = _HEDGE_WORD.sub("", s).strip()
+    """Normalise a caption's whitespace and casing. It does NOT judge whether the copy hedges — that was
+    a regex blocklist ('one reading', 'arguably', …) stripping words it could not read, which mangled
+    decisive lines. Captions are already decisive: they carry a chart's COMPUTED insight (deterministic),
+    and any LLM-authored reader copy is judged by the agentic editor (editorial.py). Decisiveness is the
+    generator's job and the agent's — never a downstream regex."""
+    s = " ".join((s or "").split())
     return (s[:1].upper() + s[1:]) if s else s
 
 

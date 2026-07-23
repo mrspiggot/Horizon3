@@ -103,7 +103,6 @@ def review_and_repair(spec: InfographicSpec, *, max_fix: int = 3) -> Infographic
     except Exception:
         return spec                                      # fail open — the deterministic gate still guards facts
     verdicts = {v.id: v for v in review.lines}
-    originals = dict(lines)
     fixes = 0
     for lid, original in lines:
         v = verdicts.get(lid)
@@ -117,3 +116,40 @@ def review_and_repair(spec: InfographicSpec, *, max_fix: int = 3) -> Infographic
         if fixes >= max_fix:
             break
     return spec
+
+
+class _Contradiction(BaseModel):
+    contradicted_ids: list[str] = Field(
+        default_factory=list,
+        description="ids whose stated direction/level the ARTICLE BODY plainly contradicts for the SAME concept")
+
+
+def contradicted_by_body(body: str, items: list[tuple[str, str]]) -> set[str]:
+    """Which data-derived state badges does the finished article BODY plainly contradict?
+
+    `items` = [(id, "CPI: elevated, rising"), …]. A dashboard must never state the opposite of the prose
+    beside it (the Horizon2 'dishonest panel'). Deciding whether prose contradicts a state is meaning, not
+    a keyword — it was a set of direction-word regexes (_FALLING/_RISING/…) that fired on "not falling"
+    and missed paraphrase. An LLM reads the body and each badge's claim and returns only GENUINE
+    contradictions (badge says rising, body says that concept is falling).
+
+    Fails OPEN → set() (suppress nothing). The badges are computed from data and TRUE; on an LLM outage it
+    is better to show the data than to over-suppress it, and the caller's floor still holds.
+    """
+    if not body or not items or os.environ.get("HORIZON3_NO_EDITORIAL"):
+        return set()
+    try:
+        from ..studio.llm import get_llm
+        llm = get_llm(max_tokens=600).with_structured_output(_Contradiction)
+        listing = "\n".join(f"  [{i}] {claim}" for i, claim in items)
+        res = llm.invoke(
+            "You are fact-checking an infographic against its own article. Each badge states a "
+            "data-derived STATE for one concept (level and/or momentum, e.g. 'CPI: elevated, rising'). "
+            "Return ONLY the ids whose direction or level the ARTICLE BODY plainly contradicts FOR THE "
+            "SAME concept — the body says that concept is falling where the badge says rising, or low "
+            "where the badge says elevated. Do not flag silence, a different concept, or a fuzzy read.\n\n"
+            "BADGES:\n" + listing + "\n\nARTICLE BODY:\n" + body[:6000])
+        valid = {i for i, _ in items}
+        return {i for i in res.contradicted_ids if i in valid}
+    except Exception:
+        return set()

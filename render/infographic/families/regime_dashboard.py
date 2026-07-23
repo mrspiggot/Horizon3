@@ -200,22 +200,14 @@ def _state_words(st) -> tuple[str, str]:
 
 # A badge reads the raw input STATE (z-score over the model's window); the body reads the model's
 # INTERPRETATION, often against a recent range. They can clash — "CPI: elevated, rising" beside a body
-# that says inflation is low and its momentum has bled out. We suppress a badge ONLY when the body
-# clearly says the opposite for the same concept (the opposite cue present, the confirming cue absent),
-# never on ambiguity: a factual badge is not convicted on a fuzzy read, and the floor still holds.
-_FALLING = re.compile(r"\b(fall\w*|fell|declin\w*|deceler\w*|eas(?:e|ed|ing)|cool\w*|bled?\s*out|"
-                      r"bleed\w*|drop\w*|lower|receded?|recedin\w*|soften\w*|softer|slow\w*|subsid\w*|"
-                      r"drain\w*|ebb\w*|come\s+down|coming\s+down|abat\w*|fad\w*)\b", re.I)
-_RISING = re.compile(r"\b(ris\w*|rose|acceler\w*|climb\w*|higher|hotter|surg\w*|jump\w*|"
-                     r"firm(?:ing|er|ed)|pick\w*\s+up|heat\w*\s+up)\b", re.I)
-_LOWWORD = re.compile(r"\b(low|lowest|bottom|subdued|depressed|below|weak\w*|muted)\b", re.I)
-_HIGHWORD = re.compile(r"\b(high|highest|elevated|above|strong\w*|hot)\b", re.I)
+# that says inflation is low and its momentum has bled out. Whether the body CONTRADICTS a badge is a
+# question of meaning, not a keyword: it used to be a stack of direction-word regexes that fired on "not
+# falling" and missed paraphrase. It is now an LLM consistency check (editorial.contradicted_by_body),
+# which suppresses a badge ONLY on a genuine contradiction, never on ambiguity — and the floor still holds.
 
-# the body and the badge often use different words for one concept (a "CPI" badge vs an "inflation"
-# body). Expand a label to its synonym group so the concept's sentences are actually found.
-# synonym groups kept TIGHT — only words that unambiguously name the concept. Generic words that
-# collide with other subjects ("price"/"prices" → "oil prices", "rate" → any rate) are excluded, so a
-# badge is never suppressed on a sentence that is actually about something else.
+# Concept resolution stays deterministic — it is retrieval, not judgment: expand a badge's label to the
+# synonym group that unambiguously names the same concept (a "CPI" badge vs an "inflation" body), so
+# per-concept dedup (the regime quadrant) and the consistency check agree on what a badge is ABOUT.
 _SYN = [
     {"cpi", "inflation", "pce", "disinflation", "inflationary"},
     {"unemployment", "jobless", "payroll", "payrolls"},
@@ -223,12 +215,8 @@ _SYN = [
     {"gdp", "output"},
     {"vol", "volatility", "vix"},
 ]
-
-
-# words that are shared across DIFFERENT concepts and so must never be the thing a badge matches on:
-# "subindex" (risk/credit/leverage all carry it), "real" (real GDP vs real rate), "curve"/"spread"/
-# "yield" (many), "gauge". Matching only DISTINCTIVE words stops a badge firing on a sentence that is
-# really about a sibling concept — the v6 over-suppression (Leverage fired on "risk subindex").
+# words shared across DIFFERENT concepts ("real" GDP vs real rate, "curve"/"spread"/"yield") — never the
+# thing a concept matches on, so a badge is never confused with a sibling concept.
 _GENERIC = {"rate", "rates", "index", "gauge", "the", "subindex", "real", "nominal", "curve",
             "spread", "yield", "level", "change", "growth"}
 
@@ -241,40 +229,11 @@ def _concept_words(label: str) -> set[str]:
     return ws
 
 
-def _badge_contradicts_body(label: str, lvl: str, mom: str, body: str) -> str:
-    """The body text proving it says the OPPOSITE of this badge for the same concept, or "". Tightened
-    to PROXIMITY: the opposite cue must sit within ~8 words of the concept word, with no confirming cue
-    in that window — so a long sentence that merely mentions the concept and, elsewhere, an unrelated
-    direction word does not fire. Returns the window for an auditable log."""
-    concept = _concept_words(label)
-    if not concept or not body:
-        return ""
-    toks = body.split()
-    low = [w.lower().strip(".,;:—()") for w in toks]
-    for i, w in enumerate(low):
-        if w not in concept:
-            continue
-        lo, hi = max(0, i - 8), min(len(toks), i + 9)
-        window = " ".join(low[lo:hi])
-        opp = confirm = False
-        if mom == "rising":
-            opp, confirm = bool(_FALLING.search(window)), bool(_RISING.search(window))
-        elif mom == "falling":
-            opp, confirm = bool(_RISING.search(window)), bool(_FALLING.search(window))
-        if not (opp and not confirm):                          # try the LEVEL contradiction too
-            if lvl == "elevated":
-                opp, confirm = bool(_LOWWORD.search(window)), bool(_HIGHWORD.search(window))
-            elif lvl == "depressed":
-                opp, confirm = bool(_HIGHWORD.search(window)), bool(_LOWWORD.search(window))
-        if opp and not confirm:
-            return " ".join(toks[lo:hi])
-    return ""
-
-
 def _badges(mat: dict, limit: int = 5, *, article: dict | None = None, floor: int = 3) -> list[Block]:
-    """One §10 state badge per key input, deduped across the persona's models. A badge that clearly
-    contradicts the finished body is suppressed (down to the floor), so the dashboard cannot say the
-    opposite of the article beside it."""
+    """One §10 state badge per key input, deduped across the persona's models. A badge the finished body
+    plainly contradicts is suppressed (down to the floor), so the dashboard cannot say the opposite of
+    the article beside it — judged by an agent, not a regex."""
+    from ..editorial import contradicted_by_body
     body = (article or {}).get("full_text") or ""
     cands, seen = [], set()
     for mid in mat["p"].get("models", []):
@@ -288,16 +247,18 @@ def _badges(mat: dict, limit: int = 5, *, article: dict | None = None, floor: in
             if not lvl and not mom:
                 continue
             seen.add(iid)
-            label = _badge_label(iid)
-            trig = _badge_contradicts_body(label, lvl, mom, body)
-            cands.append({"iid": iid, "label": label, "lvl": lvl, "mom": mom,
-                          "contra": bool(trig), "trig": trig})
+            cands.append({"iid": iid, "label": _badge_label(iid), "lvl": lvl, "mom": mom})
+    # one agentic pass: which badges does the body genuinely contradict? (empty on any LLM outage)
+    claims = [(c["iid"], f"{c['label']}: {', '.join(w for w in (c['lvl'], c['mom']) if w)}") for c in cands]
+    contra_ids = contradicted_by_body(body, claims)
+    for c in cands:
+        c["contra"] = c["iid"] in contra_ids
     clean = [c for c in cands if not c["contra"]]
     kept = clean + [c for c in cands if c["contra"]][: max(0, floor - len(clean))]
     for c in cands:
         if c["contra"] and c not in kept:
             print(f"BADGE suppressed — {c['label']}: {', '.join(w for w in (c['lvl'], c['mom']) if w)} "
-                  f"| body: “{c['trig'][:70]}”", file=sys.stderr)
+                  f"| the body contradicts it (LLM consistency check)", file=sys.stderr)
     out = []
     for c in kept[:limit]:
         words = ", ".join(w for w in (c["lvl"], c["mom"]) if w)
