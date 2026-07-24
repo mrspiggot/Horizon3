@@ -9,8 +9,11 @@ still authored by execution — the LLM cites values only by {token}; the render
 The quality bar is FT / Economist / WSJ, and the explicit anti-pattern is StoryScope (arXiv 2604.03136):
 AI prose over-explains and moralizes, tells tidy single-track stories, stays vague instead of naming
 episodes, writes as if no one is watching, forces tidy resolution, over-writes the senses. Three layers
-push against that: the StoryScope rules live in the prompts, a deterministic `_slop_lint` catches the
-worst tells, and an LLM editor scored on the StoryScope checklist runs a bounded revise loop.
+push against that: the StoryScope rules live in the write prompt, and an LLM editor scored on the
+StoryScope checklist runs a bounded revise loop. (Slop is an editorial judgment — the LLM critic owns
+it; a regex phrase-blocklist used to convict decisive prose it could not read, and is gone.) The
+deterministic checks that remain verify FACTS only — untraced numbers, worded precision, fabricated
+episodes, stray tokens — never taste.
 """
 from __future__ import annotations
 
@@ -54,19 +57,12 @@ def _invoke(llm, prompt: str, tries: int = 3):
             last = exc
     raise last
 
-# the worst AI-slop tells (StoryScope + the usual LLM crutches) — a deterministic pre-filter before the
-# LLM critic. Widened from gate._HEDGE. Matched case-insensitively over the filled prose.
-_SLOP = re.compile(
-    r"\b(the (?:key )?takeaway|the lesson (?:here )?is|in conclusion|to sum up|it'?s worth noting|"
-    r"at the end of the day|in a world where|one reading|it is important to note|needs? no introduction|"
-    r"delve|tapestry|testament to|ever-evolving|navigat\w+ the complexit|in today'?s|"
-    r"when it comes to|the bottom line|make no mistake|that said,? it'?s clear|"
-    r"paints? a picture|speaks? volumes|the reality is|ultimately,|"
-    # meta-scaffolding: narrating the article's own machinery instead of writing it (a clumsy AI tell —
-    # address the reader about the SUBJECT, never describe 'this piece' or announce 'you will see')
-    r"you will see|we will see|as we(?:'| wi)ll see|this piece|this article|the charts that follow|"
-    r"the pivot of this|in the pages that follow|read on(?=[.,;:!?])|as this piece|the sections that follow)\b",
-    re.I)
+# AI-slop is an editorial judgment, not a keyword. It used to be a phrase blocklist (`_SLOP`) that
+# force-deleted matched strings in the revise loop — convicting decisive prose ("one reading", "the
+# reality is", "ultimately") it could not read. That judgment belongs to the StoryScope LLM critic
+# (`critique_article`) that already runs below; the anti-slop rules also live in the write prompt. Facts
+# (untraced numbers, worded precision, fabricated episodes, stray tokens) stay deterministic — those are
+# verified, not judged.
 
 
 # ── schemas ──────────────────────────────────────────────────────────────────────────────────────
@@ -74,7 +70,7 @@ class SectionPlan(BaseModel):
     heading: str = Field(description="a short, specific section heading (not generic)")
     thesis: str = Field(description="the single point this section makes, in one sentence")
     model_id: str = Field(description="which model this section is grounded in")
-    chart_ids: list[str] = Field(default_factory=list, description="0-2 chart ids (exact) that illustrate this section")
+    chart_ids: list[str] = Field(default_factory=list, description="the exact chart ids this section will NARRATE, in order (one dedicated paragraph + [[FIG]] marker per chart). Every chart in the evidence must be assigned to exactly one section; place as many here as the section narrates.")
     token_ids: list[str] = Field(default_factory=list, description="the {n} tokens whose figures this section will cite")
 
 
@@ -85,7 +81,7 @@ class Outline(BaseModel):
     pivot: str = Field(description="the SINGLE mechanism the whole article turns on, to flag up front so "
                                    "the piece flows (e.g. 'the Gilchrist-Zakrajšek decomposition: is the "
                                    "spread paying you for default risk, or for risk appetite?')")
-    sections: list[SectionPlan] = Field(description="4-6 sections forming a narrative arc that WEAVES the models")
+    sections: list[SectionPlan] = Field(description="the sections forming a narrative arc that WEAVES the models — as many as the material needs; together they must place EVERY chart in the evidence")
     open_close: str = Field(description="the unresolved risk/tension the piece should end on — NOT a tidy bow")
 
 
@@ -109,12 +105,11 @@ class SectionBinding(BaseModel):
 
 class Article(BaseModel):
     standfirst: str
-    exec_summary: str = Field(description="the NARRATIVE executive summary — ~160-240 words of prose that "
-                              "answers 'why should I read this?': an extended foreshadow that names the "
-                              "article's central PIVOT up front, tells the reader what they will learn, and "
-                              "DEFINES each key term/abbreviation once on first use (e.g. 'option-adjusted "
-                              "spread, or OAS'). It sets up — and hands off to — the visual summary (the "
-                              "infographic) that follows it. Cite figures only as {n} tokens.")
+    exec_summary: str = Field(description="a PLAIN-LANGUAGE executive summary — a short (~120-200 word) "
+                              "paragraph giving a time-poor reader the GIST and the key takeaways in simple, "
+                              "everyday words (jargon defined or avoided), stating the 3-5 actual insights "
+                              "the models and charts found — a human editor's precis, not a teaser or a "
+                              "nut-graf. Cite figures only as {n} tokens.")
     sections: list[SectionDraft]
 
 
@@ -175,6 +170,19 @@ def _is_snapshot(c: dict) -> bool:
     return dc.get("kind") in {"named_values", "bar"} or c.get("chart_type") in {"bar", "named_values"}
 
 
+_DERIV_STATES = {"direction", "acceleration", "momentum"}
+
+
+def _is_pure_derivative_state(c: dict) -> bool:
+    """SIGNAL GATE (P2): a body chart whose EVERY series is a §10 DERIVATIVE state (direction /
+    acceleration / momentum) — a zero-oscillating line with no level and no meaningful threshold, so it
+    tells no story as a body exhibit. The §10 state belongs in the infographic quadrant, not the article
+    body. Graph-driven and jurisdiction-agnostic: it reads only the data_contract's declared series
+    states. (The owner's canonical noise example: 'inputs as §10 STATES — inflation momentum & accel'.)"""
+    refs = _refs(c.get("data_contract") or {})
+    return bool(refs) and all((st or "level") in _DERIV_STATES for (_k, _f, st) in refs)
+
+
 def build_brief(mat: dict, *, conn=None, limit: int = 24) -> dict:
     """Everything the planner/writer sees: the token menu, and per model its name, grounding, method,
     outputs, chart insights, live regime call, and — when `conn` is given — the §10 FACT SHEET of every
@@ -220,6 +228,12 @@ def build_brief(mat: dict, *, conn=None, limit: int = 24) -> dict:
         for c in keep:
             cid, ins = c.get("id", ""), " ".join((c.get("insight") or "").split())
             if cid:
+                # SIGNAL GATE: a pure §10 derivative-state chart tells no story as a body exhibit — drop it
+                # (it is represented in the infographic quadrant). Noise removed by the DATA, deterministically.
+                if _is_pure_derivative_state(c):
+                    print(f"NOISE-DROP — {cid}: pure §10 derivative-state chart (belongs in the "
+                          f"infographic quadrant, not the article body)", file=sys.stderr)
+                    continue
                 charts.append((cid, ins))
                 # The chart's OWN computed analysis (regime slopes, the pooled fit, the shift, later PCA
                 # loadings) — so the prose is DRIVEN by what the picture shows, not a textbook prior. Each
@@ -400,17 +414,22 @@ def plan_arc(brief: dict, feedback: str = "") -> Outline:
     p = brief["mat"]["p"]
     llm = get_llm(max_tokens=4096).with_structured_output(Outline)
     prompt = (
-        f"You are the section editor planning a ~1000-1200 word feature for a {p['name']}. "
+        f"You are the section editor planning a feature for a {p['name']}. Length is STORY-DRIVEN — as "
+        f"long as the evidence needs (roughly 150-200 words per chart narrated), NO word cap. "
         f"The decision it informs: {p.get('decision','')}. Working title: \"{p['title']}\".\n\n"
         f"{_frame_steer(brief)}"
         f"{_brief_text(brief)}\n\n"
         "First decide the PIVOT — the single mechanism the whole piece turns on — and plan for it to be "
         "flagged UP FRONT (in the standfirst and the executive summary) so the article flows: tell the "
         "reader what you are going to tell them, then tell them. Then plan the article as a NARRATIVE ARC "
-        "that WEAVES these models into one thesis — foreshadow, develop across 4-6 sections, turn on the "
-        "sharpest finding, end on the open risk. Do NOT write one tidy section per model in list order; "
-        "braid them. Assign each section the exact chart id(s) that illustrate it and the {n} tokens it "
-        "will cite. CHART CHOICE MATTERS: prefer the chart that shows the most. When a point is about a "
+        "that WEAVES these models into one thesis — foreshadow, develop across as many sections as the "
+        "material needs, turn on the sharpest finding, end on the open risk. Do NOT write one tidy section "
+        "per model in list order; braid them. "
+        "EVERY chart in the evidence above MUST be assigned to exactly one section and will be narrated "
+        "there (each chart is a model run on data with a real signal — noise was already removed). Assign "
+        "each section the exact chart id(s) it will narrate and the {n} tokens it will cite. Do not leave "
+        "any chart unplaced; do not place a chart you have no story for. "
+        "CHART CHOICE MATTERS: prefer the chart that shows the most. When a point is about a "
         "CROSS-SECTION of levels (a curve, a quality ladder, a term structure), place the chart that shows "
         "BOTH the levels AND how they have moved — a now-vs-prior comparison ('now vs 3 months ago') or "
         "the cross-section through time — in preference to a lone derived spread or a single static "
@@ -447,19 +466,20 @@ def write_article(brief: dict, outline: Outline, feedback: str = "") -> Article:
          f"END ON (open risk): {outline.open_close}", "", "SECTIONS:"]
         + [_sec_line(i, s) for i, s in enumerate(outline.sections)])
     prompt = (
-        f"You are a {p['name']} writing the full feature to the plan below. Target 1000-1200 words total.\n"
+        f"You are a {p['name']} writing the full feature to the plan below. Length is STORY-DRIVEN — as "
+        f"long as the charts' stories need, NO word cap; every chart gets its full beat.\n"
         f"{_frame_steer(brief)}"
         "STRUCTURE, in order:\n"
         "  1. STANDFIRST — the sharp foreshadowing hook (given).\n"
-        "  2. EXECUTIVE SUMMARY — ~160-240 words of narrative prose that earns the reader's next ten "
-        "minutes. Establish the stakes and the PIVOT, and DEFINE each key term/abbreviation once on first "
-        "use (e.g. 'the option-adjusted spread, or OAS', 'high yield (HY)'), using the abbreviation "
-        "thereafter. Foreshadow with FLAIR, the way an FT or Economist nut-graf does — through a confident, "
-        "specific claim and the tension in it, so the promise of what's coming is IMPLICIT. Do NOT recite a "
-        "table of contents. FORBIDDEN, because they are the clumsy mechanical tell an editor would cut: "
-        "'you will see…', 'this piece/article', 'the pivot of this piece', 'the charts that follow', "
-        "'start with the…', and any sentence that narrates the article's own structure. Address the reader "
-        "about the SUBJECT ('you are being paid…'), never about the document.\n"
+        "  2. EXECUTIVE SUMMARY — a short PLAIN-LANGUAGE paragraph (~120-200 words) that gives a time-poor "
+        "reader the GIST and the key takeaways in simple, everyday words, so they get the point even if "
+        "they read nothing else. This is NOT the dense nut-graf; it is a human editor's precis. Say what "
+        "is going on and why it matters in language a smart non-specialist understands — DEFINE or AVOID "
+        "jargon (write 'the after-inflation interest rate', not just 'the real rate'; gloss any "
+        "abbreviation on first use). State the 3-5 actual insights plainly (what the models and charts "
+        "found), not a teaser. Do NOT use flair for its own sake, do NOT recite a table of contents, and "
+        "FORBIDDEN: 'you will see…', 'this piece/article', 'the charts that follow', 'start with the…', and "
+        "any sentence that narrates the article's own structure. Plain, concrete, honest.\n"
         "  3. SECTIONS — the detail: flowing paragraphs (not bullets), each grounded in its model AND its "
         "chart. Narrate the model's finding — its outputs and what it says — AND, in the same paragraph, "
         "READ the specific chart you point at: name the visual feature the eye lands on (the crossing or "
@@ -469,10 +489,18 @@ def write_article(brief: dict, outline: Outline, feedback: str = "") -> Article:
         "its [chart …] note — use it. Never name a chart without reading it; never restate a figure "
         "without saying what the picture shows.\n\n"
         f"{_brief_text(brief)}\n\n{plan}\n\n" + _VOICE
-        + "\n\nReturn the standfirst, the executive summary, and each section's heading + prose. Cite "
-        "figures ONLY as the {n} number tokens — the ONLY braces permitted in your prose. Do NOT insert "
-        "figure numbers, footnote markers, or {chart} references; to point at a chart, name it in plain "
-        "words. The charts are placed for you from the plan."
+        + "\n\nEVERY chart is a model run on real data with a computed visual reading — it exists to be "
+        "TOLD. So for EACH chart listed under a section, write a dedicated paragraph that narrates it — "
+        "the model's finding AND what the picture shows — and then, on its OWN LINE immediately after "
+        "that paragraph, place the marker [[FIG: <exact chart id>]] (copy the chart id verbatim between "
+        "the colon and the closing brackets) to mark where that chart belongs. One narrating paragraph "
+        "and one [[FIG: id]] marker per chart. Do NOT show a chart you have not narrated, and do NOT "
+        "narrate a chart without its [[FIG: id]] marker — a chart with no story is not in your list "
+        "(noise was already removed). Take as many words as the stories need; there is no length cap.\n"
+        "Return the standfirst, the plain-language executive summary, and each section's heading + prose "
+        "(with its [[FIG: id]] markers). Cite figures ONLY as the {n} number tokens — the ONLY braces "
+        "permitted. Do NOT insert figure numbers or footnote markers; the [[FIG: id]] marker is the ONLY "
+        "way to place a chart, and elsewhere point at a chart by naming it in plain words."
         + (f"\n\nYour previous draft was rejected. Fix exactly this: {feedback}" if feedback else ""))
     return _invoke(llm, prompt)
 
@@ -623,10 +651,6 @@ def _finalize_article(article: Article, toks: dict) -> tuple[str, str, str, list
     unfilled = _TOKLEFT.search(full)
     leak = (unfilled.group() if unfilled else None) or (leaks[0] if leaks else None)
     return full, sf, ex, filled_sections, leak
-
-
-def _slop_lint(text: str) -> list[str]:
-    return sorted({m.group(0) for m in _SLOP.finditer(text)})
 
 
 _YEAR = re.compile(r"\b(199\d|20\d\d)\b")   # market-episode years 1990–2099 (pre-1990 = academic cites, ignored)
@@ -1178,30 +1202,22 @@ def _place_charts(bindings: list[SectionBinding], ci: dict, *, soft_cap: int = 1
             if c not in picked:
                 picked.append(c)
 
-    if len(picked) < _CHART_FLOOR:
-        final = _exhibit_contract(picked, ci)                      # under floor → fill up to the floor
-    elif len(picked) <= soft_cap:
-        final = _dedup_keep(picked, ci)                            # 4..cap → keep what the argument named
+    # STORY-DRIVEN COUNT: keep exactly what the sections NAMED (deduped); over the cap, diversify down.
+    # NO floor-padding — a chart ships only because a section asked for it and will narrate it. The old
+    # `_exhibit_contract` fill (which homed charts by model ownership with no prose) is deleted: that was
+    # the source of caption-only orphans.
+    if len(picked) <= soft_cap:
+        final = _dedup_keep(picked, ci)                            # keep what the argument named (deduped)
     else:
         final = _greedy_diverse([], picked, ci, soft_cap)          # over the cap → diversify down to it
     if len(final) != len(picked):
         print(f"EXHIBIT CONTRACT — sections named {len(picked)}, shipping {len(final)} "
-              f"(floor {_CHART_FLOOR}, soft cap {soft_cap})", file=sys.stderr)
+              f"(dedup / soft cap {soft_cap})", file=sys.stderr)
 
     finalset = set(final)
-    for b in bindings:                                             # 1) keep each section's own survivors
+    for b in bindings:                                             # keep each section's own survivors only
         b.chart_ids = [c for c in b.chart_ids if c in finalset]
         b.origin = {c: b.origin.get(c, "planned") for c in b.chart_ids}
-    placed = {c for b in bindings for c in b.chart_ids}
-    for cid in final:                                              # 2) home the floor-fill by provenance
-        if cid in placed:
-            continue
-        mid = (ci.get(cid) or {}).get("model_id")
-        home = next((b for b in bindings if b.model_id and b.model_id == mid), None) \
-            or min(bindings, key=lambda b: len(b.chart_ids))
-        home.chart_ids.append(cid)
-        home.origin[cid] = "floor"
-        placed.add(cid)
 
     # dedup AFTER placement: within a section collapse a subset chain (the double-EBP, a locus + its
     # two-series twin) keeping the prose form; across sections drop only near-exact duplicates. A
@@ -1210,7 +1226,10 @@ def _place_charts(bindings: list[SectionBinding], ci: dict, *, soft_cap: int = 1
     if dropped:
         print(f"CONCEPT-DEDUP charts — dropped {len(dropped)} redundant: {', '.join(dropped)[:90]}",
               file=sys.stderr)
-    _spread_overloaded_sections(bindings, ci)
+    # NOTE: _spread_overloaded_sections is DISABLED — it relocated charts across sections by keyword,
+    # which breaks the writer's [[FIG]] marker↔chart pairing (a moved chart's beat stays in the old
+    # section). Placement is now story-driven: each chart stays in the section whose prose narrates it.
+    # _spread_overloaded_sections(bindings, ci)
 
 
 def _chart_matches_section(cid: str, sec: SectionBinding) -> int:
@@ -1384,6 +1403,27 @@ def _reconcile_prose_charts(full_text: str, bindings: list[SectionBinding], brie
     return added
 
 
+def _resolve_marker_id(text: str, cids: list, shown: set):
+    """Resolve a [[FIG: …]] marker's text to one of the section's not-yet-shown charts — exact, then
+    substring, then fuzzy, then the sole remaining chart. None if nothing plausible remains."""
+    avail = [c for c in cids if c not in shown]
+    if not avail:
+        return None
+    t = (text or "").strip().lower()
+    for c in avail:
+        if c.lower() == t:
+            return c
+    if t:
+        for c in avail:
+            cl = c.lower()
+            if t in cl or cl in t:
+                return c
+    m = difflib.get_close_matches(text or "", avail, n=1, cutoff=0.5)
+    if m:
+        return m[0]
+    return avail[0] if len(avail) == 1 else None
+
+
 def _assemble_docx(path: Path, p: dict, mat: dict, headline: str, standfirst: str, exec_summary: str,
                    sections: list[SectionDraft], charts: dict, ill_png: Path, infog_png: Path | None) -> None:
     from docx import Document
@@ -1422,20 +1462,45 @@ def _assemble_docx(path: Path, p: dict, mat: dict, headline: str, standfirst: st
 
     _fig(ill_png)                                          # the Van Gogh header
 
-    # the DUAL executive summary: narrative prose, then the infographic as the visual summary
-    for para in [x for x in exec_summary.split("\n") if x.strip()]:
-        doc.add_paragraph(para.strip())
+    # The infographic is the visual summary at a glance; the plain-language executive summary follows it
+    # as a DISTINCT, labelled section — the first prose a time-poor reader scans.
     if infog_png and Path(infog_png).exists():
         _fig(infog_png, "The whole picture at a glance — every reading, priced and traced.")
+    if exec_summary.strip():
+        doc.add_heading("In plain terms", level=2)
+        for para in [x for x in exec_summary.split("\n") if x.strip()]:
+            doc.add_paragraph(para.strip())
 
+    # THE INVARIANT: a chart is emitted only WHERE the prose narrates it — never dumped caption-only. The
+    # writer's [[FIG: <chart id>]] markers ARE the placement (the plan's per-section assignment only told
+    # the writer WHICH charts to narrate). Resolve each marker against ALL rendered charts globally, so a
+    # chart appears wherever the writer told its story — even if the plan had homed it elsewhere. A chart
+    # never marked anywhere is DROPPED (narrate-or-drop). Fallback: a section with charts but no markers
+    # interleaves them after successive paragraphs.
+    all_cids = [c for c in charts if Path(charts[c][0]).exists()]
+    shown: set = set()
     for s in sections:
         doc.add_heading(s.heading, level=2)
-        for para in [x for x in s.prose.split("\n") if x.strip()]:
-            doc.add_paragraph(para.strip())
-        for cid in s.chart_ids:
-            if cid in charts:
-                cp, cap = charts[cid]
-                _fig(cp, cap, width=6.0)
+        parts = re.split(r"\[\[\s*FIG:\s*(.*?)\s*\]\]", s.prose)   # [text, id, text, id, …]
+        if len(parts) > 1:                                  # writer marked the chart positions by id
+            for i, chunk in enumerate(parts):
+                if i % 2 == 0:
+                    for para in [x for x in chunk.split("\n") if x.strip()]:
+                        doc.add_paragraph(para.strip())
+                else:
+                    cid = _resolve_marker_id(chunk, all_cids, shown)   # GLOBAL pool
+                    if cid:
+                        cp, cap = charts[cid]; _fig(cp, cap, width=6.0); shown.add(cid)
+        else:                                               # fallback: interleave this section's charts
+            cids = [c for c in s.chart_ids if c in charts and c not in shown and Path(charts[c][0]).exists()]
+            paras = [x for x in s.prose.split("\n") if x.strip()]
+            for i, para in enumerate(paras):
+                doc.add_paragraph(para.strip())
+                if i < len(cids):
+                    cp, cap = charts[cids[i]]; _fig(cp, cap, width=6.0); shown.add(cids[i])
+    for cid in all_cids:                                    # narrate-or-drop: never marked anywhere
+        if cid not in shown:
+            print(f"NARRATE-OR-DROP — {cid}: no [[FIG]] marker in any section; not shown", file=sys.stderr)
 
     resolved = _resolve_papers(mat.get("papers", []))
     if resolved:
@@ -1510,11 +1575,10 @@ def draft_best(persona_id: str, brief: dict, outline, conn, *, max_iter: int = 3
     for it in range(max_iter):
         article = write_article(brief, outline, feedback=feedback)
         full_text, standfirst, exec_summary, filled_sections, leak = _finalize_article(article, brief["toks"])
-        slop = _slop_lint(full_text)
         stray = re.search(r"\{[^}]*\}", full_text)          # an invented figure marker / bad token
         epi = _episode_leaks(full_text, brief.get("data_start", ""))
         wordnum = _worded_precision(full_text)
-        if leak or slop or stray or epi or wordnum:
+        if leak or stray or epi or wordnum:
             bits = []
             if leak:
                 # Two ways out, and the writer needs to be told BOTH — otherwise it rewrites the
@@ -1539,9 +1603,6 @@ def draft_best(persona_id: str, brief: dict, outline, conn, *, max_iter: int = 3
             if stray:
                 bits.append("REMOVE every {…} marker from the prose — do not number or footnote the "
                             "charts; name a chart in words. The only braces allowed are the number tokens.")
-            if slop:
-                bits.append("DELETE these AI-slop phrases and rewrite the sentence plainly: "
-                            + ", ".join(f"'{s}'" for s in slop))
             if epi:
                 sy = brief.get("data_start", "")[:4]
                 bits.append(f"REMOVE every reference to {', '.join(epi)}: the data begins {sy}, so no chart "
@@ -1549,7 +1610,7 @@ def draft_best(persona_id: str, brief: dict, outline, conn, *, max_iter: int = 3
                             f"on or after {sy} (e.g. what the series actually spans).")
             feedback = " ".join(bits)
             reasons.append(f"iter{it}: {f'leak({leak}) ' if leak else ''}{'stray ' if stray else ''}"
-                           f"{'slop ' if slop else ''}{'episode ' if epi else ''}"
+                           f"{'episode ' if epi else ''}"
                            f"{f'worded({wordnum})' if wordnum else ''}".strip())
             # A draft with an untraced figure is the worst thing here — it puts a number in front of a
             # reader that no model produced. Rank it below everything, but still keep it: if every
@@ -1674,12 +1735,11 @@ def assemble(persona_id: str, mat: dict, brief: dict, draft: dict, ill_png, ill_
     all_chart_ids = [cid for s in filled_sections for cid in s.chart_ids]
     prose_by_cid = {cid: s.prose for s in filled_sections for cid in s.chart_ids}  # prose-driven form
     charts = _render_charts(brief, all_chart_ids, out_dir, prose_by_cid)
-    # global-macro exhibit: if a persona runs a jurisdiction-generic model, add ONE cross-country chart so
-    # the article is literally multi-country, not US-shaped (the agency's "global macro is US macro").
-    try:
-        _inject_cross_jurisdiction(persona_id, mat, conn, out_dir, filled_sections, charts)
-    except Exception as exc:
-        print(f"XJUR — {persona_id}: skipped ({type(exc).__name__}: {str(exc)[:70]})", file=sys.stderr)
+    # NOTE: the post-draft cross-country exhibit injection is DISABLED — it appended a chart with a caption
+    # but no narrative beat, which the narration invariant now (correctly) drops. The "literally
+    # multi-country, not US-shaped" exhibit must be re-added as a POOL chart the writer narrates
+    # (threaded into build_brief before planning), so it earns a [[FIG]] beat like every other chart.
+    # _inject_cross_jurisdiction(persona_id, mat, conn, out_dir, filled_sections, charts)  # TODO: re-add narrated
     docx_path = out_dir / "article.docx"
     _assemble_docx(docx_path, p, mat, draft["headline"], draft["standfirst"], draft["exec_summary"],
                    filled_sections, charts, ill_png, infog_png)

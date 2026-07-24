@@ -569,6 +569,65 @@ def _coerce_domain(ch, dom):
         return None
 
 
+def padded_limits(vals, *, pad_frac: float = 0.08, floor: float = 1e-9, keep_zero: bool = False):
+    """(lo, hi) that CONTAINS the data with a small fractional pad — the shared data-fit rule. `keep_zero`
+    forces 0 into the range (for a zero-anchored chart). None if there is nothing finite."""
+    v = np.asarray(list(vals), dtype=float).ravel()
+    v = v[np.isfinite(v)]
+    if v.size == 0:
+        return None
+    lo, hi = float(v.min()), float(v.max())
+    if keep_zero:
+        lo, hi = min(lo, 0.0), max(hi, 0.0)
+    pad = max(floor, (hi - lo) * pad_frac)
+    return lo - pad, hi + pad
+
+
+def symmetric_padded_limits(vals, *, floor: float = 0.6, mult: float = 1.35):
+    """(-m, m) symmetric about 0 — for a QUADRANT whose origin must stay at 0 — scaled to the data's
+    peak magnitude with a small readable minimum, so a tight cluster is not lost in a wide fixed frame."""
+    v = np.asarray(list(vals), dtype=float).ravel()
+    v = v[np.isfinite(v)]
+    m = max(floor, float(np.max(np.abs(v))) * mult) if v.size else floor
+    return -m, m
+
+
+_MIN_OCC = 0.4   # the plotted content must fill at least this fraction of an axis, else the axis squishes it
+
+
+def _fit_axis_occupancy(ax, enc: ChartEncoding, df) -> None:
+    """UNIVERSAL axis-fit invariant: if the plotted CONTENT (the data plus any reference lines that must
+    stay visible) fills less than `_MIN_OCC` of an axis span, rescale that axis to the content so the
+    signal can be SEEN. Guards against an over-broad LLM `scale.domain` or a fixed window squishing the
+    data — generically, for every studio chart. Categorical x (heatmap items) and temporal x keep their
+    own full-range limits."""
+    def _content(field, orient):
+        if not field or field not in df:
+            return None
+        vals = list(pd.to_numeric(df[field], errors="coerce").dropna())
+        vals += [r.value for r in enc.annotations.ref_lines
+                 if getattr(r, "orient", None) == orient and r.value is not None]
+        return vals if len(vals) >= 2 else None
+
+    ey = enc.encoding.y
+    yc = _content(ey.field, "y") if ey else None
+    if yc:
+        lo, hi = ax.get_ylim(); span = abs(hi - lo); cspan = max(yc) - min(yc)
+        if span > 0 and cspan / span < _MIN_OCC:
+            nl = padded_limits(yc)
+            if nl:
+                ax.set_ylim(*nl)
+    ex = enc.encoding.x
+    if ex and ex.type != "temporal" and ex.field in df:
+        xc = _content(ex.field, "x")
+        if xc:
+            lo, hi = ax.get_xlim(); span = abs(hi - lo); cspan = max(xc) - min(xc)
+            if span > 0 and cspan / span < _MIN_OCC:
+                nl = padded_limits(xc)
+                if nl:
+                    ax.set_xlim(*nl)
+
+
 def _draw_on_axes(ax, enc: ChartEncoding, df, fig, mark: str, *, panel: bool = False):
     """Draw the mark + refs + domain + legend on one Axes. `panel=True` for a small-multiple cell
     (suppresses per-panel axis labels; the figure carries shared labels)."""
@@ -588,6 +647,9 @@ def _draw_on_axes(ax, enc: ChartEncoding, df, fig, mark: str, *, panel: bool = F
         if d:
             ax.set_xlim(*d)
     _apply_refs_events(ax, enc, df)
+    # UNIVERSAL last word on limits: never ship a chart whose data is squished into a sliver of the axis.
+    if not panel and mark not in ("heatmap", "ridgeline"):
+        _fit_axis_occupancy(ax, enc, df)
     ng = len(_series_groups(df, enc))
     if ng >= 2 and mark in ("line", "area", "point", "bubble") and not enc.annotations.label_last and not panel:
         ax.legend(fontsize=9, framealpha=0.9, loc="best")

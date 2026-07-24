@@ -82,8 +82,12 @@ def render_state_space(points: list[StatePoint], spec: StateSpaceSpec, out: str)
                                   gridspec_kw={"width_ratios": [1.95, 1.0]})
     fig.subplots_adjust(left=0.072, right=0.985, top=0.80, bottom=0.095, wspace=0.04)
 
-    xm = max(2.6, max(abs(pt.x) for pt in pts) * 1.28)
-    ym = max(2.2, max(abs(pt.y) for pt in pts) * 1.35)
+    # Data-driven SYMMETRIC limits (origin stays 0 — the quadrant tints/crosshair depend on it), scaled
+    # to each axis's real spread with only a small readable floor. The old fixed 2.6/2.2 σ floors hid a
+    # tight momentum cluster (±0.2σ) in a 4.4σ-tall frame; now the spread fills the axis. Generic.
+    from ..compile import symmetric_padded_limits
+    _, xm = symmetric_padded_limits([pt.x for pt in pts], floor=0.8, mult=1.28)
+    _, ym = symmetric_padded_limits([pt.y for pt in pts], floor=0.4, mult=1.4)
     ax.set_xlim(-xm, xm); ax.set_ylim(-ym, ym)
 
     # quadrant tints (warm right = elevated vs history, cool left = depressed) + corner guidance
