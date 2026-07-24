@@ -51,6 +51,15 @@ three *renderings* of that model output.
    is one row, never the yardstick — the recurring Horizon2 failure.
 7. **Prove one excellent artifact before systematizing.** Taste precedes
    architecture. Don't answer "the output is bad" with "here's a bigger system."
+8. **Determinism for facts, agents for judgment.** A regex/keyword blocklist must
+   NEVER make an editorial or taste judgment (decisive-vs-shrug, AI-slop, tone) — a
+   regex cannot read meaning (it convicted the decisive "one reading of where policy
+   stands" as a hedge and dropped the infographic). That call belongs to an LLM
+   editor/critic. Deterministic code is for FACTS (number == fmt(data-val),
+   provenance, structure, template/token leaks) and RETRIEVAL (text→chart) ONLY —
+   never agentify those (rule #2). Every new LLM judge fails OPEN and must be PROVEN
+   to fire (a known-bad input flags, a known-good passes) — a silently-failing-open
+   judge is a green gate that lies (the `dishonest_validation_panel` again).
 
 ## Sequencing (the gate)
 
